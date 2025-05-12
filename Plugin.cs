@@ -1,4 +1,4 @@
-﻿using MediaBrowser.Common.Plugins;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Plugins;
