@@ -37,3 +37,6 @@ Remember to restart Emby Server after changing plugin settings.
 
 License
 This plugin is provided as-is without warranty. Use at your own risk.
+
+If you like the plugin and want to buy me a coffee.
+https://www.paypal.com/donate/?hosted_button_id=KEXBXYM4KFPE8
