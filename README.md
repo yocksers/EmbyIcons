@@ -64,4 +64,8 @@
 
 ---
 
+Many thanks to Neminem in the Emby Forums for hes help with testing this plugin!!
+
+---
+
 If you like the plugin and want to [Buy me a coffee](https://www.paypal.com/donate/?hosted_button_id=KEXBXYM4KFPE8)
