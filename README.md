@@ -50,6 +50,7 @@
 
 > **Important:**  
 > _Please restart the Emby Server after changing plugin settings for changes to take effect!_
+> 
 > _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, please eng with the language code you want._
 
 ---
