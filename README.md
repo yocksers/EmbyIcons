@@ -49,8 +49,6 @@
 | **Log Folder Path**           | Directory where plugin logs are saved.                                                            |
 
 > **Important:**  
-> _Please restart the Emby Server after changing plugin settings for changes to take effect!_
-> 
 > _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, please eng with the language code you want._
 
 ---
@@ -60,7 +58,6 @@
 - Verify the icon folder path contains correctly named PNG icons for your languages.  
 - Check the `EmbyIcons.log` file (in the configured log folder) for processing details and errors.  
 - Ensure media files have proper language tags on audio and subtitle streams.  
-- Restart Emby Server after changing any plugin settings.
 
 ---
 
