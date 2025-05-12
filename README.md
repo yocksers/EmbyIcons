@@ -1,42 +1,66 @@
 ![image](https://github.com/user-attachments/assets/90ed1d7b-e0ed-46c6-94f4-4ffdd47aa9db)
 
-EmbyIcons Plugin
-Overview:
-EmbyIcons is an Emby Server plugin that overlays custom audio and subtitle language icons onto media posters. It provides a quick visual summary of the languages available in your media files, directly on the poster images.
+# EmbyIcons Plugin
 
-Important note:
-Icons must be named eng.png for audio and srt.eng.png for subtitles, replace eng with your language code!
-Sadly for now a server restart is needed for new settings to work.
+---
 
-Configuration Options
-Icons Folder Path: Directory containing language icon PNG files named like eng.png for audio or srt.eng.png for subtitles.
-Icon Size: Percentage size of icons relative to the poster's shorter side (e.g., 10%).
-Audio Icon Alignment: Position where audio icons appear (TopLeft, TopRight, BottomLeft, BottomRight).
-Subtitle Icon Alignment: Position where subtitle icons appear.
-Audio Languages to Detect: Comma-separated ISO language codes for audio streams to overlay icons.
-Subtitle Languages to Detect: Comma-separated ISO language codes for subtitles.
-Show Audio Icons: Enable or disable audio language icons.
-Show Subtitle Icons: Enable or disable subtitle language icons.
-Restrict to Libraries: Comma-separated list of library names to apply overlays; leave empty for all libraries.
-Enable Logging: Toggle plugin logging.
-Log Folder Path: Location to save plugin logs.
-Important:
-Please restart the Emby Server after changing plugin settings for changes to take effect!
+## Overview
 
-Installatio
-Copy the EmbyIcons.dll Emby Server plugin directory.
-Restart Emby Server.
-Open Emby Server dashboard and navigate to Plugins.
-Open the plugin settings page to configure options (reset server after configurating settings)
+**EmbyIcons** is a plugin for [Emby Server](https://emby.media/) that overlays audio and subtitle language icons directly onto media posters. This provides a quick visual summary of available languages in your media, making browsing your library more informative and visually appealing.
 
-Troubleshooting
-If icons do not appear, verify the icon folder path and that icons named appropriately exist.
-Check plugin logs (EmbyIcons.log) for errors or status messages.
-Ensure your media files have audio/subtitle streams with correct language tags.
-Remember to restart Emby Server after changing plugin settings.
+---
 
-License
-This plugin is provided as-is without warranty. Use at your own risk.
+## Features
 
-If you like the plugin and want to buy me a coffee.
-https://www.paypal.com/donate/?hosted_button_id=KEXBXYM4KFPE8
+- Supports detection of external subtitle files (`.srt`).
+- Overlays language icons on posters with user-configurable size and alignment.
+- Restricts icon overlay to selected libraries by name.
+- Enables separate toggling of audio and subtitle icons.
+- Configurable list of languages to detect and display icons for.
+- Adjustable icon size as a percentage of the poster's shorter dimension.
+- Plugin logging with configurable log folder location.
+- Maps common language codes internally for consistent icon naming.
+
+---
+
+## Installation
+
+1. Place the EmbyIcons.dll into your Emby Server's plugin directory.
+2. Restart Emby Server to load the plugin.
+3. Open the Emby Server dashboard and navigate to **Plugins**.
+4. Configure the plugin settings from the plugin page.
+
+---
+
+## Configuration Options
+
+| Setting                      | Description                                                                                          |
+|------------------------------|--------------------------------------------------------------------------------------------------|
+| **Icons Folder Path**         | Directory containing language icon PNG files (e.g., `eng.png`, `srt.eng.png`).                    |
+| **Icon Size**                 | Size of icons as a percentage of the poster’s shorter side (e.g., 10%).                           |
+| **Audio Icon Alignment**      | Corner where audio icons are displayed (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`).      |
+| **Subtitle Icon Alignment**   | Corner where subtitle icons are displayed.                                                        |
+| **Audio Languages to Detect** | Comma-separated list of ISO language codes for audio streams to overlay icons for.                |
+| **Subtitle Languages to Detect** | Comma-separated list of ISO language codes for subtitle streams.                              |
+| **Show Audio Icons**          | Enable or disable audio language icon overlays.                                                   |
+| **Show Subtitle Icons**       | Enable or disable subtitle icon overlays.                                                        |
+| **Restrict to Libraries**     | Comma-separated list of library names to restrict icon overlays to; leave empty for all libraries.|
+| **Enable Logging**            | Enable or disable plugin logging.                                                                 |
+| **Log Folder Path**           | Directory where plugin logs are saved.                                                            |
+
+> **Important:**  
+> _Please restart the Emby Server after changing plugin settings for changes to take effect!_
+> _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, please eng with the language code you want._
+
+---
+
+## Troubleshooting
+
+- Verify the icon folder path contains correctly named PNG icons for your languages.  
+- Check the `EmbyIcons.log` file (in the configured log folder) for processing details and errors.  
+- Ensure media files have proper language tags on audio and subtitle streams.  
+- Restart Emby Server after changing any plugin settings.
+
+---
+
+If you like the plugin and want to [Buy me a coffee](https://www.paypal.com/donate/?hosted_button_id=KEXBXYM4KFPE8)
