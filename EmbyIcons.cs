@@ -9,8 +9,10 @@ using MediaBrowser.Model.Drawing;
 using SkiaSharp;
 using System.Collections.Generic;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Entities;
 
 namespace EmbyIcons
 {
@@ -36,16 +38,32 @@ namespace EmbyIcons
 
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
 
-        // Parse comma-separated language codes to a set
-        private HashSet<string> ParseLanguageList(string? csv) =>
-            string.IsNullOrWhiteSpace(csv)
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                     .Select(s => s.Trim().ToLowerInvariant())
-                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Only support main media items, exclude person (actor) posters.
+        /// </summary>
+        public bool Supports(BaseItem item, ImageType imageType)
+        {
+            if (item == null || imageType != ImageType.Primary)
+                return false;
 
-        public bool Supports(BaseItem item, ImageType imageType) =>
-            item != null && imageType == ImageType.Primary;
+            if (item is Person)
+                return false;
+
+            return item is Movie || item is Episode || item is Series || item is Season || item is BoxSet || item is MusicVideo;
+        }
+
+        /// <summary>
+        /// Parses comma-separated language codes into a HashSet.
+        /// </summary>
+        private HashSet<string> ParseLanguageList(string? csv)
+        {
+            if (string.IsNullOrWhiteSpace(csv))
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            return csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                      .Select(s => s.Trim().ToLowerInvariant())
+                      .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
@@ -228,34 +246,50 @@ namespace EmbyIcons
         {
             try
             {
-                var folderPath = !string.IsNullOrEmpty(mediaOrInputPath) ? Path.GetDirectoryName(mediaOrInputPath) : null;
-
-                if (!string.IsNullOrEmpty(folderPath))
+                if (string.IsNullOrEmpty(mediaOrInputPath))
                 {
-                    var srtFiles = Directory.GetFiles(folderPath!, "*.srt");
-                    foreach (var srt in srtFiles)
+                    Log(enableLogging, "Media path is empty, skipping subtitle scan");
+                    return;
+                }
+
+                var folderPath = Path.GetDirectoryName(mediaOrInputPath);
+
+                if (string.IsNullOrEmpty(folderPath))
+                {
+                    Log(enableLogging, "Could not determine folder path, skipping subtitle scan");
+                    return;
+                }
+
+                if (!Directory.Exists(folderPath))
+                {
+                    Log(enableLogging, $"Folder does not exist: {folderPath}, skipping subtitle scan");
+                    return;
+                }
+
+                var srtFiles = Directory.GetFiles(folderPath, "*.srt");
+
+                foreach (var srt in srtFiles)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(srt).ToLowerInvariant();
+                    string? langCode = null;
+
+                    var parts = fileName.Split(new[] { '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    if (parts.Length > 1)
                     {
-                        var name = Path.GetFileNameWithoutExtension(srt).ToLowerInvariant();
-                        string? langCode = null;
+                        var candidate = parts[^1];
 
-                        var parts = name.Split(new[] { '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length > 1)
+                        if (candidate.Length >= 2 && candidate.Length <= 3)
                         {
-                            var candidate = parts[^1];
-                            if (candidate.Length >= 2 && candidate.Length <= 3)
-                                langCode = NormalizeLangCode(candidate);
-                        }
-
-                        if (!string.IsNullOrEmpty(langCode) && !subtitleLangs.Contains(langCode))
-                        {
-                            subtitleLangs.Add(langCode);
-                            Log(enableLogging, $"Detected external subtitle language: {langCode} from file {srt}");
+                            langCode = NormalizeLangCode(candidate);
                         }
                     }
-                }
-                else
-                {
-                    Log(enableLogging, "Subtitle folder path is empty");
+
+                    if (!string.IsNullOrEmpty(langCode) && !subtitleLangs.Contains(langCode))
+                    {
+                        subtitleLangs.Add(langCode);
+                        Log(enableLogging, $"Detected external subtitle language: {langCode} from file {srt}");
+                    }
                 }
             }
             catch (Exception ex)
