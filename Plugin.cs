@@ -16,16 +16,14 @@ namespace EmbyIcons
     public class Plugin : BasePluginSimpleUI<PluginOptions>, IServerEntryPoint, IImageEnhancer, IDisposable
     {
         private readonly ILibraryManager _libraryManager;
-        private readonly EmbyIconsEnhancer _enhancer;
 
         public static Plugin Instance { get; private set; } = null!;
 
         public Plugin(IApplicationHost appHost, ILibraryManager libraryManager)
             : base(appHost)
         {
-            Instance = this;
+            Instance = this ?? throw new ArgumentNullException(nameof(Instance));
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-            _enhancer = new EmbyIconsEnhancer(_libraryManager);
         }
 
         public override string Name => "EmbyIcons";
@@ -34,27 +32,61 @@ namespace EmbyIcons
 
         public override Guid Id => new Guid("b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f");
 
-        public void Run() { /* No background tasks needed */ }
+        public void Run()
+        {
+            // No background tasks needed
+        }
 
-        public void Dispose() { /* Cleanup if needed */ }
+        public void Dispose()
+        {
+            // Cleanup if needed
+        }
 
         public PluginOptions GetConfiguredOptions() => GetOptions();
 
-        public MetadataProviderPriority Priority => _enhancer.Priority;
+        private EmbyIconsEnhancer CreateEnhancer()
+        {
+            // Always create a new enhancer with the latest configuration
+            return new EmbyIconsEnhancer(_libraryManager);
+        }
 
-        public bool Supports(BaseItem item, ImageType imageType) =>
-            _enhancer.Supports(item, imageType);
+        public MetadataProviderPriority Priority
+        {
+            get
+            {
+                var enhancer = CreateEnhancer();
+                return enhancer.Priority;
+            }
+        }
 
-        public string GetConfigurationCacheKey(BaseItem item, ImageType imageType) =>
-            _enhancer.GetConfigurationCacheKey(item, imageType);
+        public bool Supports(BaseItem item, ImageType imageType)
+        {
+            var enhancer = CreateEnhancer();
+            return enhancer.Supports(item, imageType);
+        }
 
-        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
-            _enhancer.GetEnhancedImageInfo(item, inputFile, imageType, imageIndex);
+        public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
+        {
+            var enhancer = CreateEnhancer();
+            return enhancer.GetConfigurationCacheKey(item, imageType);
+        }
 
-        public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) =>
-            _enhancer.GetEnhancedImageSize(item, imageType, imageIndex, originalSize);
+        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
+        {
+            var enhancer = CreateEnhancer();
+            return enhancer.GetEnhancedImageInfo(item, inputFile, imageType, imageIndex);
+        }
 
-        public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex) =>
-            _enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex);
+        public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize)
+        {
+            var enhancer = CreateEnhancer();
+            return enhancer.GetEnhancedImageSize(item, imageType, imageIndex, originalSize);
+        }
+
+        public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex)
+        {
+            var enhancer = CreateEnhancer();
+            return enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex);
+        }
     }
 }
