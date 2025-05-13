@@ -19,7 +19,6 @@ namespace EmbyIcons
 {
     public class EmbyIconsEnhancer : IImageEnhancer
     {
-        private readonly PluginOptions _options;
         private readonly ILibraryManager _libraryManager;
 
         private static readonly string[] DefaultSupportedExtensions = { ".mkv", ".mp4", ".avi", ".mov" };
@@ -38,12 +37,12 @@ namespace EmbyIcons
             {"fre", "fr"},
             {"ger", "de"},
             {"jpn", "jp"}
+            // Add more as needed
         };
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager, PluginOptions options)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
@@ -61,19 +60,9 @@ namespace EmbyIcons
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
-            var optionsKey = string.Join("_", new[]
-            {
-                _options.IconSize.ToString(),
-                _options.ShowAudioIcons.ToString(),
-                _options.ShowSubtitleIcons.ToString(),
-                _options.AudioLanguages ?? "",
-                _options.SubtitleLanguages ?? "",
-                _options.AudioIconAlignment.ToString(),
-                _options.SubtitleIconAlignment.ToString(),
-                (_options.SelectedLibraries ?? "").Replace(',', '-').Replace(" ", "")
-            });
-
-            return $"embyicons_{item.Id}_{imageType}_{optionsKey}";
+            var options = Plugin.Instance!.GetConfiguredOptions();
+            var libsKey = (options.SelectedLibraries ?? "").Replace(',', '-').Replace(" ", "");
+            return $"embyicons_{item.Id}_{imageType}_scale{options.IconSize}_libs{libsKey}";
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
@@ -82,20 +71,25 @@ namespace EmbyIcons
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) =>
             originalSize;
 
+        // Explicit interface implementation — required signature
         public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex)
         {
+            // Calls internal method with CancellationToken.None
             return EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
         }
 
+        // Internal method with CancellationToken support
         public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
-                                            ImageType imageType, int imageIndex,
-                                            CancellationToken cancellationToken)
+                                           ImageType imageType, int imageIndex,
+                                           CancellationToken cancellationToken)
         {
-            var allowedLibraryIds = FileUtils.GetAllowedLibraryIds(_libraryManager, _options.SelectedLibraries);
+            var options = Plugin.Instance!.GetConfiguredOptions();
+
+            var allowedLibraryIds = FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
 
             if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
             {
-                LoggingHelper.Log(_options.EnableLogging,
+                LoggingHelper.Log(options.EnableLogging,
                     $"Input missing or invalid for '{item.Name}', copying original");
                 await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
@@ -105,20 +99,20 @@ namespace EmbyIcons
 
             if (allowedLibraryIds.Count > 0 && (libraryId == null || !allowedLibraryIds.Contains(libraryId)))
             {
-                LoggingHelper.Log(_options.EnableLogging,
+                LoggingHelper.Log(options.EnableLogging,
                     $"Skipping item '{item.Name}' due to library restriction.");
                 await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
-            var audioLangsAllowed = LanguageHelper.ParseLanguageList(_options.AudioLanguages);
-            var subtitleLangsAllowed = LanguageHelper.ParseLanguageList(_options.SubtitleLanguages);
+            var audioLangsAllowed = LanguageHelper.ParseLanguageList(options.AudioLanguages);
+            var subtitleLangsAllowed = LanguageHelper.ParseLanguageList(options.SubtitleLanguages);
 
             var audioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var subtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var supportedExtensions =
-                _options.SupportedExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim().ToLowerInvariant())
+                options.SupportedExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim().ToLowerInvariant())
                 ?? DefaultSupportedExtensions;
 
             if (!string.IsNullOrEmpty(item.Path) && File.Exists(item.Path) &&
@@ -126,27 +120,27 @@ namespace EmbyIcons
             {
                 await MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangs,
                     subtitleLangs,
-                    _options.EnableLogging);
+                    options.EnableLogging);
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
             SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangs,
-                _options.EnableLogging);
+                options.EnableLogging);
 
             cancellationToken.ThrowIfCancellationRequested();
 
             audioLangs.IntersectWith(audioLangsAllowed);
             subtitleLangs.IntersectWith(subtitleLangsAllowed);
 
-            if (!_options.ShowAudioIcons || audioLangs.Count == 0)
+            if (!options.ShowAudioIcons || audioLangs.Count == 0)
                 audioLangs.Clear();
 
-            if (!_options.ShowSubtitleIcons || subtitleLangs.Count == 0)
+            if (!options.ShowSubtitleIcons || subtitleLangs.Count == 0)
                 subtitleLangs.Clear();
 
             if (audioLangs.Count == 0 && subtitleLangs.Count == 0)
             {
-                LoggingHelper.Log(_options.EnableLogging,
+                LoggingHelper.Log(options.EnableLogging,
                     $"No icons to draw for '{item.Name}', copying original");
                 await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
@@ -165,18 +159,18 @@ namespace EmbyIcons
 
             var now = DateTime.UtcNow;
 
-            if (_lastIconsFolder != _options.IconsFolder ||
-                (now - _lastCacheRefreshTime).TotalMinutes > _options.IconCacheDebounceMinutes)
+            if (_lastIconsFolder != options.IconsFolder ||
+                (now - _lastCacheRefreshTime).TotalMinutes > options.IconCacheDebounceMinutes)
             {
-                await RefreshIconCachesAsync(_options.IconsFolder!, cancellationToken);
-                _lastIconsFolder = _options.IconsFolder!;
+                await RefreshIconCachesAsync(options.IconsFolder!, cancellationToken);
+                _lastIconsFolder = options.IconsFolder!;
                 _lastCacheRefreshTime = now;
             }
 
             int width = surfBmp.Width;
             int height = surfBmp.Height;
             int shortSide = Math.Min(width, height);
-            int iconSize = Math.Max(MinIconSize, (shortSide * _options.IconSize) / 100);
+            int iconSize = Math.Max(MinIconSize, (shortSide * options.IconSize) / 100);
             int padding = Math.Max(MinPadding, iconSize / 4);
 
             using var surface = SKSurface.Create(new SKImageInfo(width, height));
@@ -187,7 +181,7 @@ namespace EmbyIcons
 
             var audioIconPaths =
                 audioLangs.OrderBy(l => l).Select(lang =>
-                    ResolveIconPathWithFallback(lang, _options.IconsFolder!, _audioIconCache))
+                    ResolveIconPathWithFallback(lang, options.IconsFolder!, _audioIconCache))
                     .Where(p => !string.IsNullOrEmpty(p))
                     .Cast<string>()
                     .ToList();
@@ -199,11 +193,11 @@ namespace EmbyIcons
                     padding,
                     width,
                     height,
-                    _options.AudioIconAlignment);
+                    options.AudioIconAlignment);
 
             var subtitleIconPaths =
                 subtitleLangs.OrderBy(l => l).Select(lang =>
-                    ResolveIconPathWithFallback($"srt.{lang}", _options.IconsFolder!, _subtitleIconCache))
+                    ResolveIconPathWithFallback($"srt.{lang}", options.IconsFolder!, _subtitleIconCache))
                     .Where(p => !string.IsNullOrEmpty(p))
                     .Cast<string>()
                     .ToList();
@@ -215,11 +209,12 @@ namespace EmbyIcons
                     padding,
                     width,
                     height,
-                    _options.SubtitleIconAlignment);
+                    options.SubtitleIconAlignment);
 
             canvas.Flush();
 
             using var image = surface.Snapshot();
+
             using var encodedImg = image.Encode(SKEncodedImageFormat.Png, 100);
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
@@ -232,16 +227,27 @@ namespace EmbyIcons
                 await fsOut.FlushAsync(cancellationToken);
             }
 
+#pragma warning disable CA2000 // Dispose objects before losing scope - handled here
+
+#pragma warning restore CA2000
+
+#pragma warning disable CS4014 // Because this call is not awaited - we await below
+
+#pragma warning restore CS4014
+
+            // Atomically replace target file
             File.Move(tempOutput, outputFile, overwrite: true);
 
-            LoggingHelper.Log(_options.EnableLogging,
+            LoggingHelper.Log(options.EnableLogging,
                 $"Saved enhanced image to '{outputFile}'");
         }
 
-        private async Task RefreshIconCachesAsync(string iconsFolderPath, CancellationToken cancellationToken)
+        private async Task RefreshIconCachesAsync(string iconsFolderPath,
+                                                  CancellationToken cancellationToken)
         {
             try
             {
+
                 var pngFiles = Directory.GetFiles(iconsFolderPath, "*.png");
 
                 _audioIconCache.Clear();

@@ -47,7 +47,8 @@ namespace EmbyIcons
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-           "Configure icon folder, icon size, alignments, logging options, languages to detect, supported media extensions, and restrict to specific libraries by name.";
+            "<h2 style='color:red; font-weight:bold;'>Please reset server after changing settings for changes to take effect!</h2><br/>" +
+            "Configure icon folder, icon size, alignments, logging options, languages to detect, supported media extensions, and restrict to specific libraries by name.";
 
         [DisplayName("Icons Folder Path")]
         [Description("Full path containing language icon files.")]
