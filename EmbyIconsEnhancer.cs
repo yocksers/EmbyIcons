@@ -15,11 +15,10 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Providers;
 
-
 // Optimized: lazy decoding, smart icon caching, batching, and unnecessary copy avoidance
 namespace EmbyIcons
 {
-    public class EmbyIconsEnhancer : IImageEnhancer
+    public class EmbyIconsEnhancer : IImageEnhancer, IDisposable
     {
         private readonly ILibraryManager _libraryManager;
 
@@ -29,6 +28,9 @@ namespace EmbyIcons
 
         private readonly ConcurrentDictionary<string, string?> _audioIconCache = new();
         private readonly ConcurrentDictionary<string, string?> _subtitleIconCache = new();
+
+        private readonly ConcurrentDictionary<string, SKBitmap> _audioIconBitmapCache = new();
+        private readonly ConcurrentDictionary<string, SKBitmap> _subtitleIconBitmapCache = new();
 
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
         private string? _lastIconsFolder;
@@ -181,37 +183,39 @@ namespace EmbyIcons
             canvas.Clear(SKColors.Transparent);
             canvas.DrawBitmap(surfBmp, 0, 0);
 
-            var audioIconPaths =
-                audioLangs.OrderBy(l => l).Select(lang =>
-                    ResolveIconPathWithFallback(lang, options.IconsFolder!, _audioIconCache))
-                    .Where(p => !string.IsNullOrEmpty(p))
-                    .Cast<string>()
-                    .ToList();
+            // Get cached SKBitmap icons for audio languages
+            var audioIcons =
+                audioLangs.OrderBy(l => l)
+                          .Select(lang => GetCachedIconBitmap(lang, isSubtitle: false, options.IconsFolder!))
+                          .Where(bmp => bmp != null)
+                          .Cast<SKBitmap>()
+                          .ToList();
 
-            if (audioIconPaths.Count > 0)
+            if (audioIcons.Count > 0)
                 IconDrawer.DrawIcons(canvas,
-                    audioIconPaths,
-                    iconSize,
-                    padding,
-                    width,
-                    height,
-                    options.AudioIconAlignment);
+                                     audioIcons,
+                                     iconSize,
+                                     padding,
+                                     width,
+                                     height,
+                                     options.AudioIconAlignment);
 
-            var subtitleIconPaths =
-                subtitleLangs.OrderBy(l => l).Select(lang =>
-                    ResolveIconPathWithFallback($"srt.{lang}", options.IconsFolder!, _subtitleIconCache))
-                    .Where(p => !string.IsNullOrEmpty(p))
-                    .Cast<string>()
-                    .ToList();
+            // Get cached SKBitmap icons for subtitle languages
+            var subtitleIcons =
+                subtitleLangs.OrderBy(l => l)
+                             .Select(lang => GetCachedIconBitmap($"srt.{lang}", isSubtitle: true, options.IconsFolder!))
+                             .Where(bmp => bmp != null)
+                             .Cast<SKBitmap>()
+                             .ToList();
 
-            if (subtitleIconPaths.Count > 0)
+            if (subtitleIcons.Count > 0)
                 IconDrawer.DrawIcons(canvas,
-                    subtitleIconPaths,
-                    iconSize,
-                    padding,
-                    width,
-                    height,
-                    options.SubtitleIconAlignment);
+                                     subtitleIcons,
+                                     iconSize,
+                                     padding,
+                                     width,
+                                     height,
+                                     options.SubtitleIconAlignment);
 
             canvas.Flush();
 
@@ -249,11 +253,24 @@ namespace EmbyIcons
         {
             try
             {
-
                 var pngFiles = Directory.GetFiles(iconsFolderPath, "*.png");
 
+                // Clear path caches
                 _audioIconCache.Clear();
                 _subtitleIconCache.Clear();
+
+                // Dispose cached bitmaps and clear bitmap caches
+                foreach (var bmp in _audioIconBitmapCache.Values)
+                {
+                    bmp.Dispose();
+                }
+                _audioIconBitmapCache.Clear();
+
+                foreach (var bmp in _subtitleIconBitmapCache.Values)
+                {
+                    bmp.Dispose();
+                }
+                _subtitleIconBitmapCache.Clear();
 
                 await Task.Run(() =>
                 {
@@ -279,8 +296,48 @@ namespace EmbyIcons
             }
         }
 
+        /// <summary>
+        /// Returns a cached SKBitmap for the given language code key.
+        /// If not cached, decodes the icon from disk and caches it.
+        /// </summary>
+        /// <param name="langCodeKey">Language code key or icon name</param>
+        /// <param name="isSubtitle">True if subtitle icon; false if audio icon</param>
+        /// <param name="iconsFolder">Base icons folder path</param>
+        /// <returns>Cached SKBitmap or null if not found</returns>
+        private SKBitmap? GetCachedIconBitmap(string langCodeKey, bool isSubtitle, string iconsFolder)
+        {
+            langCodeKey = langCodeKey.ToLowerInvariant();
+
+            var pathCache = isSubtitle ? _subtitleIconCache : _audioIconCache;
+            var bitmapCache = isSubtitle ? _subtitleIconBitmapCache : _audioIconBitmapCache;
+
+            // Resolve path with fallback as before
+            string? iconPath = ResolveIconPathWithFallback(langCodeKey, iconsFolder, pathCache);
+            if (iconPath == null || !File.Exists(iconPath))
+                return null;
+
+            // Try get from bitmap cache
+            if (bitmapCache.TryGetValue(iconPath, out var cachedBitmap))
+            {
+                return cachedBitmap;
+            }
+
+            // Load and cache
+            var bmp = SKBitmap.Decode(iconPath);
+            if (bmp != null)
+            {
+                bitmapCache[iconPath] = bmp;
+            }
+
+            return bmp;
+        }
+
+        /// <summary>
+        /// Resolves icon file path by language code key with fallback support.
+        /// Caches lookup results in the provided cache dictionary.
+        /// </summary>
         private static string? ResolveIconPathWithFallback(string langCodeKey, string iconsFolderPath,
-            ConcurrentDictionary<string, string?> cache)
+                                                         ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
@@ -315,6 +372,22 @@ namespace EmbyIcons
 
             cache[langCodeKey] = null!;
             return null;
+        }
+
+        /// <summary>
+        /// Dispose cached bitmaps when this enhancer is disposed.
+        /// </summary>
+        public void Dispose()
+        {
+            foreach (var bmp in _audioIconBitmapCache.Values)
+                bmp.Dispose();
+
+            _audioIconBitmapCache.Clear();
+
+            foreach (var bmp in _subtitleIconBitmapCache.Values)
+                bmp.Dispose();
+
+            _subtitleIconBitmapCache.Clear();
         }
     }
 }
