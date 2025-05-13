@@ -39,9 +39,7 @@ namespace EmbyIcons
 
             SelectedLibraries = string.Empty;
 
-            SupportedExtensions = ".mkv,.mp4,.avi,.mov"; // comma-separated
-
-            IconCacheDebounceMinutes = 5; // default debounce interval
+            SupportedExtensions = ".mkv,.mp4,.avi,.mov"; // <-- Added back here
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -92,25 +90,25 @@ namespace EmbyIcons
         [Description("Comma-separated list of library names to restrict plugin operation. Leave empty to process all libraries.")]
         public string SelectedLibraries { get; set; }
 
+        [DisplayName("Supported Media Extensions")]
+        [Description("Comma-separated list of supported media file extensions for language detection.")]
+        public string SupportedExtensions { get; set; }  // <-- Added property
+
+        // Moved EnableLogging and LogFolder to bottom by specifying a high Order value
+
         [DisplayName("Enable Logging")]
         [Description("Enable or disable plugin logging.")]
+        [Display(Order = 1000)]
         public bool EnableLogging { get; set; }
 
         [DisplayName("Log Folder Path")]
         [Description("Folder path where plugin logs will be saved.")]
+        [Display(Order = 1001)]
         public string LogFolder
         {
             get => _logFolder;
             set => _logFolder = Environment.ExpandEnvironmentVariables(value ?? @"C:\temp");
         }
-
-        [DisplayName("Supported Media Extensions")]
-        [Description("Comma-separated list of supported media file extensions for language detection.")]
-        public string SupportedExtensions { get; set; }
-
-        [DisplayName("Icon Cache Debounce Interval Minutes")]
-        [Description("Minimum minutes between icon cache refreshes when icons folder changes.")]
-        public int IconCacheDebounceMinutes { get; set; }
 
         // Validation method remains unchanged
 

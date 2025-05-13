@@ -3,6 +3,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Model.Drawing;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
@@ -52,6 +53,6 @@ namespace EmbyIcons
             Enhancer.GetEnhancedImageSize(item, imageType, imageIndex, originalSize);
 
         public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex) =>
-            Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex);
+            Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
     }
 }
