@@ -1,0 +1,8 @@
+{
+  "Id": "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f",
+  "Name": "EmbyIcons",
+  "Description": "Overlays language icons onto media posters.",
+  "Version": "1.0.0",
+  "AssemblyFile": "EmbyIcons.dll",
+  "MinServerVersion": "4.8.11.0"
+}
