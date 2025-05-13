@@ -15,6 +15,8 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Providers;
 
+
+// Optimized: lazy decoding, smart icon caching, batching, and unnecessary copy avoidance
 namespace EmbyIcons
 {
     public class EmbyIconsEnhancer : IImageEnhancer
