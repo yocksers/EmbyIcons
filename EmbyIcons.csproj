@@ -14,7 +14,7 @@
 
 	<ItemGroup>
 	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	    <HintPath>..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 
