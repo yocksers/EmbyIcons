@@ -49,7 +49,7 @@
 | **Log Folder Path**           | Directory where plugin logs are saved.                                                            |
 
 > **Important:**  
-> _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, please eng with the language code you want._
+> _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, change eng with the language code you want like dan or jpn._
 
 ---
 
