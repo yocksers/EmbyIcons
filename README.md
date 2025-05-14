@@ -25,10 +25,11 @@
 
 ## Installation
 
-1. Place the EmbyIcons.dll into your Emby Server's plugin directory.
-2. Restart Emby Server to load the plugin.
-3. Open the Emby Server dashboard and navigate to **Plugins**.
-4. Configure the plugin settings from the plugin page.
+1- Make sure you have the latest Emby version as this plugin might be incompatible with older and non x64/amd64 versions!
+2. Place the EmbyIcons.dll into your Emby Server's plugin directory.
+3. Restart Emby Server to load the plugin.
+4. Open the Emby Server dashboard and navigate to **Plugins**.
+5. Configure the plugin settings from the plugin page.
 
 ---
 
