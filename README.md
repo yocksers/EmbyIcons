@@ -57,6 +57,7 @@
 ## Troubleshooting
 
 - Verify the icon folder path contains correctly named PNG icons for your languages.  
+- Library names might need quotetation marks around them on some systems eg. "Movies". I'm looking into this.
 - Check the `EmbyIcons.log` file (in the configured log folder) for processing details and errors.  
 - Ensure media files have proper language tags on audio and subtitle streams.  
 
