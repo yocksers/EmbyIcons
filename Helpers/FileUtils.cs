@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
@@ -33,7 +33,7 @@ namespace EmbyIcons.Helpers
             }
         }
 
-        // Added missing method
+        // Updated method: trims spaces and removes surrounding quotes from library names
         public static HashSet<string> GetAllowedLibraryIds(ILibraryManager libraryManager, string? selectedLibrariesCsv)
         {
             var allowedIds = new HashSet<string>();
@@ -42,7 +42,7 @@ namespace EmbyIcons.Helpers
                 return allowedIds; // no restriction, empty set
 
             var selectedNames = selectedLibrariesCsv.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
+                .Select(s => s.Trim().Trim('"', '\''))
                 .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
 
             foreach (var lib in libraryManager.GetVirtualFolders())
@@ -54,7 +54,7 @@ namespace EmbyIcons.Helpers
             return allowedIds;
         }
 
-        // Added missing method
+        // Updated method: normalizes paths by trimming trailing slashes and ignoring case
         public static string? GetLibraryIdForItem(ILibraryManager libraryManager, BaseItem item)
         {
             if (item == null) return null;
@@ -63,13 +63,19 @@ namespace EmbyIcons.Helpers
 
             if (string.IsNullOrEmpty(itemPath)) return null;
 
+            string NormalizePath(string path) =>
+                path.TrimEnd('\\', '/').ToLowerInvariant();
+
+            var normItemPath = NormalizePath(itemPath);
+
             foreach (var lib in libraryManager.GetVirtualFolders())
             {
                 if (lib.Locations != null)
                 {
                     foreach (var loc in lib.Locations)
                     {
-                        if (!string.IsNullOrEmpty(loc) && itemPath.StartsWith(loc, System.StringComparison.OrdinalIgnoreCase))
+                        var normLoc = NormalizePath(loc);
+                        if (!string.IsNullOrEmpty(normLoc) && normItemPath.StartsWith(normLoc))
                             return lib.Id;
                     }
                 }
