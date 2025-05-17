@@ -35,16 +35,16 @@
 
 ## Configuration Options
 
-| Setting                      | Description                                                                                          |
+| Setting                      | Description                                                                                      |
 |------------------------------|--------------------------------------------------------------------------------------------------|
-| **Icons Folder Path**         | Directory containing language icon PNG files (e.g., `eng.png`, `srt.eng.png`).                    |
+| **Icons Folder Path**         | Directory containing language icon PNG files (e.g., `eng.png`, `srt.eng.png`). Note: Must supply own icons, i suggest 100x100 in size.|
 | **Icon Size**                 | Size of icons as a percentage of the poster’s shorter side (e.g., 10%).                           |
 | **Audio Icon Alignment**      | Corner where audio icons are displayed (`TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`).      |
 | **Subtitle Icon Alignment**   | Corner where subtitle icons are displayed.                                                        |
 | **Audio Languages to Detect** | Comma-separated list of ISO language codes for audio streams to overlay icons for.                |
-| **Subtitle Languages to Detect** | Comma-separated list of ISO language codes for subtitle streams.                              |
+| **Subtitle Languages to Detect** | Comma-separated list of ISO language codes for subtitle streams.                               |
 | **Show Audio Icons**          | Enable or disable audio language icon overlays.                                                   |
-| **Show Subtitle Icons**       | Enable or disable subtitle icon overlays.                                                        |
+| **Show Subtitle Icons**       | Enable or disable subtitle icon overlays.                                                         |
 | **Restrict to Libraries**     | Comma-separated list of library names to restrict icon overlays to; leave empty for all libraries.|
 | **Enable Logging**            | Enable or disable plugin logging.                                                                 |
 | **Log Folder Path**           | Directory where plugin logs are saved.                                                            |
