@@ -24,14 +24,15 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
 
-        private readonly Dictionary<string, string> _languageFallbackMap = new(StringComparer.OrdinalIgnoreCase)
-        {
-            {"eng", "en"},
-            {"fre", "fr"},
-            {"ger", "de"},
-            {"jpn", "jp"}
-            // Add more as needed
-        };
+        // Removed hardcoded fallback map to allow all languages dynamically
+        // private readonly Dictionary<string, string> _languageFallbackMap = new(StringComparer.OrdinalIgnoreCase)
+        // {
+        //     {"eng", "en"},
+        //     {"fre", "fr"},
+        //     {"ger", "de"},
+        //     {"jpn", "jp"}
+        //     // Add more as needed
+        // };
 
         public IconCacheManager(TimeSpan cacheTtl)
         {
@@ -158,6 +159,11 @@ namespace EmbyIcons.Helpers
             return imageCache.TryGetValue(iconPath, out var loaded) ? loaded.Image : null;
         }
 
+        /// <summary>
+        /// Resolves the icon path for the given language key.
+        /// No fallback map used: only direct language code matching.
+        /// Optionally tries alternate lang codes if enabled.
+        /// </summary>
         private string? ResolveIconPathWithFallback(string langCodeKey, string folderPath,
                                                    ConcurrentDictionary<string, string?> cache)
         {
@@ -166,25 +172,27 @@ namespace EmbyIcons.Helpers
             if (cache.TryGetValue(langCodeKey, out var path) && !string.IsNullOrEmpty(path))
                 return path;
 
-            if (_languageFallbackMap.TryGetValue(langCodeKey, out var fallback))
-            {
-                if (cache.TryGetValue(fallback, out var fbPath) && !string.IsNullOrEmpty(fbPath))
-                    return fbPath;
-
-                var fbCandidate = Path.Combine(folderPath, $"{fallback}.png");
-                if (File.Exists(fbCandidate))
-                {
-                    cache[fallback] = fbCandidate;
-                    return fbCandidate;
-                }
-            }
-
+            // Try exact match first
             var candidate = Path.Combine(folderPath, $"{langCodeKey}.png");
             if (File.Exists(candidate))
             {
                 cache[langCodeKey] = candidate;
                 return candidate;
             }
+
+#if ENABLE_ALT_LANG_CODE_FALLBACK
+            // Optional: try alternate language code (2-letter <-> 3-letter) via LanguageHelper
+            var altCode = LanguageHelper.GetAlternateLangCode(langCodeKey);
+            if (!string.IsNullOrEmpty(altCode))
+            {
+                var altCandidate = Path.Combine(folderPath, $"{altCode}.png");
+                if (File.Exists(altCandidate))
+                {
+                    cache[langCodeKey] = altCandidate;
+                    return altCandidate;
+                }
+            }
+#endif
 
             cache[langCodeKey] = null!;
             return null;
