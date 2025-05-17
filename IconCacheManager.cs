@@ -132,7 +132,7 @@ namespace EmbyIcons.Helpers
             var pathCache = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
             var imageCache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
 
-            string? iconPath = ResolveIconPathWithSimpleFallback(langCodeKey, _iconsFolder, pathCache);
+            string? iconPath = ResolveIconPathBidirectionalFallback(langCodeKey, _iconsFolder, pathCache);
 
             if (iconPath == null || !File.Exists(iconPath))
                 return null;
@@ -151,9 +151,10 @@ namespace EmbyIcons.Helpers
 
         /// <summary>
         /// Tries exact lang code first; if 3-letter code and no match, tries first two letters as fallback.
+        /// If 2-letter code and no match, tries to find any 3-letter icon starting with those two letters.
         /// </summary>
-        private string? ResolveIconPathWithSimpleFallback(string langCodeKey, string folderPath,
-                                                         ConcurrentDictionary<string, string?> cache)
+        private string? ResolveIconPathBidirectionalFallback(string langCodeKey, string folderPath,
+                                                             ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
@@ -168,7 +169,7 @@ namespace EmbyIcons.Helpers
                 return candidate;
             }
 
-            // Simple fallback: try first 2 letters if input length is 3
+            // If 3-letter code, try first two letters fallback (3->2)
             if (langCodeKey.Length == 3)
             {
                 var shortCode = langCodeKey.Substring(0, 2);
@@ -177,6 +178,16 @@ namespace EmbyIcons.Helpers
                 {
                     cache[langCodeKey] = shortCandidate;
                     return shortCandidate;
+                }
+            }
+            // If 2-letter code, try to find a 3-letter icon starting with that 2-letter prefix (2->3)
+            else if (langCodeKey.Length == 2)
+            {
+                var possibleThreeLetterFiles = Directory.GetFiles(folderPath, $"{langCodeKey}??.png");
+                if (possibleThreeLetterFiles.Length > 0)
+                {
+                    cache[langCodeKey] = possibleThreeLetterFiles[0];
+                    return possibleThreeLetterFiles[0];
                 }
             }
 
