@@ -24,16 +24,6 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
 
-        // Removed hardcoded fallback map to allow all languages dynamically
-        // private readonly Dictionary<string, string> _languageFallbackMap = new(StringComparer.OrdinalIgnoreCase)
-        // {
-        //     {"eng", "en"},
-        //     {"fre", "fr"},
-        //     {"ger", "de"},
-        //     {"jpn", "jp"}
-        //     // Add more as needed
-        // };
-
         public IconCacheManager(TimeSpan cacheTtl)
         {
             _cacheTtl = cacheTtl;
@@ -142,7 +132,7 @@ namespace EmbyIcons.Helpers
             var pathCache = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
             var imageCache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
 
-            string? iconPath = ResolveIconPathWithFallback(langCodeKey, _iconsFolder, pathCache);
+            string? iconPath = ResolveIconPathWithSimpleFallback(langCodeKey, _iconsFolder, pathCache);
 
             if (iconPath == null || !File.Exists(iconPath))
                 return null;
@@ -160,12 +150,10 @@ namespace EmbyIcons.Helpers
         }
 
         /// <summary>
-        /// Resolves the icon path for the given language key.
-        /// No fallback map used: only direct language code matching.
-        /// Optionally tries alternate lang codes if enabled.
+        /// Tries exact lang code first; if 3-letter code and no match, tries first two letters as fallback.
         /// </summary>
-        private string? ResolveIconPathWithFallback(string langCodeKey, string folderPath,
-                                                   ConcurrentDictionary<string, string?> cache)
+        private string? ResolveIconPathWithSimpleFallback(string langCodeKey, string folderPath,
+                                                         ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
@@ -180,19 +168,17 @@ namespace EmbyIcons.Helpers
                 return candidate;
             }
 
-#if ENABLE_ALT_LANG_CODE_FALLBACK
-            // Optional: try alternate language code (2-letter <-> 3-letter) via LanguageHelper
-            var altCode = LanguageHelper.GetAlternateLangCode(langCodeKey);
-            if (!string.IsNullOrEmpty(altCode))
+            // Simple fallback: try first 2 letters if input length is 3
+            if (langCodeKey.Length == 3)
             {
-                var altCandidate = Path.Combine(folderPath, $"{altCode}.png");
-                if (File.Exists(altCandidate))
+                var shortCode = langCodeKey.Substring(0, 2);
+                var shortCandidate = Path.Combine(folderPath, $"{shortCode}.png");
+                if (File.Exists(shortCandidate))
                 {
-                    cache[langCodeKey] = altCandidate;
-                    return altCandidate;
+                    cache[langCodeKey] = shortCandidate;
+                    return shortCandidate;
                 }
             }
-#endif
 
             cache[langCodeKey] = null!;
             return null;
