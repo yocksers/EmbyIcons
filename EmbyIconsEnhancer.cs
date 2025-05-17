@@ -66,24 +66,24 @@ namespace EmbyIcons
             var options = Plugin.Instance!.GetConfiguredOptions();
 
             // Check library restrictions
-            var allowedLibs = FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
-            var libraryId = FileUtils.GetLibraryIdForItem(_libraryManager, item);
+            var allowedLibs = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
+            var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
             if (allowedLibs.Count > 0 && (libraryId == null || !allowedLibs.Contains(libraryId)))
             {
-                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
             // Validate input file exists
             if (string.IsNullOrEmpty(inputFile) || !System.IO.File.Exists(inputFile))
             {
-                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
             // Detect languages in media & subtitles
-            var audioLangsAllowed = LanguageHelper.ParseLanguageList(options.AudioLanguages).Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var subtitleLangsAllowed = LanguageHelper.ParseLanguageList(options.SubtitleLanguages).Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var audioLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.AudioLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var subtitleLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.SubtitleLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var audioLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var subtitleLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -96,14 +96,17 @@ namespace EmbyIcons
             if (!string.IsNullOrEmpty(item.Path) && System.IO.File.Exists(item.Path) &&
                 supportedExtensions.Contains(System.IO.Path.GetExtension(item.Path).ToLowerInvariant()))
             {
-                await MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
+                await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
                     subtitleLangsDetected,
                     options.EnableLogging);
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
-                options.EnableLogging);
+            // --- UPDATED: Use configured subtitle file extensions ---
+            var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
+
+            Helpers.SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
+                options.EnableLogging, subtitleExtensions);
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -118,7 +121,7 @@ namespace EmbyIcons
 
             if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0)
             {
-                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
@@ -126,7 +129,7 @@ namespace EmbyIcons
             using var surfBmp = SKBitmap.Decode(inputFile);
             if (surfBmp == null)
             {
-                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
@@ -149,19 +152,19 @@ namespace EmbyIcons
             var audioIconsToDraw =
                 audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
             if (audioIconsToDraw.Count > 0)
-                IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
-                                     width, height,
-                                     options.AudioIconAlignment,
-                                     new SKPaint { FilterQuality = SKFilterQuality.High });
+                Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
+                                             width, height,
+                                             options.AudioIconAlignment,
+                                             new SKPaint { FilterQuality = SKFilterQuality.High });
 
             // Draw subtitle icons
             var subtitleIconsToDraw =
                 subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
             if (subtitleIconsToDraw.Count > 0)
-                IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
-                                     width, height,
-                                     options.SubtitleIconAlignment,
-                                     new SKPaint { FilterQuality = SKFilterQuality.High });
+                Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
+                                             width, height,
+                                             options.SubtitleIconAlignment,
+                                             new SKPaint { FilterQuality = SKFilterQuality.High });
 
             canvas.Flush();
 

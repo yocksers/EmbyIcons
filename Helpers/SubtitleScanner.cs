@@ -6,11 +6,12 @@ namespace EmbyIcons.Helpers
 {
     internal static class SubtitleScanner
     {
-        public static void ScanExternalSubtitles(string? mediaOrInputPath, HashSet<string> subtitleLangs, bool enableLogging)
+        // Updated method signature with extensions parameter
+        public static void ScanExternalSubtitles(string? mediaOrInputPath, HashSet<string> subtitleLangs, bool enableLogging, IEnumerable<string>? extensions = null)
         {
             try
             {
-                if (string.IsNullOrEmpty(mediaOrInputPath))
+                if (string.IsNullOrEmpty(mediaOrInputPath) || extensions == null)
                     return;
 
                 var folderPath = Path.GetDirectoryName(mediaOrInputPath);
@@ -21,27 +22,35 @@ namespace EmbyIcons.Helpers
                 if (!Directory.Exists(folderPath))
                     return;
 
-                var srtFiles = Directory.GetFiles(folderPath, "*.srt");
-
-                foreach (var srt in srtFiles)
+                foreach (var ext in extensions)
                 {
-                    var fileName = Path.GetFileNameWithoutExtension(srt).ToLowerInvariant();
-                    string? langCode = null;
+                    var extTrimmed = ext.Trim().ToLowerInvariant();
 
-                    var parts = fileName.Split(new[] { '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (!extTrimmed.StartsWith("."))
+                        extTrimmed = "." + extTrimmed;
 
-                    if (parts.Length > 1)
+                    var files = Directory.GetFiles(folderPath, "*" + extTrimmed);
+
+                    foreach (var file in files)
                     {
-                        var candidate = parts[^1];
+                        var fileName = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                        string? langCode = null;
 
-                        if (candidate.Length >= 2 && candidate.Length <= 3)
+                        var parts = fileName.Split(new[] { '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        if (parts.Length > 1)
                         {
-                            langCode = LanguageHelper.NormalizeLangCode(candidate);
-                        }
-                    }
+                            var candidate = parts[^1];
 
-                    if (!string.IsNullOrEmpty(langCode) && !subtitleLangs.Contains(langCode))
-                        subtitleLangs.Add(langCode);
+                            if (candidate.Length >= 2 && candidate.Length <= 3)
+                            {
+                                langCode = LanguageHelper.NormalizeLangCode(candidate);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(langCode) && !subtitleLangs.Contains(langCode))
+                            subtitleLangs.Add(langCode);
+                    }
                 }
             }
             catch

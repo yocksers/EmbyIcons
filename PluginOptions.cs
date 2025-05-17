@@ -39,7 +39,9 @@ namespace EmbyIcons
 
             SelectedLibraries = string.Empty;
 
-            SupportedExtensions = ".mkv,.mp4,.avi,.mov"; // <-- Added back here
+            SupportedExtensions = ".mkv,.mp4,.avi,.mov"; // existing
+
+            SubtitleFileExtensions = ".srt"; // <--- NEW PROPERTY DEFAULT
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -92,7 +94,12 @@ namespace EmbyIcons
 
         [DisplayName("Supported Media Extensions")]
         [Description("Comma-separated list of supported media file extensions for language detection.")]
-        public string SupportedExtensions { get; set; }  // <-- Added property
+        public string SupportedExtensions { get; set; }
+
+        // <--- NEW SETTING FOR EXTERNAL SUBTITLE EXTENSIONS
+        [DisplayName("External Subtitle File Extensions")]
+        [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.ttml).")]
+        public string SubtitleFileExtensions { get; set; }
 
         // Moved EnableLogging and LogFolder to bottom by specifying a high Order value
 
