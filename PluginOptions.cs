@@ -39,16 +39,20 @@ namespace EmbyIcons
 
             SelectedLibraries = string.Empty;
 
-            SupportedExtensions = ".mkv,.mp4,.avi,.mov"; // existing
+            SupportedExtensions = ".mkv,.mp4,.avi,.mov";
 
-            SubtitleFileExtensions = ".srt"; // <--- NEW PROPERTY DEFAULT
+            // NEW: external subtitle extensions list
+            SubtitleFileExtensions = ".srt,.ass,.vtt";
+
+            // Added default for new property
+            ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-            "<h2 style='color:red; font-weight:bold;'>Refreshing metadata might be needed for changes to take effect!</h2><br/>" +
-            "Best to test your settings with one video at a time but not required.";
+           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata might be needed for changes to take effect!</h2><br/>" +
+           "Best to test your settings with one video at a time but not required.";
 
         [DisplayName("Icons Folder Path")]
         [Description("Full path containing language icon files.")]
@@ -96,12 +100,15 @@ namespace EmbyIcons
         [Description("Comma-separated list of supported media file extensions for language detection.")]
         public string SupportedExtensions { get; set; }
 
-        // <--- NEW SETTING FOR EXTERNAL SUBTITLE EXTENSIONS
+        // NEW property added here
         [DisplayName("External Subtitle File Extensions")]
-        [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.ttml).")]
+        [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.vtt).")]
         public string SubtitleFileExtensions { get; set; }
 
-        // Moved EnableLogging and LogFolder to bottom by specifying a high Order value
+        // NEW property added here
+        [DisplayName("Show Series Icons If All Episodes Have Language")]
+        [Description("Show icons on series posters if all episodes have the specified audio/subtitle languages.")]
+        public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
 
         [DisplayName("Enable Logging")]
         [Description("Enable or disable plugin logging.")]
@@ -116,8 +123,6 @@ namespace EmbyIcons
             get => _logFolder;
             set => _logFolder = Environment.ExpandEnvironmentVariables(value ?? @"C:\temp");
         }
-
-        // Validation method remains unchanged
 
         public static ValidationResult? ValidateIconsFolder(string? folderPath, ValidationContext context)
         {

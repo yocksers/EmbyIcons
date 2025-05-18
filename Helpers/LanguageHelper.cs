@@ -6,9 +6,17 @@ namespace EmbyIcons.Helpers
 {
     internal static class LanguageHelper
     {
-        /// <summary>
-        /// Parses a comma-separated list of language codes into a HashSet, trimming and ignoring case.
-        /// </summary>
+        private static readonly Dictionary<string, string> LangCodeMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "da", "dan" },
+            { "en", "eng" },
+            { "fr", "fre" },
+            { "de", "ger" },
+            { "es", "spa" },
+            { "pl", "pol" },
+            { "jp", "jpn" },
+        };
+
         public static HashSet<string> ParseLanguageList(string? csv)
         {
             if (string.IsNullOrWhiteSpace(csv))
@@ -19,15 +27,12 @@ namespace EmbyIcons.Helpers
                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Normalizes a language code by trimming and lowercasing.
-        /// </summary>
         public static string NormalizeLangCode(string code)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return code!;
 
-            return code.Trim().ToLowerInvariant();
+            return LangCodeMap.TryGetValue(code.ToLowerInvariant(), out var mapped) ? mapped.ToLowerInvariant() : code.ToLowerInvariant();
         }
     }
 }

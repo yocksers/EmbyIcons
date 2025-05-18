@@ -132,7 +132,7 @@ namespace EmbyIcons.Helpers
             var pathCache = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
             var imageCache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
 
-            string? iconPath = ResolveIconPathBidirectionalFallback(langCodeKey, _iconsFolder, pathCache);
+            string? iconPath = ResolveIconPathWithFallback(langCodeKey, _iconsFolder, pathCache);
 
             if (iconPath == null || !File.Exists(iconPath))
                 return null;
@@ -150,18 +150,21 @@ namespace EmbyIcons.Helpers
         }
 
         /// <summary>
-        /// Tries exact lang code first; if 3-letter code and no match, tries first two letters as fallback.
-        /// If 2-letter code and no match, tries to find any 3-letter icon starting with those two letters.
+        /// Resolves the icon path for the given language code with bidirectional fallback:
+        /// - First tries exact match on the code.
+        /// - If 3-letter code and no exact match, tries the first two letters as 2-letter fallback.
+        /// - If 2-letter code and no exact match, tries to find any 3-letter icon starting with those two letters.
         /// </summary>
-        private string? ResolveIconPathBidirectionalFallback(string langCodeKey, string folderPath,
-                                                             ConcurrentDictionary<string, string?> cache)
+        private string? ResolveIconPathWithFallback(string langCodeKey, string folderPath,
+                                                   ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
+            // Check cache first
             if (cache.TryGetValue(langCodeKey, out var path) && !string.IsNullOrEmpty(path))
                 return path;
 
-            // Try exact match first
+            // Exact match
             var candidate = Path.Combine(folderPath, $"{langCodeKey}.png");
             if (File.Exists(candidate))
             {
@@ -169,7 +172,7 @@ namespace EmbyIcons.Helpers
                 return candidate;
             }
 
-            // If 3-letter code, try first two letters fallback (3->2)
+            // If 3-letter code: try 2-letter fallback (first two chars)
             if (langCodeKey.Length == 3)
             {
                 var shortCode = langCodeKey.Substring(0, 2);
@@ -180,7 +183,7 @@ namespace EmbyIcons.Helpers
                     return shortCandidate;
                 }
             }
-            // If 2-letter code, try to find a 3-letter icon starting with that 2-letter prefix (2->3)
+            // If 2-letter code: try to find 3-letter icon starting with those two letters
             else if (langCodeKey.Length == 2)
             {
                 var possibleThreeLetterFiles = Directory.GetFiles(folderPath, $"{langCodeKey}??.png");
@@ -191,6 +194,7 @@ namespace EmbyIcons.Helpers
                 }
             }
 
+            // No match found: cache negative result
             cache[langCodeKey] = null!;
             return null;
         }

@@ -10,8 +10,8 @@ using MediaBrowser.Controller.Library;
 using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Controller.Providers;
 
 namespace EmbyIcons
 {
@@ -50,65 +50,67 @@ namespace EmbyIcons
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize)
            => originalSize;
 
-        // Explicit interface implementation for no-cancellation token method required by IImageEnhancer
         Task IImageEnhancer.EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                               ImageType imageType, int imageIndex)
-        {
-            // Forward call with CancellationToken.None
-            return EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
-        }
+           => EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
 
-        // Your main method supporting cancellation token
         public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                             ImageType imageType, int imageIndex,
                                             CancellationToken cancellationToken)
         {
             var options = Plugin.Instance!.GetConfiguredOptions();
 
+            LoggingHelper.Log(options.EnableLogging, $"Starting EnhanceImageAsync for {item.Name} ({item.Id})");
+
             // Check library restrictions
-            var allowedLibs = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
-            var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
+            var allowedLibs = FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
+            var libraryId = FileUtils.GetLibraryIdForItem(_libraryManager, item);
             if (allowedLibs.Count > 0 && (libraryId == null || !allowedLibs.Contains(libraryId)))
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                LoggingHelper.Log(options.EnableLogging, $"Skipping {item.Name} due to library restrictions.");
+                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
-            // Validate input file exists
             if (string.IsNullOrEmpty(inputFile) || !System.IO.File.Exists(inputFile))
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                LoggingHelper.Log(options.EnableLogging, $"Input file missing or empty for {item.Name}: {inputFile}");
+                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
-            // Detect languages in media & subtitles
-            var audioLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.AudioLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var subtitleLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.SubtitleLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> audioLangsDetected = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> subtitleLangsDetected = new(StringComparer.OrdinalIgnoreCase);
 
-            var audioLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var subtitleLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // Check supported extensions
-            var supportedExtensions =
-                options.SupportedExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim().ToLowerInvariant())
-                ?? new[] { ".mkv", ".mp4", ".avi", ".mov" };
-
-            if (!string.IsNullOrEmpty(item.Path) && System.IO.File.Exists(item.Path) &&
-                supportedExtensions.Contains(System.IO.Path.GetExtension(item.Path).ToLowerInvariant()))
+            if (item is Series series && options.ShowSeriesIconsIfAllEpisodesHaveLanguage)
             {
-                await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
-                    subtitleLangsDetected,
-                    options.EnableLogging);
-                cancellationToken.ThrowIfCancellationRequested();
+                LoggingHelper.Log(options.EnableLogging, $"Aggregating languages for series '{series.Name}'");
+                (audioLangsDetected, subtitleLangsDetected) = await GetAggregatedLanguagesForSeriesAsync(series, options, cancellationToken);
+            }
+            else
+            {
+                var supportedExtensions = options.SupportedExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim().ToLowerInvariant())
+                    ?? new[] { ".mkv", ".mp4", ".avi", ".mov" };
+
+                if (!string.IsNullOrEmpty(item.Path) && System.IO.File.Exists(item.Path) &&
+                    supportedExtensions.Contains(System.IO.Path.GetExtension(item.Path).ToLowerInvariant()))
+                {
+                    await MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
+                        subtitleLangsDetected,
+                        options.EnableLogging);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
+
+                SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
+                    options.EnableLogging, subtitleExtensions);
             }
 
-            // --- UPDATED: Use configured subtitle file extensions ---
-            var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
-
-            Helpers.SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
-                options.EnableLogging, subtitleExtensions);
-
             cancellationToken.ThrowIfCancellationRequested();
+
+            var audioLangsAllowed = LanguageHelper.ParseLanguageList(options.AudioLanguages).Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var subtitleLangsAllowed = LanguageHelper.ParseLanguageList(options.SubtitleLanguages).Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             audioLangsDetected.IntersectWith(audioLangsAllowed);
             subtitleLangsDetected.IntersectWith(subtitleLangsAllowed);
@@ -121,19 +123,19 @@ namespace EmbyIcons
 
             if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0)
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                LoggingHelper.Log(options.EnableLogging, $"No languages detected for '{item.Name}', copying original image.");
+                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
-            // Decode original image
             using var surfBmp = SKBitmap.Decode(inputFile);
             if (surfBmp == null)
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                LoggingHelper.Log(options.EnableLogging, $"Failed to decode image '{inputFile}' for '{item.Name}', copying original.");
+                await FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
-            // Initialize / refresh icon cache manager
             await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
 
             int width = surfBmp.Width;
@@ -148,23 +150,21 @@ namespace EmbyIcons
             canvas.Clear(SKColors.Transparent);
             canvas.DrawBitmap(surfBmp, 0, 0);
 
-            // Draw audio icons
             var audioIconsToDraw =
                 audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
             if (audioIconsToDraw.Count > 0)
-                Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
-                                             width, height,
-                                             options.AudioIconAlignment,
-                                             new SKPaint { FilterQuality = SKFilterQuality.High });
+                IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
+                                     width, height,
+                                     options.AudioIconAlignment,
+                                     new SKPaint { FilterQuality = SKFilterQuality.High });
 
-            // Draw subtitle icons
             var subtitleIconsToDraw =
                 subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
             if (subtitleIconsToDraw.Count > 0)
-                Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
-                                             width, height,
-                                             options.SubtitleIconAlignment,
-                                             new SKPaint { FilterQuality = SKFilterQuality.High });
+                IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
+                                     width, height,
+                                     options.SubtitleIconAlignment,
+                                     new SKPaint { FilterQuality = SKFilterQuality.High });
 
             canvas.Flush();
 
@@ -182,6 +182,78 @@ namespace EmbyIcons
             }
 
             System.IO.File.Move(tempOutput, outputFile, overwrite: true);
+
+            LoggingHelper.Log(options.EnableLogging, $"Finished EnhanceImageAsync for '{item.Name}'.");
+        }
+
+        private async Task<(HashSet<string>, HashSet<string>)> GetAggregatedLanguagesForSeriesAsync(Series series, PluginOptions options, CancellationToken cancellationToken)
+        {
+            var audioLangsAllowed = LanguageHelper.ParseLanguageList(options.AudioLanguages)
+                .Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var subtitleLangsAllowed = LanguageHelper.ParseLanguageList(options.SubtitleLanguages)
+                .Select(LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var query = new InternalItemsQuery
+            {
+                Parent = series,
+                Recursive = true,
+                IncludeItemTypes = new[] { "Episode" }
+            };
+
+            IEnumerable<BaseItem> items = _libraryManager.GetItemList(query);
+            List<Episode> episodes = items.OfType<Episode>().ToList();
+
+            if (episodes.Count == 0)
+                return (new HashSet<string>(), new HashSet<string>());
+
+            var audioLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var subtitleLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var episodeAudioLangCache = new Dictionary<Guid, HashSet<string>>();
+            var episodeSubtitleLangCache = new Dictionary<Guid, HashSet<string>>();
+
+            foreach (var ep in episodes)
+            {
+                if (string.IsNullOrEmpty(ep.Path) || !System.IO.File.Exists(ep.Path))
+                    continue;
+
+                var epAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var epSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                await MediaInfoDetector.DetectLanguagesFromMediaAsync(ep.Path!, epAudioLangs, epSubtitleLangs, options.EnableLogging);
+
+                episodeAudioLangCache[ep.Id] = epAudioLangs;
+                episodeSubtitleLangCache[ep.Id] = epSubtitleLangs;
+
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            foreach (var lang in audioLangsAllowed)
+            {
+                bool allHaveLanguage = episodes.All(ep =>
+                    episodeAudioLangCache.TryGetValue(ep.Id, out var langs) && langs.Contains(lang));
+
+                if (allHaveLanguage)
+                    audioLangsDetected.Add(lang);
+            }
+
+            foreach (var lang in subtitleLangsAllowed)
+            {
+                bool allHaveLanguage = episodes.All(ep =>
+                    episodeSubtitleLangCache.TryGetValue(ep.Id, out var langs) && langs.Contains(lang));
+
+                if (allHaveLanguage)
+                    subtitleLangsDetected.Add(lang);
+            }
+
+            if (!options.ShowAudioIcons)
+                audioLangsDetected.Clear();
+
+            if (!options.ShowSubtitleIcons)
+                subtitleLangsDetected.Clear();
+
+            return (audioLangsDetected, subtitleLangsDetected);
         }
 
         public void Dispose()
