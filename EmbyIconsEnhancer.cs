@@ -223,6 +223,13 @@ namespace EmbyIcons
 
                 await MediaInfoDetector.DetectLanguagesFromMediaAsync(ep.Path!, epAudioLangs, epSubtitleLangs, options.EnableLogging);
 
+                // Scan external subtitles for the episode file
+                SubtitleScanner.ScanExternalSubtitles(
+                    ep.Path!,
+                    epSubtitleLangs,
+                    options.EnableLogging,
+                    options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" });
+
                 episodeAudioLangCache[ep.Id] = epAudioLangs;
                 episodeSubtitleLangCache[ep.Id] = epSubtitleLangs;
 
