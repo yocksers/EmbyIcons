@@ -66,7 +66,7 @@
 
 ---
 
-- Many thanks to Neminem in the Emby Forums for hes help with testing this plugin!!
+- Many thanks to Neminem and keitaro26 in the Emby Forums for the help with testing this plugin!!
 - A shoutout to Craggles for the awesome icons!!
 
 ---
