@@ -131,22 +131,36 @@ namespace EmbyIcons
 
             canvas.Flush();
 
-            using var snapshot = surface.Snapshot();
-            using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
-
-            string tempOutput = outputFile + ".tmp";
-
-            using (var fsOut = File.OpenWrite(tempOutput))
+            try
             {
-                await encodedImg.AsStream().CopyToAsync(fsOut, cancellationToken);
-                await fsOut.FlushAsync(cancellationToken);
+                using var snapshot = surface.Snapshot();
+                using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
+
+                string tempOutput = outputFile + ".tmp";
+
+                using (var fsOut = File.OpenWrite(tempOutput))
+                {
+                    await encodedImg.AsStream().CopyToAsync(fsOut, cancellationToken);
+                    await fsOut.FlushAsync(cancellationToken);
+                }
+
+                // Replace existing file atomically on Linux:
+                if (File.Exists(outputFile))
+                    File.Delete(outputFile);
+
+                File.Move(tempOutput, outputFile);
+
+                LoggingHelper.Log(options.EnableLogging, $"Finished EnhanceImageInternalAsync for '{item.Name}'.");
             }
+            catch (Exception ex)
+            {
+                LoggingHelper.Log(true, $"Error encoding/writing enhanced image for '{item.Name}': {ex}");
 
-            File.Move(tempOutput, outputFile, overwrite: true);
-
-            LoggingHelper.Log(options.EnableLogging, $"Finished EnhanceImageInternalAsync for '{item.Name}'.");
+                // Fallback: copy original image to output to prevent corrupted file
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+            }
         }
     }
 }

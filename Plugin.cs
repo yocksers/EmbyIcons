@@ -38,6 +38,8 @@ namespace EmbyIcons
 
         public PluginOptions GetConfiguredOptions() => GetOptions();
 
+        // Set priority carefully to avoid conflicts with other image enhancers like CoverArt.
+        // Consider setting this lower or higher depending on desired enhancer order.
         public MetadataProviderPriority Priority => Enhancer.Priority;
 
         public bool Supports(BaseItem item, ImageType imageType) =>
