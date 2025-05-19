@@ -11,15 +11,20 @@ namespace EmbyIcons.Helpers
     {
         public static async Task SafeCopyAsync(string source, string dest)
         {
-            const int maxRetries = 3;
+            const int maxRetries = 5;
             int tries = 0;
+            int delayMs = 100;
 
             while (true)
             {
                 try
                 {
-                    using var sourceStream = File.OpenRead(source);
-                    using var destStream = File.Create(dest);
+                    // Open source for reading with shared read/write access to reduce lock conflicts
+                    using var sourceStream = File.Open(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+                    // Open destination for writing with shared read access to reduce lock conflicts
+                    using var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.Read);
+
                     await sourceStream.CopyToAsync(destStream);
                     await destStream.FlushAsync();
                     break;
@@ -27,8 +32,13 @@ namespace EmbyIcons.Helpers
                 catch (IOException)
                 {
                     tries++;
-                    if (tries >= maxRetries) throw;
-                    await Task.Delay(100);
+                    if (tries >= maxRetries)
+                        throw;
+
+                    await Task.Delay(delayMs);
+
+                    // Exponential backoff capped at 1 second
+                    delayMs = delayMs * 2 > 1000 ? 1000 : delayMs * 2;
                 }
             }
         }
