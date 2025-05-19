@@ -1,72 +1,90 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 
 namespace EmbyIcons.Helpers
 {
-    public static class SubtitleScanner
+    internal static class SubtitleScanner
     {
-        // Existing method scanning subtitles by folder (assumed present)
-        public static void ScanExternalSubtitles(string mediaFilePath, HashSet<string> detectedLanguages, bool enableLogging, IEnumerable<string> subtitleExtensions)
-        {
-            string folder = Path.GetDirectoryName(mediaFilePath) ?? "";
-            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
-                return;
-
-            foreach (var ext in subtitleExtensions)
-            {
-                var files = Directory.EnumerateFiles(folder, "*" + ext, SearchOption.TopDirectoryOnly);
-                foreach (var file in files)
-                {
-                    TryAddLanguageFromFilename(file, mediaFilePath, detectedLanguages, enableLogging);
-                }
-            }
-        }
-
-        // New method: scan only known subtitle files (from cached folder scan)
-        public static void ScanExternalSubtitlesWithKnownFiles(string mediaFilePath, HashSet<string> detectedLanguages, bool enableLogging, List<string> knownSubtitleFiles)
-        {
-            if (knownSubtitleFiles == null || knownSubtitleFiles.Count == 0)
-                return;
-
-            foreach (var file in knownSubtitleFiles)
-            {
-                TryAddLanguageFromFilename(file, mediaFilePath, detectedLanguages, enableLogging);
-            }
-        }
-
-        // Helper to detect language code from subtitle filename relative to media file
-        private static void TryAddLanguageFromFilename(string subtitleFilePath, string mediaFilePath, HashSet<string> detectedLanguages, bool enableLogging)
+        /// <summary>
+        /// Scans the folder adjacent to mediaOrInputPath for external subtitle files with specified extensions,
+        /// extracts language codes from filenames, and adds them to subtitleLangs.
+        /// </summary>
+        /// <param name="mediaOrInputPath">Full path to media or input file</param>
+        /// <param name="subtitleLangs">HashSet to add detected subtitle languages</param>
+        /// <param name="enableLogging">Enable logging</param>
+        /// <param name="extensions">Subtitle file extensions to scan, e.g. ".srt", ".ass", ".vtt", etc.</param>
+        public static void ScanExternalSubtitles(string? mediaOrInputPath, HashSet<string> subtitleLangs, bool enableLogging, IEnumerable<string>? extensions = null)
         {
             try
             {
-                var mediaFileNameWithoutExt = Path.GetFileNameWithoutExtension(mediaFilePath);
-                var subtitleFileNameWithoutExt = Path.GetFileNameWithoutExtension(subtitleFilePath);
-
-                // Basic check: subtitle filename must start with media filename to be related
-                if (!subtitleFileNameWithoutExt.StartsWith(mediaFileNameWithoutExt, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(mediaOrInputPath))
                     return;
 
-                // Extract language code part from subtitle filename (e.g. "movie.eng.srt" -> "eng")
-                var langMatch = Regex.Match(subtitleFileNameWithoutExt, @"\.(?<lang>[a-z]{2,3})(\..*)?$", RegexOptions.IgnoreCase);
-                if (!langMatch.Success)
+                var folderPath = Path.GetDirectoryName(mediaOrInputPath);
+
+                if (string.IsNullOrEmpty(folderPath))
                     return;
 
-                var langCode = langMatch.Groups["lang"].Value.ToLowerInvariant();
+                if (!Directory.Exists(folderPath))
+                    return;
 
-                if (!string.IsNullOrEmpty(langCode) && !detectedLanguages.Contains(langCode))
+                // Default to .srt if no extensions provided
+                var exts = extensions ?? new[] { ".srt" };
+
+                foreach (var ext in exts)
                 {
-                    detectedLanguages.Add(langCode);
-                    if (enableLogging)
-                        Console.WriteLine($"Detected subtitle language '{langCode}' from file '{subtitleFilePath}'.");
+                    var trimmedExt = ext.Trim().ToLowerInvariant();
+                    if (!trimmedExt.StartsWith("."))
+                        trimmedExt = "." + trimmedExt;
+
+                    var files = Directory.GetFiles(folderPath, "*" + trimmedExt);
+
+                    foreach (var file in files)
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+
+                        var langCode = ExtractLangCodeFromFilename(fileName);
+
+                        if (!string.IsNullOrEmpty(langCode) && !subtitleLangs.Contains(langCode))
+                        {
+                            subtitleLangs.Add(langCode);
+
+                            if (enableLogging)
+                                LoggingHelper.Log(true, $"SubtitleScanner: Detected subtitle language '{langCode}' from file '{file}'.");
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 if (enableLogging)
-                    Console.WriteLine($"Error scanning subtitle file '{subtitleFilePath}': {ex.Message}");
+                    LoggingHelper.Log(true, $"SubtitleScanner: Exception scanning subtitles: {ex.Message}");
             }
+        }
+
+        private static string? ExtractLangCodeFromFilename(string fileName)
+        {
+            // Split by '.' or '_'
+            var parts = fileName.Split(new[] { '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // Try last part first
+            if (parts.Length > 1)
+            {
+                var candidate = parts[^1];
+                if (candidate.Length >= 2 && candidate.Length <= 5) // Allow regional codes like en-US
+                    return LanguageHelper.NormalizeLangCode(candidate);
+            }
+
+            // Try second last part as fallback
+            if (parts.Length > 2)
+            {
+                var candidate = parts[^2];
+                if (candidate.Length >= 2 && candidate.Length <= 5)
+                    return LanguageHelper.NormalizeLangCode(candidate);
+            }
+
+            return null;
         }
     }
 }

@@ -1,62 +1,18 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Model.Entities;  // For ImageType
+using MediaBrowser.Model.Entities;  // Correct namespace for ImageType
 using MediaBrowser.Model.Drawing;
 using SkiaSharp;
-using EmbyIcons.Helpers; // <-- Added for WithCancellation extension method and Helpers
+using EmbyIcons.Helpers;
 
 namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        // Cache media path -> detected languages (audio, subtitles)
-        private static readonly ConcurrentDictionary<string, (HashSet<string> AudioLangs, HashSet<string> SubtitleLangs)> _mediaLanguageCache
-            = new();
-
-        internal async Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs)> GetLanguagesForMediaAsync(string mediaPath, PluginOptions options, CancellationToken cancellationToken)
-        {
-            if (_mediaLanguageCache.TryGetValue(mediaPath, out var cached))
-                return cached;
-
-            var audioLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var subtitleLangsDetected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            await DetectLanguagesWithTimeoutAsync(mediaPath, audioLangsDetected, subtitleLangsDetected, options.EnableLogging, cancellationToken);
-
-            var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
-            // Use cached subtitle files per folder
-            string folder = Path.GetDirectoryName(mediaPath) ?? "";
-            var knownSubtitleFiles = SubtitleFolderCacheHelper.GetSubtitleFilesForFolder(folder, subtitleExtensions);
-
-            SubtitleScanner.ScanExternalSubtitlesWithKnownFiles(mediaPath, subtitleLangsDetected, options.EnableLogging, knownSubtitleFiles);
-
-            _mediaLanguageCache[mediaPath] = (audioLangsDetected, subtitleLangsDetected);
-            return (audioLangsDetected, subtitleLangsDetected);
-        }
-
-        private async Task DetectLanguagesWithTimeoutAsync(string mediaPath, HashSet<string> audioLangs, HashSet<string> subtitleLangs,
-                                                          bool enableLogging, CancellationToken cancellationToken)
-        {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(30)); // Timeout after 30 seconds
-
-            try
-            {
-                await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(mediaPath, audioLangs, subtitleLangs, enableLogging)
-                    .WithCancellation(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                LoggingHelper.Log(enableLogging, $"Language detection timed out or cancelled for: {mediaPath}");
-                // Optionally continue with partial results or empty sets
-            }
-        }
-
         internal async Task EnhanceImageInternalAsync(MediaBrowser.Controller.Entities.BaseItem item,
                                                      string inputFile,
                                                      string outputFile,
@@ -102,16 +58,16 @@ namespace EmbyIcons
                 if (!string.IsNullOrEmpty(item.Path) && File.Exists(item.Path) &&
                     supportedExtensions.Contains(Path.GetExtension(item.Path).ToLowerInvariant()))
                 {
-                    (audioLangsDetected, subtitleLangsDetected) = await GetLanguagesForMediaAsync(item.Path!, options, cancellationToken);
+                    await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
+                        subtitleLangsDetected,
+                        options.EnableLogging);
                     cancellationToken.ThrowIfCancellationRequested();
                 }
-                else
-                {
-                    // Fallback: scan subtitles without caching if no media path or unsupported extension
-                    var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
-                    SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
-                        options.EnableLogging, subtitleExtensions);
-                }
+
+                var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
+
+                Helpers.SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
+                    options.EnableLogging, subtitleExtensions);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -157,30 +113,21 @@ namespace EmbyIcons
             canvas.Clear(SKColors.Transparent);
             canvas.DrawBitmap(surfBmp, 0, 0);
 
-            // Cache icons before drawing to optimize performance
-            var audioIconsToDraw = audioLangsDetected
-                .OrderBy(l => l)
-                .Select(lang => _iconCacheManager.GetCachedIcon(lang, false))
-                .Where(icon => icon != null)
-                .ToList();
-
-            var subtitleIconsToDraw = subtitleLangsDetected
-                .OrderBy(l => l)
-                .Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true))
-                .Where(icon => icon != null)
-                .ToList();
-
+            var audioIconsToDraw =
+                audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
             if (audioIconsToDraw.Count > 0)
                 Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
                                              width, height,
                                              options.AudioIconAlignment,
-                                             new SKPaint { FilterQuality = SKFilterQuality.High });
+                                             new SkiaSharp.SKPaint { FilterQuality = SkiaSharp.SKFilterQuality.High });
 
+            var subtitleIconsToDraw =
+                subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
             if (subtitleIconsToDraw.Count > 0)
                 Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
                                              width, height,
                                              options.SubtitleIconAlignment,
-                                             new SKPaint { FilterQuality = SKFilterQuality.High });
+                                             new SkiaSharp.SKPaint { FilterQuality = SkiaSharp.SKFilterQuality.High });
 
             canvas.Flush();
 
