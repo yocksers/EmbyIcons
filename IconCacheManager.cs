@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SkiaSharp;
@@ -11,8 +13,6 @@ namespace EmbyIcons.Helpers
 {
     public class IconCacheManager : IDisposable
     {
-        private FileSystemWatcher? _iconFolderWatcher;
-
         private readonly TimeSpan _cacheTtl;
 
         private readonly ConcurrentDictionary<string, string?> _audioIconPathCache = new();
@@ -24,9 +24,20 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
 
-        public IconCacheManager(TimeSpan cacheTtl)
+        // Track file last write times to detect changes
+        private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
+
+        private string _currentIconVersion = string.Empty;
+
+        public event EventHandler<string>? CacheRefreshedWithVersion;
+
+        // Max degree of parallelism for icon loading to avoid overloading CPU/IO
+        private readonly int _maxParallelism;
+
+        public IconCacheManager(TimeSpan cacheTtl, int maxParallelism = 4)
         {
             _cacheTtl = cacheTtl;
+            _maxParallelism = maxParallelism;
         }
 
         public async Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -35,12 +46,16 @@ namespace EmbyIcons.Helpers
             {
                 _iconsFolder = iconsFolder;
                 await RefreshCacheAsync(cancellationToken);
-                SetupWatcher();
             }
             else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
             {
                 await RefreshCacheAsync(cancellationToken);
             }
+        }
+
+        public async Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken)
+        {
+            await RefreshCacheAsync(cancellationToken);
         }
 
         private async Task RefreshCacheAsync(CancellationToken cancellationToken)
@@ -49,6 +64,36 @@ namespace EmbyIcons.Helpers
                 return;
 
             var pngFiles = Directory.GetFiles(_iconsFolder, "*.png");
+
+            bool anyChanged = false;
+            var currentWriteTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in pngFiles)
+            {
+                var lastWrite = File.GetLastWriteTimeUtc(file);
+                currentWriteTimes[file] = lastWrite;
+
+                if (!_iconFileLastWriteTimes.TryGetValue(file, out var knownWrite) || knownWrite != lastWrite)
+                {
+                    anyChanged = true;
+                }
+            }
+
+            foreach (var cachedFile in _iconFileLastWriteTimes.Keys)
+            {
+                if (!currentWriteTimes.ContainsKey(cachedFile))
+                {
+                    anyChanged = true;
+                    break;
+                }
+            }
+
+            if (!anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
+                return;
+
+            _iconFileLastWriteTimes.Clear();
+            foreach (var kvp in currentWriteTimes)
+                _iconFileLastWriteTimes[kvp.Key] = kvp.Value;
 
             _audioIconPathCache.Clear();
             _subtitleIconPathCache.Clear();
@@ -69,13 +114,15 @@ namespace EmbyIcons.Helpers
                         _audioIconPathCache[name] = file;
                 }
 
-                Parallel.ForEach(_audioIconPathCache.Values.Where(f => f != null)!, new ParallelOptions { CancellationToken = cancellationToken }, path =>
+                var po = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = _maxParallelism };
+
+                Parallel.ForEach(_audioIconPathCache.Values.Where(f => f != null)!, po, path =>
                 {
                     if (!string.IsNullOrEmpty(path))
                         TryLoadAndCacheIcon(path!, false);
                 });
 
-                Parallel.ForEach(_subtitleIconPathCache.Values.Where(f => f != null)!, new ParallelOptions { CancellationToken = cancellationToken }, path =>
+                Parallel.ForEach(_subtitleIconPathCache.Values.Where(f => f != null)!, po, path =>
                 {
                     if (!string.IsNullOrEmpty(path))
                         TryLoadAndCacheIcon(path!, true);
@@ -83,6 +130,14 @@ namespace EmbyIcons.Helpers
             }, cancellationToken);
 
             _lastCacheRefreshTime = DateTime.UtcNow;
+
+            var version = ComputeIconFilesVersion(pngFiles);
+
+            bool versionChanged = version != _currentIconVersion;
+            _currentIconVersion = version;
+
+            if (anyChanged && versionChanged)
+                CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
@@ -100,17 +155,20 @@ namespace EmbyIcons.Helpers
                 using var stream = File.OpenRead(iconPath);
                 var data = SKData.Create(stream);
                 var img = data != null ? SKImage.FromEncodedData(data) : null;
-                CacheIcon(iconPath, img, isSubtitle);
+                var lastWrite = File.GetLastWriteTimeUtc(iconPath);
+                CacheIcon(iconPath, img, lastWrite, isSubtitle);
             }
-            catch
+            catch (Exception ex)
             {
-                CacheIcon(iconPath, null, isSubtitle);
+                // Log exception for diagnostics - replace with your logging system as needed
+                Console.WriteLine($"[IconCacheManager] Failed to load icon '{iconPath}': {ex.Message}");
+                CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
             }
         }
 
-        private void CacheIcon(string iconPath, SKImage? image, bool isSubtitle)
+        private void CacheIcon(string iconPath, SKImage? image, DateTime lastWrite, bool isSubtitle)
         {
-            var cacheEntry = new CachedIcon(image);
+            var cacheEntry = new CachedIcon(image, lastWrite);
 
             var cache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
 
@@ -137,34 +195,28 @@ namespace EmbyIcons.Helpers
             if (iconPath == null || !File.Exists(iconPath))
                 return null;
 
+            var currentFileWrite = File.GetLastWriteTimeUtc(iconPath);
+
             if (imageCache.TryGetValue(iconPath, out var cached))
             {
-                if (cached.IsExpired(_cacheTtl))
+                if (cached.IsExpired(_cacheTtl) || cached.FileWriteTimeUtc != currentFileWrite)
                     TryLoadAndCacheIcon(iconPath, isSubtitle);
 
-                return cached.Image;
+                return imageCache.TryGetValue(iconPath, out var latest) ? latest.Image : null;
             }
 
             TryLoadAndCacheIcon(iconPath, isSubtitle);
             return imageCache.TryGetValue(iconPath, out var loaded) ? loaded.Image : null;
         }
 
-        /// <summary>
-        /// Resolves the icon path for the given language code with bidirectional fallback:
-        /// - First tries exact match on the code.
-        /// - If 3-letter code and no exact match, tries the first two letters as 2-letter fallback.
-        /// - If 2-letter code and no exact match, tries to find any 3-letter icon starting with those two letters.
-        /// </summary>
         private string? ResolveIconPathWithFallback(string langCodeKey, string folderPath,
                                                    ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
-            // Check cache first
             if (cache.TryGetValue(langCodeKey, out var path) && !string.IsNullOrEmpty(path))
                 return path;
 
-            // Exact match
             var candidate = Path.Combine(folderPath, $"{langCodeKey}.png");
             if (File.Exists(candidate))
             {
@@ -172,7 +224,6 @@ namespace EmbyIcons.Helpers
                 return candidate;
             }
 
-            // If 3-letter code: try 2-letter fallback (first two chars)
             if (langCodeKey.Length == 3)
             {
                 var shortCode = langCodeKey.Substring(0, 2);
@@ -183,7 +234,6 @@ namespace EmbyIcons.Helpers
                     return shortCandidate;
                 }
             }
-            // If 2-letter code: try to find 3-letter icon starting with those two letters
             else if (langCodeKey.Length == 2)
             {
                 var possibleThreeLetterFiles = Directory.GetFiles(folderPath, $"{langCodeKey}??.png");
@@ -194,81 +244,43 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            // No match found: cache negative result
+#pragma warning disable CS8604 // Possible null reference argument.
             cache[langCodeKey] = null!;
+#pragma warning restore CS8604 // Possible null reference argument.
+
             return null;
         }
 
-        private void SetupWatcher()
+        private static string ComputeIconFilesVersion(string[] files)
         {
-            try
-            {
-                if (_iconFolderWatcher != null)
-                {
-                    _iconFolderWatcher.EnableRaisingEvents = false;
-                    _iconFolderWatcher.Dispose();
-                    _iconFolderWatcher = null;
-                }
+            using var md5 = MD5.Create();
 
-                if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
-                    return;
+            var combined =
+              string.Join("|", files.OrderBy(f => f).Select(f =>
+                  f.ToLowerInvariant() + ":" + File.GetLastWriteTimeUtc(f).Ticks));
 
-                _iconFolderWatcher = new FileSystemWatcher(_iconsFolder, "*.png")
-                {
-                    EnableRaisingEvents = true,
-                    IncludeSubdirectories = false,
-                    NotifyFilter =
-                        NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime | NotifyFilters.Size
-                };
+            var bytes = Encoding.UTF8.GetBytes(combined);
+            var hashBytes = md5.ComputeHash(bytes);
 
-                _iconFolderWatcher.Changed += OnFolderChanged;
-                _iconFolderWatcher.Created += OnFolderChanged;
-                _iconFolderWatcher.Deleted += OnFolderChanged;
-                _iconFolderWatcher.Renamed += OnFolderChanged;
-            }
-            catch
-            {
-                // Optionally handle watcher setup failure
-            }
-        }
-
-        private DateTime _lastEventTime = DateTime.MinValue;
-        private static readonly TimeSpan _eventDebounceTime = TimeSpan.FromSeconds(1);
-
-        private void OnFolderChanged(object sender, FileSystemEventArgs e)
-        {
-            var now = DateTime.UtcNow;
-            if (now - _lastEventTime < _eventDebounceTime)
-                return;
-
-            _lastEventTime = now;
-
-#pragma warning disable CS4014 // fire-and-forget
-            RefreshCacheAsync(CancellationToken.None);
-#pragma warning restore CS4014
+            return Convert.ToBase64String(hashBytes);
         }
 
         public void Dispose()
         {
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
-
-            if (_iconFolderWatcher != null)
-            {
-                _iconFolderWatcher.EnableRaisingEvents = false;
-                _iconFolderWatcher.Dispose();
-                _iconFolderWatcher = null;
-            }
         }
 
         private sealed class CachedIcon
         {
             public SKImage? Image { get; }
+            public DateTime FileWriteTimeUtc { get; }
             private readonly DateTime _loadTimeUtc;
 
-            public CachedIcon(SKImage? image)
+            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc)
             {
                 Image = image;
+                FileWriteTimeUtc = fileWriteTimeUtc;
                 _loadTimeUtc = DateTime.UtcNow;
             }
 

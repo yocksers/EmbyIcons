@@ -1,15 +1,15 @@
-using MediaBrowser.Common.Plugins;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Drawing;
-using MediaBrowser.Model.Drawing;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Common;
-using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Drawing;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Model.Drawing;
 
 namespace EmbyIcons
 {
@@ -27,12 +27,43 @@ namespace EmbyIcons
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             Instance = this;
         }
+
         protected override void OnOptionsSaved(PluginOptions options)
         {
-            _enhancer = null;
             base.OnOptionsSaved(options);
+
+            if (_enhancer == null)
+            {
+                _enhancer = new EmbyIconsEnhancer(_libraryManager);
+            }
+
+            try
+            {
+                var task = _enhancer.RefreshIconCacheAsync(CancellationToken.None);
+                bool completed = task.Wait(TimeSpan.FromSeconds(10));
+
+                if (!completed)
+                {
+                    Helpers.LoggingHelper.Log(true, "EmbyIcons: Warning - icon cache refresh timed out on options save.");
+                }
+                else
+                {
+                    Helpers.LoggingHelper.Log(true, "EmbyIcons: Icon cache refreshed successfully on options save.");
+                }
+
+                // Note: Clearing Emby image cache per item is not available in public API.
+                // Consider instructing users to refresh metadata manually if needed.
+            }
+            catch (Exception ex)
+            {
+                Helpers.LoggingHelper.Log(true, "EmbyIcons: Error refreshing icon cache on options save: " + ex.Message);
+            }
+
+            _enhancer.Dispose();
+            _enhancer = null;
         }
-private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager);
+
+        private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager);
 
         public override string Name => "EmbyIcons";
 
@@ -42,8 +73,6 @@ private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libra
 
         public PluginOptions GetConfiguredOptions() => GetOptions();
 
-        // Set priority carefully to avoid conflicts with other image enhancers like CoverArt.
-        // Consider setting this lower or higher depending on desired enhancer order.
         public MetadataProviderPriority Priority => Enhancer.Priority;
 
         public bool Supports(BaseItem item, ImageType imageType) =>
@@ -52,13 +81,17 @@ private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libra
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType) =>
             Enhancer.GetConfigurationCacheKey(item, imageType);
 
-        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
+        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile,
+                                                      ImageType imageType, int imageIndex) =>
             Enhancer.GetEnhancedImageInfo(item, inputFile, imageType, imageIndex);
 
-        public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) =>
+        public ImageSize GetEnhancedImageSize(BaseItem item,
+                                              ImageType imageType, int imageIndex,
+                                              ImageSize originalSize) =>
             Enhancer.GetEnhancedImageSize(item, imageType, imageIndex, originalSize);
 
-        public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex) =>
+        public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
+                                      ImageType imageType, int imageIndex) =>
             Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
     }
 }

@@ -41,11 +41,12 @@ namespace EmbyIcons
 
             SupportedExtensions = ".mkv,.mp4,.avi,.mov";
 
-            // NEW: external subtitle extensions list
             SubtitleFileExtensions = ".srt,.ass,.vtt";
 
-            // Added default for new property
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
+
+            AudioIconVerticalOffset = 0; // New property default
+            SubtitleIconVerticalOffset = 0; // New property default
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -76,6 +77,14 @@ namespace EmbyIcons
         [Description("Corner of the poster where subtitle icons are overlayed.")]
         public IconAlignment SubtitleIconAlignment { get; set; }
 
+        [DisplayName("Audio Icon Vertical Offset (px)")]
+        [Description("Vertical offset in pixels from the default audio icon position. Positive moves down, negative moves up.")]
+        public int AudioIconVerticalOffset { get; set; }
+
+        [DisplayName("Subtitle Icon Vertical Offset (px)")]
+        [Description("Vertical offset in pixels from the default subtitle icon position. Positive moves down, negative moves up.")]
+        public int SubtitleIconVerticalOffset { get; set; }
+
         [DisplayName("Audio Languages to Detect")]
         [Description("Comma-separated audio language codes (e.g., eng,dan,jpn). Only these audio languages will have icons overlaid.")]
         public string AudioLanguages { get; set; }
@@ -100,12 +109,10 @@ namespace EmbyIcons
         [Description("Comma-separated list of supported media file extensions for language detection.")]
         public string SupportedExtensions { get; set; }
 
-        // NEW property added here
         [DisplayName("External Subtitle File Extensions")]
         [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.vtt).")]
         public string SubtitleFileExtensions { get; set; }
 
-        // NEW property added here
         [DisplayName("Show Series Icons If All Episodes Have Language")]
         [Description("Show icons on series posters if all episodes have the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }

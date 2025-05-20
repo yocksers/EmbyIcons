@@ -12,7 +12,8 @@ namespace EmbyIcons.Helpers
                                      int width,
                                      int height,
                                      IconAlignment alignment,
-                                     SKPaint paint)
+                                     SKPaint paint,
+                                     int verticalOffset = 0)
         {
             int count = icons.Count;
 
@@ -29,6 +30,8 @@ namespace EmbyIcons.Helpers
                 alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight
                     ? height - size - pad
                     : pad;
+
+            startY += verticalOffset;
 
             for (int i = 0; i < count; i++)
             {
