@@ -57,7 +57,8 @@
 
 ## Troubleshooting
 
-- For icons to show on TV show posters ALL episodes but contain the same language audio and/or subtitles.
+- When chaging an icon for another of the same name sometimes a metadata refresh (with new images and/or server restart might be needed, not much i can do about that.
+- For icons to show on TV show posters ALL episodes must contain the same language audio and/or subtitles.
 - You need to supply your own icons. 
 - Verify the icon folder path contains correctly named PNG icons for your languages.  
 - Library names might need quotetation marks around them on some systems eg. "Movies". I'm looking into this.
