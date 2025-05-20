@@ -52,7 +52,7 @@ namespace EmbyIcons
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata might be needed for changes to take effect!</h2><br/>" +
+           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when chaging an icon for one with the same name!</h2><br/>" +
            "Best to test your settings with one video at a time but not required.";
 
         [DisplayName("Icons Folder Path")]
