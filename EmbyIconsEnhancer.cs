@@ -37,11 +37,41 @@ namespace EmbyIcons
                    item is Season || item is BoxSet || item is MusicVideo;
         }
 
-        public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
+                public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
-            var options = Plugin.Instance!.GetConfiguredOptions();
-            var libsKey = (options.SelectedLibraries ?? "").Replace(',', '-').Replace(" ", "");
-            return $"embyicons_{item.Id}_{imageType}_scale{options.IconSize}_libs{libsKey}";
+            var o = Plugin.Instance!.GetConfiguredOptions();
+
+            // library filter
+            var libs = (o.SelectedLibraries ?? "")
+                        .Replace(',', '-')
+                        .Replace(" ", "");
+
+            // languages
+            string Norm(string s) => (s ?? "")
+                                        .Replace(",", "-")
+                                        .Replace(" ", "")
+                                        .ToLowerInvariant();
+            var aLangs = Norm(o.AudioLanguages);
+            var sLangs = Norm(o.SubtitleLanguages);
+
+            // alignments & toggles
+            var aAlign = o.AudioIconAlignment.ToString();
+            var sAlign = o.SubtitleIconAlignment.ToString();
+            var showA  = o.ShowAudioIcons   ? "1" : "0";
+            var showS  = o.ShowSubtitleIcons? "1" : "0";
+            var series = o.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0";
+
+            return
+              $"embyicons_{item.Id}_{imageType}" +
+              $"_sz{o.IconSize}" +
+              $"_libs{libs}" +
+              $"_aLangs{aLangs}" +
+              $"_sLangs{sLangs}" +
+              $"_aAlign{aAlign}" +
+              $"_sAlign{sAlign}" +
+              $"_showA{showA}" +
+              $"_showS{showS}" +
+              $"_series{series}";
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)

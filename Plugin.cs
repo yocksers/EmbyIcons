@@ -27,8 +27,12 @@ namespace EmbyIcons
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             Instance = this;
         }
-
-        private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager);
+        protected override void OnOptionsSaved(PluginOptions options)
+        {
+            _enhancer = null;
+            base.OnOptionsSaved(options);
+        }
+private EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager);
 
         public override string Name => "EmbyIcons";
 
