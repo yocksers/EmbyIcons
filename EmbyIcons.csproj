@@ -5,7 +5,19 @@
 		<OutputType>Library</OutputType>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
+
+		<Version>1.19.0</Version>
+		<AssemblyVersion>1.19.0.0</AssemblyVersion>
+		<FileVersion>1.19.0.0</FileVersion>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="Images\logo.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Images\logo.png" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="MediaBrowser.Common" Version="4.8.11" />
@@ -13,9 +25,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Reference Include="SkiaSharp">
-	    <HintPath>C:\Users\yock1\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
-	  </Reference>
+		<Reference Include="SkiaSharp">
+			<HintPath>C:\Users\yock1\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+		</Reference>
 	</ItemGroup>
 
 </Project>

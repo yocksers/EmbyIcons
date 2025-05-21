@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common;
@@ -13,7 +15,8 @@ using MediaBrowser.Model.Drawing;
 
 namespace EmbyIcons
 {
-    public class Plugin : BasePluginSimpleUI<PluginOptions>
+    // Implement IHasThumbImage to provide embedded logo to Emby UI
+    public class Plugin : BasePluginSimpleUI<PluginOptions>, IHasThumbImage
     {
         private readonly ILibraryManager _libraryManager;
 
@@ -93,5 +96,18 @@ namespace EmbyIcons
         public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                       ImageType imageType, int imageIndex) =>
             Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
+
+        // IHasThumbImage implementation to provide embedded logo as plugin icon
+        public Stream GetThumbImage()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+
+            // Adjust namespace and path if logo.png location changes
+            string resourceName = $"{GetType().Namespace}.Images.logo.png";
+
+            return assembly.GetManifestResourceStream(resourceName) ?? Stream.Null;
+        }
+
+        public ImageFormat ThumbImageFormat => ImageFormat.Png;
     }
 }
