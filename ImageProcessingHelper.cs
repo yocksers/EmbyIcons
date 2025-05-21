@@ -101,6 +101,10 @@ namespace EmbyIcons
                 int iconSize = Math.Max(16, (shortSide * options.IconSize) / 100);
                 int padding = Math.Max(4, iconSize / 4);
 
+                // Convert vertical offset % to pixels based on shorter side length
+                int audioVerticalOffsetPx = (shortSide * options.AudioIconVerticalOffset) / 100;
+                int subtitleVerticalOffsetPx = (shortSide * options.SubtitleIconVerticalOffset) / 100;
+
                 using (var surface = SKSurface.Create(new SKImageInfo(width, height)))
                 {
                     var canvas = surface.Canvas;
@@ -116,7 +120,7 @@ namespace EmbyIcons
                                                      width, height,
                                                      options.AudioIconAlignment,
                                                      new SKPaint { FilterQuality = SKFilterQuality.High },
-                                                     options.AudioIconVerticalOffset);
+                                                     audioVerticalOffsetPx);
 
                     var subtitleIconsToDraw =
                         subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
@@ -126,7 +130,7 @@ namespace EmbyIcons
                                                      width, height,
                                                      options.SubtitleIconAlignment,
                                                      new SKPaint { FilterQuality = SKFilterQuality.High },
-                                                     options.SubtitleIconVerticalOffset);
+                                                     subtitleVerticalOffsetPx);
 
                     canvas.Flush();
 

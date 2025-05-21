@@ -45,8 +45,9 @@ namespace EmbyIcons
 
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
 
-            AudioIconVerticalOffset = 0; // New property default
-            SubtitleIconVerticalOffset = 0; // New property default
+            // Changed: Vertical offsets are now percentages of the shorter side (instead of pixels)
+            AudioIconVerticalOffset = 0;
+            SubtitleIconVerticalOffset = 0;
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -77,12 +78,12 @@ namespace EmbyIcons
         [Description("Corner of the poster where subtitle icons are overlayed.")]
         public IconAlignment SubtitleIconAlignment { get; set; }
 
-        [DisplayName("Audio Icon Vertical Offset (px)")]
-        [Description("Vertical offset in pixels from the default audio icon position. Positive moves down, negative moves up.")]
+        [DisplayName("Audio Icon Vertical Offset (%)")]
+        [Description("Vertical offset as % of the poster's shorter dimension. Positive moves down, negative moves up.")]
         public int AudioIconVerticalOffset { get; set; }
 
-        [DisplayName("Subtitle Icon Vertical Offset (px)")]
-        [Description("Vertical offset in pixels from the default subtitle icon position. Positive moves down, negative moves up.")]
+        [DisplayName("Subtitle Icon Vertical Offset (%)")]
+        [Description("Vertical offset as % of the poster's shorter dimension. Positive moves down, negative moves up.")]
         public int SubtitleIconVerticalOffset { get; set; }
 
         [DisplayName("Audio Languages to Detect")]
