@@ -1,17 +1,17 @@
-﻿using System;
+﻿using EmbyIcons.Helpers;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Drawing;
+using MediaBrowser.Model.Entities;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Drawing;
-using EmbyIcons.Helpers;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Providers;
 
 namespace EmbyIcons
 {
@@ -76,28 +76,27 @@ namespace EmbyIcons
             var aVertOffset = o.AudioIconVerticalOffset.ToString();
             var sVertOffset = o.SubtitleIconVerticalOffset.ToString();
 
-            // NEW: Add media and subtitle timestamp for cache invalidation
             string mediaFileTimestamp = "";
             string subtitleTimestamp = "";
 
             try
             {
-                if (!string.IsNullOrEmpty(item.Path))
-                {
-                    var path = item.Path;
+                var path = item.Path;
 
+                if (!string.IsNullOrEmpty(path))
+                {
                     if (File.Exists(path))
                     {
                         mediaFileTimestamp = File.GetLastWriteTimeUtc(path).Ticks.ToString();
                     }
 
-                    var subtitleDir = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(subtitleDir) && Directory.Exists(subtitleDir))
+                    var folder = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
                     {
                         var subtitleExtensions = o.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                             ?? new[] { ".srt", ".ass", ".vtt" };
+                                                 ?? new[] { ".srt", ".ass", ".vtt" };
 
-                        var subsLastWrite = Directory.GetFiles(subtitleDir)
+                        var subsLastWrite = Directory.GetFiles(folder)
                             .Where(f => subtitleExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
                             .Select(f => File.GetLastWriteTimeUtc(f).Ticks)
                             .DefaultIfEmpty(0)
@@ -109,7 +108,7 @@ namespace EmbyIcons
             }
             catch (Exception ex)
             {
-                Helpers.LoggingHelper.Log(true, $"Failed to compute timestamps for cache key: {ex.Message}");
+                Helpers.LoggingHelper.Log(true, $"Exception while computing timestamps for cache key on '{item.Name}': {ex.Message}");
             }
 
             return
@@ -125,8 +124,8 @@ namespace EmbyIcons
               $"_series{series}" +
               $"_aVertOffset{aVertOffset}" +
               $"_sVertOffset{sVertOffset}" +
-              $"_mediaTS{mediaFileTimestamp}" + // newly added
-              $"_subsTS{subtitleTimestamp}" +   // newly added
+              $"_mediaTS{mediaFileTimestamp}" +
+              $"_subsTS{subtitleTimestamp}" +
               $"_iconVer{_iconCacheVersion}";
         }
 

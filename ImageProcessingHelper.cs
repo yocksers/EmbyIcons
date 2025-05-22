@@ -1,5 +1,6 @@
 ﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using SkiaSharp;
@@ -47,16 +48,25 @@ namespace EmbyIcons
             }
             else
             {
-                var supportedExtensions = options.SupportedExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim().ToLowerInvariant())
-                    ?? new[] { ".mkv", ".mp4", ".avi", ".mov" };
+                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
 
-                if (!string.IsNullOrEmpty(item.Path) && File.Exists(item.Path) &&
-                    supportedExtensions.Contains(Path.GetExtension(item.Path).ToLowerInvariant()))
+                foreach (var stream in streams)
                 {
-                    await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(item.Path!, audioLangsDetected,
-                        subtitleLangsDetected,
-                        options.EnableLogging);
-                    cancellationToken.ThrowIfCancellationRequested();
+                    if (stream.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.Language))
+                    {
+                        var norm = LanguageHelper.NormalizeLangCode(stream.Language);
+                        audioLangsDetected.Add(norm);
+                        if (options.EnableLogging)
+                            LoggingHelper.Log(true, $"[Embedded] Audio stream: {stream.Language} => {norm}");
+                    }
+
+                    if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
+                    {
+                        var norm = LanguageHelper.NormalizeLangCode(stream.Language);
+                        subtitleLangsDetected.Add(norm);
+                        if (options.EnableLogging)
+                            LoggingHelper.Log(true, $"[Embedded] Subtitle stream: {stream.Language} => {norm}");
+                    }
                 }
 
                 var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
@@ -85,97 +95,92 @@ namespace EmbyIcons
                 return;
             }
 
-            using (var surfBmp = SKBitmap.Decode(inputFile))
+            using var surfBmp = SKBitmap.Decode(inputFile);
+            if (surfBmp == null)
             {
-                if (surfBmp == null)
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                return;
+            }
+
+            await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
+
+            int width = surfBmp.Width;
+            int height = surfBmp.Height;
+            int shortSide = Math.Min(width, height);
+            int iconSize = Math.Max(16, (shortSide * options.IconSize) / 100);
+            int padding = Math.Max(4, iconSize / 4);
+
+            int audioVerticalOffsetPx = (shortSide * options.AudioIconVerticalOffset) / 100;
+            int subtitleVerticalOffsetPx = (shortSide * options.SubtitleIconVerticalOffset) / 100;
+
+            using var surface = SKSurface.Create(new SKImageInfo(width, height));
+            var canvas = surface.Canvas;
+
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(surfBmp, 0, 0);
+
+            var audioIconsToDraw =
+                audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
+
+            if (audioIconsToDraw.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
+                                             width, height,
+                                             options.AudioIconAlignment,
+                                             new SKPaint { FilterQuality = SKFilterQuality.High },
+                                             audioVerticalOffsetPx);
+
+            var subtitleIconsToDraw =
+                subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
+
+            if (subtitleIconsToDraw.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
+                                             width, height,
+                                             options.SubtitleIconAlignment,
+                                             new SKPaint { FilterQuality = SKFilterQuality.High },
+                                             subtitleVerticalOffsetPx);
+
+            canvas.Flush();
+
+            try
+            {
+                using var snapshot = surface.Snapshot();
+                using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
+
+                string tempOutput = outputFile + "." + Guid.NewGuid() + ".tmp";
+
+                using (var fsOut = File.Create(tempOutput))
                 {
-                    await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
-                    return;
+                    await encodedImg.AsStream().CopyToAsync(fsOut);
+                    await fsOut.FlushAsync();
                 }
 
-                await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
+                const int maxRetries = 5;
+                int retries = 0;
+                int delayMs = 100;
 
-                int width = surfBmp.Width;
-                int height = surfBmp.Height;
-                int shortSide = Math.Min(width, height);
-                int iconSize = Math.Max(16, (shortSide * options.IconSize) / 100);
-                int padding = Math.Max(4, iconSize / 4);
-
-                // Convert vertical offset % to pixels based on shorter side length
-                int audioVerticalOffsetPx = (shortSide * options.AudioIconVerticalOffset) / 100;
-                int subtitleVerticalOffsetPx = (shortSide * options.SubtitleIconVerticalOffset) / 100;
-
-                using (var surface = SKSurface.Create(new SKImageInfo(width, height)))
+                while (true)
                 {
-                    var canvas = surface.Canvas;
-
-                    canvas.Clear(SKColors.Transparent);
-                    canvas.DrawBitmap(surfBmp, 0, 0);
-
-                    var audioIconsToDraw =
-                        audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
-
-                    if (audioIconsToDraw.Count > 0)
-                        Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
-                                                     width, height,
-                                                     options.AudioIconAlignment,
-                                                     new SKPaint { FilterQuality = SKFilterQuality.High },
-                                                     audioVerticalOffsetPx);
-
-                    var subtitleIconsToDraw =
-                        subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
-
-                    if (subtitleIconsToDraw.Count > 0)
-                        Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
-                                                     width, height,
-                                                     options.SubtitleIconAlignment,
-                                                     new SKPaint { FilterQuality = SKFilterQuality.High },
-                                                     subtitleVerticalOffsetPx);
-
-                    canvas.Flush();
-
                     try
                     {
-                        using var snapshot = surface.Snapshot();
-                        using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
-
-                        Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
-
-                        string tempOutput = outputFile + "." + Guid.NewGuid() + ".tmp";
-
-                        using (var fsOut = File.Create(tempOutput))
-                        {
-                            await encodedImg.AsStream().CopyToAsync(fsOut);
-                            await fsOut.FlushAsync();
-                        }
-
-                        const int maxRetries = 5;
-                        int retries = 0;
-                        int delayMs = 100;
-
-                        while (true)
-                        {
-                            try
-                            {
-                                File.Move(tempOutput, outputFile, overwrite: true);
-                                break;
-                            }
-                            catch (IOException)
-                            {
-                                retries++;
-                                if (retries >= maxRetries)
-                                    throw;
-
-                                await Task.Delay(delayMs);
-                                delayMs = Math.Min(1000, delayMs * 2);
-                            }
-                        }
+                        File.Move(tempOutput, outputFile, overwrite: true);
+                        break;
                     }
-                    catch
+                    catch (IOException)
                     {
-                        await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                        retries++;
+                        if (retries >= maxRetries)
+                            throw;
+
+                        await Task.Delay(delayMs);
+                        delayMs = Math.Min(1000, delayMs * 2); // Exponential backoff
                     }
                 }
+            }
+            catch
+            {
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
             }
         }
     }
