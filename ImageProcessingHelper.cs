@@ -1,14 +1,14 @@
-﻿using System;
+﻿using EmbyIcons.Helpers;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Model.Drawing;
+using MediaBrowser.Model.Entities;
+using SkiaSharp;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Drawing;
-using SkiaSharp;
-using EmbyIcons.Helpers;
-using MediaBrowser.Controller.Entities;
 
 namespace EmbyIcons
 {
@@ -149,7 +149,6 @@ namespace EmbyIcons
                             await fsOut.FlushAsync();
                         }
 
-                        // Retry loop for atomic move to avoid file lock conflicts
                         const int maxRetries = 5;
                         int retries = 0;
                         int delayMs = 100;
@@ -168,13 +167,12 @@ namespace EmbyIcons
                                     throw;
 
                                 await Task.Delay(delayMs);
-                                delayMs = Math.Min(1000, delayMs * 2); // Exponential backoff capped at 1 sec
+                                delayMs = Math.Min(1000, delayMs * 2);
                             }
                         }
                     }
                     catch
                     {
-                        // Fallback: copy original image to output to prevent corrupted file
                         await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                     }
                 }

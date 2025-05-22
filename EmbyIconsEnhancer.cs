@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
@@ -72,9 +73,44 @@ namespace EmbyIcons
 
             var series = o.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0";
 
-            // Include vertical offsets in cache key so changes cause reprocessing
             var aVertOffset = o.AudioIconVerticalOffset.ToString();
             var sVertOffset = o.SubtitleIconVerticalOffset.ToString();
+
+            // NEW: Add media and subtitle timestamp for cache invalidation
+            string mediaFileTimestamp = "";
+            string subtitleTimestamp = "";
+
+            try
+            {
+                if (!string.IsNullOrEmpty(item.Path))
+                {
+                    var path = item.Path;
+
+                    if (File.Exists(path))
+                    {
+                        mediaFileTimestamp = File.GetLastWriteTimeUtc(path).Ticks.ToString();
+                    }
+
+                    var subtitleDir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(subtitleDir) && Directory.Exists(subtitleDir))
+                    {
+                        var subtitleExtensions = o.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                             ?? new[] { ".srt", ".ass", ".vtt" };
+
+                        var subsLastWrite = Directory.GetFiles(subtitleDir)
+                            .Where(f => subtitleExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+                            .Select(f => File.GetLastWriteTimeUtc(f).Ticks)
+                            .DefaultIfEmpty(0)
+                            .Max();
+
+                        subtitleTimestamp = subsLastWrite.ToString();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Helpers.LoggingHelper.Log(true, $"Failed to compute timestamps for cache key: {ex.Message}");
+            }
 
             return
               $"embyicons_{item.Id}_{imageType}" +
@@ -89,6 +125,8 @@ namespace EmbyIcons
               $"_series{series}" +
               $"_aVertOffset{aVertOffset}" +
               $"_sVertOffset{sVertOffset}" +
+              $"_mediaTS{mediaFileTimestamp}" + // newly added
+              $"_subsTS{subtitleTimestamp}" +   // newly added
               $"_iconVer{_iconCacheVersion}";
         }
 
