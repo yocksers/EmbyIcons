@@ -10,7 +10,7 @@ namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal async Task<(HashSet<string>, HashSet<string>)> GetAggregatedLanguagesForSeriesAsync(Series series, PluginOptions options, CancellationToken cancellationToken)
+        internal Task<(HashSet<string>, HashSet<string>)> GetAggregatedLanguagesForSeriesAsync(Series series, PluginOptions options, CancellationToken cancellationToken)
         {
             var audioLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.AudioLanguages)
                 .Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(System.StringComparer.OrdinalIgnoreCase);
@@ -29,7 +29,7 @@ namespace EmbyIcons
             var episodes = items.OfType<Episode>().ToList();
 
             if (episodes.Count == 0)
-                return (new HashSet<string>(), new HashSet<string>());
+                return Task.FromResult((new HashSet<string>(), new HashSet<string>()));
 
             var audioLangsDetected = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var subtitleLangsDetected = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -45,13 +45,25 @@ namespace EmbyIcons
                 var epAudioLangs = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 var epSubtitleLangs = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
-                await Helpers.MediaInfoDetector.DetectLanguagesFromMediaAsync(ep.Path!, epAudioLangs, epSubtitleLangs, options.EnableLogging);
+                var streams = ep.GetMediaStreams() ?? new List<MediaStream>();
 
-                Helpers.SubtitleScanner.ScanExternalSubtitles(
-                    ep.Path!,
-                    epSubtitleLangs,
-                    options.EnableLogging,
-                    options.SubtitleFileExtensions?.Split(',', System.StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" });
+                foreach (var stream in streams)
+                {
+                    if (stream.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.Language))
+                    {
+                        var norm = Helpers.LanguageHelper.NormalizeLangCode(stream.Language);
+                        epAudioLangs.Add(norm);
+                        if (options.EnableLogging)
+                            Helpers.LoggingHelper.Log(true, $"[Embedded] Audio stream: {stream.Language} => {norm}");
+                    }
+                    if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
+                    {
+                        var norm = Helpers.LanguageHelper.NormalizeLangCode(stream.Language);
+                        epSubtitleLangs.Add(norm);
+                        if (options.EnableLogging)
+                            Helpers.LoggingHelper.Log(true, $"[Embedded] Subtitle stream: {stream.Language} => {norm}");
+                    }
+                }
 
                 episodeAudioLangCache[ep.Id] = epAudioLangs;
                 episodeSubtitleLangCache[ep.Id] = epSubtitleLangs;
@@ -83,7 +95,7 @@ namespace EmbyIcons
             if (!options.ShowSubtitleIcons)
                 subtitleLangsDetected.Clear();
 
-            return (audioLangsDetected, subtitleLangsDetected);
+            return Task.FromResult((audioLangsDetected, subtitleLangsDetected));
         }
     }
 }

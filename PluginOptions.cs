@@ -39,13 +39,8 @@ namespace EmbyIcons
 
             SelectedLibraries = string.Empty;
 
-            SupportedExtensions = ".mkv,.mp4,.avi,.mov";
-
-            SubtitleFileExtensions = ".srt,.ass,.vtt";
-
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
 
-            // Changed: Vertical offsets are now percentages of the shorter side (instead of pixels)
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
         }
@@ -53,7 +48,7 @@ namespace EmbyIcons
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when chaging an icon for one with the same name!</h2><br/>" +
+           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when changing an icon for one with the same name!</h2><br/>" +
            "Best to test your settings with one video at a time but not required.";
 
         [DisplayName("Icons Folder Path")]
@@ -105,14 +100,6 @@ namespace EmbyIcons
         [DisplayName("Restrict to Libraries (comma separated names)")]
         [Description("Comma-separated list of library names to restrict plugin operation. Leave empty to process all libraries.")]
         public string SelectedLibraries { get; set; }
-
-        [DisplayName("Supported Media Extensions")]
-        [Description("Comma-separated list of supported media file extensions for language detection.")]
-        public string SupportedExtensions { get; set; }
-
-        [DisplayName("External Subtitle File Extensions")]
-        [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.vtt).")]
-        public string SubtitleFileExtensions { get; set; }
 
         [DisplayName("Show Series Icons If All Episodes Have Language")]
         [Description("Show icons on series posters if all episodes have the specified audio/subtitle languages.")]
