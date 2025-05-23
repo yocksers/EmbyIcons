@@ -9,17 +9,9 @@ namespace EmbyIcons.Helpers
 {
     internal static class FileUtils
     {
-        // Now returns ValueTask and checks for unnecessary copies
-        public static async ValueTask SafeCopyAsync(string source, string dest)
+        public static async Task SafeCopyAsync(string source, string dest)
         {
-            if (string.Equals(source, dest, System.StringComparison.OrdinalIgnoreCase))
-                return;
-
-            var srcInfo = new FileInfo(source);
-            var destInfo = new FileInfo(dest);
-            if (destInfo.Exists && srcInfo.Length == destInfo.Length && srcInfo.LastWriteTimeUtc == destInfo.LastWriteTimeUtc)
-                return;
-
+            // Asynchronous file copy with buffer
             const int bufferSize = 81920; // 80 KB buffer
 
             using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true))

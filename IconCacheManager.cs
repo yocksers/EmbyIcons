@@ -24,11 +24,6 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
 
-        // For optimized initialization:
-        private string? _lastInitializedFolder;
-        private DateTime _lastInitializedTime;
-        private readonly TimeSpan _initInterval = TimeSpan.FromMinutes(5);
-
         // Track file last write times to detect changes
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
 
@@ -45,17 +40,17 @@ namespace EmbyIcons.Helpers
             _maxParallelism = maxParallelism;
         }
 
-        /// <summary>
-        /// Only reinitializes if folder changed or interval expired.
-        /// </summary>
         public async Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
-            if (_lastInitializedFolder == iconsFolder && (DateTime.UtcNow - _lastInitializedTime) < _initInterval)
-                return;
-
-            _lastInitializedFolder = iconsFolder;
-            _lastInitializedTime = DateTime.UtcNow;
-            await RefreshCacheAsync(cancellationToken);
+            if (_iconsFolder != iconsFolder)
+            {
+                _iconsFolder = iconsFolder;
+                await RefreshCacheAsync(cancellationToken);
+            }
+            else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
+            {
+                await RefreshCacheAsync(cancellationToken);
+            }
         }
 
         public async Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken)
@@ -65,9 +60,6 @@ namespace EmbyIcons.Helpers
 
         private async Task RefreshCacheAsync(CancellationToken cancellationToken)
         {
-            if (_iconsFolder != _lastInitializedFolder)
-                _iconsFolder = _lastInitializedFolder;
-
             if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
                 return;
 

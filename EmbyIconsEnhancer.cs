@@ -8,7 +8,6 @@ using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -24,10 +23,6 @@ namespace EmbyIcons
 
         private static string _iconCacheVersion = string.Empty;
 
-        // -- Optimization: Cache allowed library IDs between calls --
-        private string? _lastSelectedLibraries;
-        private HashSet<string>? _allowedLibraryIds;
-
         public EmbyIconsEnhancer(ILibraryManager libraryManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
@@ -36,19 +31,6 @@ namespace EmbyIcons
             {
                 _iconCacheVersion = version ?? string.Empty;
             };
-        }
-
-        /// <summary>
-        /// Returns a cached set of allowed library IDs based on selected libraries.
-        /// </summary>
-        private HashSet<string> GetCachedAllowedLibraryIds(string? selectedLibraries)
-        {
-            if (_allowedLibraryIds == null || !string.Equals(_lastSelectedLibraries, selectedLibraries, StringComparison.Ordinal))
-            {
-                _allowedLibraryIds = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, selectedLibraries);
-                _lastSelectedLibraries = selectedLibraries;
-            }
-            return _allowedLibraryIds!;
         }
 
         public Task RefreshIconCacheAsync(CancellationToken cancellationToken)
@@ -95,6 +77,7 @@ namespace EmbyIcons
             var sVertOffset = o.SubtitleIconVerticalOffset.ToString();
 
             string mediaFileTimestamp = "";
+            string subtitleTimestamp = "";
 
             try
             {
@@ -106,12 +89,30 @@ namespace EmbyIcons
                     {
                         mediaFileTimestamp = File.GetLastWriteTimeUtc(path).Ticks.ToString();
                     }
+
+                    var folder = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                    {
+                        var subtitleExtensions = o.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                 ?? new[] { ".srt", ".ass", ".vtt" };
+
+                        var subsLastWrite = Directory.GetFiles(folder)
+                            .Where(f => subtitleExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+                            .Select(f => File.GetLastWriteTimeUtc(f).Ticks)
+                            .DefaultIfEmpty(0)
+                            .Max();
+
+                        subtitleTimestamp = subsLastWrite.ToString();
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Helpers.LoggingHelper.Log(true, $"Exception while computing timestamps for cache key on '{item.Name}': {ex.Message}");
             }
+
+            // --- Add force-refresh counter ---
+            var forceRefreshVal = o.ForceOverlayRefreshCounter.ToString();
 
             return
               $"embyicons_{item.Id}_{imageType}" +
@@ -127,7 +128,9 @@ namespace EmbyIcons
               $"_aVertOffset{aVertOffset}" +
               $"_sVertOffset{sVertOffset}" +
               $"_mediaTS{mediaFileTimestamp}" +
-              $"_iconVer{_iconCacheVersion}";
+              $"_subsTS{subtitleTimestamp}" +
+              $"_iconVer{_iconCacheVersion}" +
+              $"_forceRefresh{forceRefreshVal}";
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
@@ -158,12 +161,6 @@ namespace EmbyIcons
                 sem.Release();
             }
         }
-
-        /// <summary>
-        /// Uses cached allowed libraries for efficiency.
-        /// </summary>
-        internal HashSet<string> GetAllowedLibraries(string? selectedLibraries)
-            => GetCachedAllowedLibraryIds(selectedLibraries);
 
         public void Dispose()
         {

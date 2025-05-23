@@ -38,33 +38,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // ======= Optimization: Skip processing if cachekey matches and output file is valid =======
-            string cacheKey = GetConfigurationCacheKey(item, imageType);
-            string cacheKeyPath = outputFile + ".cachekey";
-            if (File.Exists(outputFile) && File.Exists(cacheKeyPath))
-            {
-                try
-                {
-                    string lastCacheKey = File.ReadAllText(cacheKeyPath);
-                    if (lastCacheKey == cacheKey)
-                    {
-                        // Also check output file is newer than input
-                        var outInfo = new FileInfo(outputFile);
-                        var inInfo = new FileInfo(inputFile);
-                        if (outInfo.LastWriteTimeUtc > inInfo.LastWriteTimeUtc)
-                        {
-                            // Optionally: Also check if icon files in cachekey are not newer, or always trust the cachekey
-                            return; // Overlay is unchanged; skip processing!
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore errors; fall through to normal processing
-                }
-            }
-            // =========================================================================================
-
             HashSet<string> audioLangsDetected = new(StringComparer.OrdinalIgnoreCase);
             HashSet<string> subtitleLangsDetected = new(StringComparer.OrdinalIgnoreCase);
 
@@ -95,6 +68,11 @@ namespace EmbyIcons
                             LoggingHelper.Log(true, $"[Embedded] Subtitle stream: {stream.Language} => {norm}");
                     }
                 }
+
+                var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
+
+                Helpers.SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
+                    options.EnableLogging, subtitleExtensions);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -114,8 +92,6 @@ namespace EmbyIcons
             if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0)
             {
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
-                // Also remove cachekey file as overlay is not present
-                try { if (File.Exists(cacheKeyPath)) File.Delete(cacheKeyPath); } catch { }
                 return;
             }
 
@@ -123,7 +99,6 @@ namespace EmbyIcons
             if (surfBmp == null)
             {
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
-                try { if (File.Exists(cacheKeyPath)) File.Delete(cacheKeyPath); } catch { }
                 return;
             }
 
@@ -169,7 +144,6 @@ namespace EmbyIcons
             try
             {
                 using var snapshot = surface.Snapshot();
-                // SkiaSharp only accepts int for PNG encoding in this version.
                 using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
 
                 Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? throw new Exception("Invalid output path"));
@@ -203,19 +177,10 @@ namespace EmbyIcons
                         delayMs = Math.Min(1000, delayMs * 2); // Exponential backoff
                     }
                 }
-                // ======= Write/Update cache key sidecar file =======
-                try
-                {
-                    File.WriteAllText(cacheKeyPath, cacheKey);
-                }
-                catch { /* ignore errors */ }
-                // ===================================================
-
             }
             catch
             {
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
-                try { if (File.Exists(cacheKeyPath)) File.Delete(cacheKeyPath); } catch { }
             }
         }
     }
