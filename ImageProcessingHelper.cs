@@ -56,23 +56,14 @@ namespace EmbyIcons
                     {
                         var norm = LanguageHelper.NormalizeLangCode(stream.Language);
                         audioLangsDetected.Add(norm);
-                        if (options.EnableLogging)
-                            LoggingHelper.Log(true, $"[Embedded] Audio stream: {stream.Language} => {norm}");
-                    }
+                        }
 
                     if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
                     {
                         var norm = LanguageHelper.NormalizeLangCode(stream.Language);
                         subtitleLangsDetected.Add(norm);
-                        if (options.EnableLogging)
-                            LoggingHelper.Log(true, $"[Embedded] Subtitle stream: {stream.Language} => {norm}");
-                    }
+                        }
                 }
-
-                var subtitleExtensions = options.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { ".srt" };
-
-                Helpers.SubtitleScanner.ScanExternalSubtitles(item.Path ?? inputFile!, subtitleLangsDetected,
-                    options.EnableLogging, subtitleExtensions);
             }
 
             cancellationToken.ThrowIfCancellationRequested();

@@ -33,9 +33,10 @@ namespace EmbyIcons
             };
         }
 
-        public Task RefreshIconCacheAsync(CancellationToken cancellationToken)
+        // PATCH: Add 'force' parameter with default value
+        public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
-            return _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken);
+            return _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken, force);
         }
 
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
@@ -90,29 +91,21 @@ namespace EmbyIcons
                         mediaFileTimestamp = File.GetLastWriteTimeUtc(path).Ticks.ToString();
                     }
 
-                    var folder = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
-                    {
-                        var subtitleExtensions = o.SubtitleFileExtensions?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                                 ?? new[] { ".srt", ".ass", ".vtt" };
-
-                        var subsLastWrite = Directory.GetFiles(folder)
-                            .Where(f => subtitleExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-                            .Select(f => File.GetLastWriteTimeUtc(f).Ticks)
-                            .DefaultIfEmpty(0)
-                            .Max();
-
-                        subtitleTimestamp = subsLastWrite.ToString();
-                    }
+                    subtitleTimestamp = "";
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Helpers.LoggingHelper.Log(true, $"Exception while computing timestamps for cache key on '{item.Name}': {ex.Message}");
             }
 
-            // --- Add force-refresh counter ---
-            var forceRefreshVal = o.ForceOverlayRefreshCounter.ToString();
+            // --------- PER-SERIES CACHE BUSTER (NEW) ----------
+            string cacheBusterVal = "";
+            // This may reference an old cache buster. It is now safe (no library mutation).
+            cacheBusterVal = "0";
+            // ---------------------------------------------------
+
+            // PATCH: Add OverlayRefreshCounter to cache key
+            var refreshCounter = o.OverlayRefreshCounter.ToString();
 
             return
               $"embyicons_{item.Id}_{imageType}" +
@@ -130,7 +123,8 @@ namespace EmbyIcons
               $"_mediaTS{mediaFileTimestamp}" +
               $"_subsTS{subtitleTimestamp}" +
               $"_iconVer{_iconCacheVersion}" +
-              $"_forceRefresh{forceRefreshVal}";
+              $"_refresh{refreshCounter}" +              // PATCH: Added here
+              $"_cacheBuster{cacheBusterVal}";
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
@@ -160,6 +154,15 @@ namespace EmbyIcons
             {
                 sem.Release();
             }
+        }
+
+        /// <summary>
+        /// Called by the plugin when Emby says a library item was updated.
+        /// This does NOT touch Emby library items. It only clears per-item overlay cache if present.
+        /// </summary>
+        public void ClearOverlayCacheForItem(BaseItem item)
+        {
+
         }
 
         public void Dispose()

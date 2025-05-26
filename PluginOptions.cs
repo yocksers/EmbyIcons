@@ -17,19 +17,13 @@ namespace EmbyIcons
     public class PluginOptions : EditableOptionsBase
     {
         private string _iconsFolder = @"D:\icons";
-        private string _logFolder = @"C:\temp";
-
         public PluginOptions()
         {
             _iconsFolder = Environment.ExpandEnvironmentVariables(_iconsFolder);
-            _logFolder = Environment.ExpandEnvironmentVariables(_logFolder);
-
             IconSize = 10;
 
             AudioIconAlignment = IconAlignment.TopLeft;
             SubtitleIconAlignment = IconAlignment.BottomLeft;
-
-            EnableLogging = true;
 
             AudioLanguages = "eng,dan,fre,ger,spa,pol,jpn";
             SubtitleLanguages = "eng,dan,fre,ger,spa,pol,jpn";
@@ -38,24 +32,17 @@ namespace EmbyIcons
             ShowSubtitleIcons = true;
 
             SelectedLibraries = string.Empty;
-
-            SupportedExtensions = ".mkv,.mp4,.avi,.mov";
-
-            SubtitleFileExtensions = ".srt,.ass,.vtt";
-
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
-
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
-
-            // Default for force refresh counter
-            ForceOverlayRefreshCounter = 0;
+            PosterUpdateDelaySeconds = 7; // Default value
+            OverlayRefreshCounter = 0;    // Initialize hidden counter
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when chaging an icon for one with the same name!</h2><br/>" +
+           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when changing an icon for one with the same name!</h2><br/>" +
            "Best to test your settings with one video at a time but not required.";
 
         [DisplayName("Icons Folder Path")]
@@ -108,38 +95,22 @@ namespace EmbyIcons
         [Description("Comma-separated list of library names to restrict plugin operation. Leave empty to process all libraries.")]
         public string SelectedLibraries { get; set; }
 
-        [DisplayName("Supported Media Extensions")]
-        [Description("Comma-separated list of supported media file extensions for language detection.")]
-        public string SupportedExtensions { get; set; }
-
-        [DisplayName("External Subtitle File Extensions")]
-        [Description("Comma-separated list of external subtitle file extensions to scan (e.g., .srt,.ass,.vtt).")]
-        public string SubtitleFileExtensions { get; set; }
-
         [DisplayName("Show Series Icons If All Episodes Have Language")]
         [Description("Show icons on series posters if all episodes have the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
 
-        [DisplayName("Enable Logging")]
-        [Description("Enable or disable plugin logging.")]
-        [Display(Order = 1000)]
-        public bool EnableLogging { get; set; }
+        [DisplayName("Poster Overlay Update Delay (seconds)")]
+        [Description("How many seconds to wait after a change before refreshing a TV series poster overlay. Increase if your server is slow to scan new files.")]
+        [Range(0, 120)]
+        public int PosterUpdateDelaySeconds { get; set; } = 7;
 
-        [DisplayName("Log Folder Path")]
-        [Description("Folder path where plugin logs will be saved.")]
-        [Display(Order = 1001)]
-        public string LogFolder
-        {
-            get => _logFolder;
-            set => _logFolder = Environment.ExpandEnvironmentVariables(value ?? @"C:\temp");
-        }
+        [DisplayName("Enable Overlay Logging")]
+        [Description("Enable detailed plugin overlay logging for troubleshooting (resource-intensive on large libraries).")]
+        public bool EnableOverlayLogging { get; set; } = false;
 
-        // -------------- DUMMY COUNTER ADDED HERE ------------------
-        [DisplayName("Force Overlay Refresh (increment & save)")]
-        [Description("Increase this number and press Save to force all overlays/icons to regenerate. No other effect.")]
-        [Display(Order = 2002)]
-        public int ForceOverlayRefreshCounter { get; set; }
-        // ----------------------------------------------------------
+        // ---- HIDDEN COUNTER FOR FORCING OVERLAY REFRESH ----
+        [Browsable(false)]
+        public int OverlayRefreshCounter { get; set; } = 0;
 
         public static ValidationResult? ValidateIconsFolder(string? folderPath, ValidationContext context)
         {

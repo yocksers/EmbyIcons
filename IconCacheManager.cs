@@ -40,28 +40,31 @@ namespace EmbyIcons.Helpers
             _maxParallelism = maxParallelism;
         }
 
-        public async Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
+        public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
             if (_iconsFolder != iconsFolder)
             {
                 _iconsFolder = iconsFolder;
-                await RefreshCacheAsync(cancellationToken);
+                return RefreshCacheAsync(cancellationToken);
             }
             else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
             {
-                await RefreshCacheAsync(cancellationToken);
+                return RefreshCacheAsync(cancellationToken);
             }
+            return Task.CompletedTask;
         }
 
-        public async Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken)
+        // PATCH: Add force parameter (default false)
+        public Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken, bool force = false)
         {
-            await RefreshCacheAsync(cancellationToken);
+            return RefreshCacheAsync(cancellationToken, force);
         }
 
-        private async Task RefreshCacheAsync(CancellationToken cancellationToken)
+        // PATCH: Add force parameter (default false)
+        private Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
             if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
-                return;
+                return Task.CompletedTask;
 
             var pngFiles = Directory.GetFiles(_iconsFolder, "*.png");
 
@@ -88,8 +91,9 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            if (!anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
-                return;
+            // PATCH: bypass cache short-circuit if force is true
+            if (!force && !anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
+                return Task.CompletedTask;
 
             _iconFileLastWriteTimes.Clear();
             foreach (var kvp in currentWriteTimes)
@@ -101,33 +105,29 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
 
-            await Task.Run(() =>
+            foreach (var file in pngFiles)
             {
-                foreach (var file in pngFiles)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
 
-                    if (name.StartsWith("srt."))
-                        _subtitleIconPathCache[name] = file;
-                    else
-                        _audioIconPathCache[name] = file;
-                }
+                if (name.StartsWith("srt."))
+                    _subtitleIconPathCache[name] = file;
+                else
+                    _audioIconPathCache[name] = file;
+            }
 
-                var po = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = _maxParallelism };
+            var po = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = _maxParallelism };
 
-                Parallel.ForEach(_audioIconPathCache.Values.Where(f => f != null)!, po, path =>
-                {
-                    if (!string.IsNullOrEmpty(path))
-                        TryLoadAndCacheIcon(path!, false);
-                });
+            Parallel.ForEach(_audioIconPathCache.Values.Where(f => f != null)!, po, path =>
+            {
+                if (!string.IsNullOrEmpty(path))
+                    TryLoadAndCacheIcon(path!, false);
+            });
 
-                Parallel.ForEach(_subtitleIconPathCache.Values.Where(f => f != null)!, po, path =>
-                {
-                    if (!string.IsNullOrEmpty(path))
-                        TryLoadAndCacheIcon(path!, true);
-                });
-            }, cancellationToken);
+            Parallel.ForEach(_subtitleIconPathCache.Values.Where(f => f != null)!, po, path =>
+            {
+                if (!string.IsNullOrEmpty(path))
+                    TryLoadAndCacheIcon(path!, true);
+            });
 
             _lastCacheRefreshTime = DateTime.UtcNow;
 
@@ -138,6 +138,8 @@ namespace EmbyIcons.Helpers
 
             if (anyChanged && versionChanged)
                 CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
+
+            return Task.CompletedTask;
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
