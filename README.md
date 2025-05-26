@@ -68,7 +68,7 @@ Note: Run it once a day or more, depending on system it can be rather taxing as 
 
 ---
 
-- Many thanks to Neminem and keitaro26 Bakes 268 in the Emby Forums for the help with this plugin!!
+- Many thanks to Neminem and keitaro26 Bakes82 in the Emby Forums for the help with this plugin!!
 - A shoutout to Craggles for the awesome icons!!
 
 ---
