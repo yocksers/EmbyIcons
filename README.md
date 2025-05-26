@@ -48,7 +48,9 @@
 | **Show Subtitle Icons**       | Enable or disable subtitle icon overlays.                                                         |
 | **Restrict to Libraries**     | Comma-separated list of library names to restrict icon overlays to; leave empty for all libraries.|
 | **Enable Logging**            | Enable or disable plugin logging.                                                                 |
-| **Log Folder Path**           | Directory where plugin logs are saved.                                                            |
+
+The task scheduler is to refresh icon overlays, TV show posters will often not update on their own so running this will fix that.
+Note: Run it once a day or more, depending on system it can be rather taxing as it has to redraw all posters.
 
 > **Important:**  
 > _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, change eng with the language code you want like dan or jpn._
@@ -62,12 +64,11 @@
 - You need to supply your own icons. 
 - Verify the icon folder path contains correctly named PNG icons for your languages.  
 - Library names might need quotetation marks around them on some systems eg. "Movies". I'm looking into this.
-- Check the `EmbyIcons.log` file (in the configured log folder) for processing details and errors.  
 - Ensure media files have proper language tags on audio and subtitle streams.  
 
 ---
 
-- Many thanks to Neminem and keitaro26 in the Emby Forums for the help with testing this plugin!!
+- Many thanks to Neminem and keitaro26 Bakes 268 in the Emby Forums for the help with this plugin!!
 - A shoutout to Craggles for the awesome icons!!
 
 ---
