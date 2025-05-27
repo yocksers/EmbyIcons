@@ -10,6 +10,8 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,12 +35,12 @@ namespace EmbyIcons
             };
         }
 
-        // PATCH: Add 'force' parameter with default value
         public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
             return _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken, force);
         }
 
+        // ✅ Lower priority so CoverArt can take precedence
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
 
         public bool Supports(BaseItem? item, ImageType imageType)
@@ -98,14 +100,51 @@ namespace EmbyIcons
             {
             }
 
-            // --------- PER-SERIES CACHE BUSTER (NEW) ----------
-            string cacheBusterVal = "";
-            // This may reference an old cache buster. It is now safe (no library mutation).
-            cacheBusterVal = "0";
-            // ---------------------------------------------------
+            // --------- PER-SERIES/SEASON CHILD LANGUAGES HASH ----------
+            string childLangsHash = "";
 
-            // PATCH: Add OverlayRefreshCounter to cache key
-            var refreshCounter = o.OverlayRefreshCounter.ToString();
+            if (item is Series || item is Season)
+            {
+                try
+                {
+                    var query = new InternalItemsQuery
+                    {
+                        Parent = item,
+                        Recursive = true,
+                        IncludeItemTypes = new[] { "Episode" }
+                    };
+                    var episodes = _libraryManager.GetItemList(query).OfType<Episode>().ToList();
+
+                    var langs = episodes
+                        .AsParallel().OrderBy(e => e.Id)
+                        .Select(e =>
+                        {
+                            var audio = string.Join(",", (e.GetMediaStreams() ?? new System.Collections.Generic.List<MediaBrowser.Model.Entities.MediaStream>())
+                                .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language))
+                                .Select(s => s.Language));
+                            var subs = string.Join(",", (e.GetMediaStreams() ?? new System.Collections.Generic.List<MediaBrowser.Model.Entities.MediaStream>())
+                                .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language))
+                                .Select(s => s.Language));
+                            return $"{e.Id}:{audio}|{subs}";
+                        });
+
+                    var combined = string.Join(";", langs);
+
+                    using (var sha = SHA256.Create())
+                    {
+                        var bytes = Encoding.UTF8.GetBytes(combined);
+                        var hashBytes = sha.ComputeHash(bytes);
+                        childLangsHash = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    childLangsHash = "err";
+                    Plugin.Instance?.Logger?.ErrorException("Error hashing child languages", ex);
+                }
+            }
+
+            string cacheBusterVal = "0";
 
             return
               $"embyicons_{item.Id}_{imageType}" +
@@ -123,7 +162,7 @@ namespace EmbyIcons
               $"_mediaTS{mediaFileTimestamp}" +
               $"_subsTS{subtitleTimestamp}" +
               $"_iconVer{_iconCacheVersion}" +
-              $"_refresh{refreshCounter}" +              // PATCH: Added here
+              $"_childLangs{childLangsHash}" +
               $"_cacheBuster{cacheBusterVal}";
         }
 
@@ -156,13 +195,9 @@ namespace EmbyIcons
             }
         }
 
-        /// <summary>
-        /// Called by the plugin when Emby says a library item was updated.
-        /// This does NOT touch Emby library items. It only clears per-item overlay cache if present.
-        /// </summary>
         public void ClearOverlayCacheForItem(BaseItem item)
         {
-
+            // Optional: implemented elsewhere in plugin
         }
 
         public void Dispose()
@@ -171,7 +206,6 @@ namespace EmbyIcons
                 sem.Dispose();
 
             _locks.Clear();
-
             _iconCacheManager.Dispose();
         }
     }

@@ -35,18 +35,18 @@ namespace EmbyIcons
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
-            PosterUpdateDelaySeconds = 7; // Default value
-            OverlayRefreshCounter = 0;    // Initialize hidden counter
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
 
         public override string EditorDescription =>
-           "<h2 style='color:red; font-weight:bold;'>Refreshing metadata or server reset might be needed when changing an icon for one with the same name!</h2><br/>" +
-           "Best to test your settings with one video at a time but not required.";
+           "<h3 style='color:darkred;'>Tip:</h3>" +
+           "<ul>" +
+           "<li>If you replace an icon image with a new one of the same name, you may need to refresh metadata or restart the server to see the change.</li>" +
+           "</ul>";
 
         [DisplayName("Icons Folder Path")]
-        [Description("Full path containing language icon files.")]
+        [Description("Folder containing your PNG icon images. For audio icons, use language codes like 'eng.png', 'fre.png', etc. For subtitle icons, use 'srt.eng.png', 'srt.jpn.png', etc.")]
         [Required(ErrorMessage = "Icons folder path is required.")]
         [CustomValidation(typeof(PluginOptions), nameof(ValidateIconsFolder))]
         public string IconsFolder
@@ -56,61 +56,52 @@ namespace EmbyIcons
         }
 
         [DisplayName("Icon Size (% of shorter side)")]
-        [Description("Size of icons overlaid on posters as % of the poster's shorter dimension.")]
+        [Description("Size of icons relative to the shorter side of the poster (height or width). For example, 10 means the icon will be 10% of that dimension.")]
         public int IconSize { get; set; }
 
         [DisplayName("Audio Icon Alignment")]
-        [Description("Corner of the poster where audio icons are overlayed.")]
+        [Description("Which corner of the poster to place the audio icons (e.g. top-left, bottom-right, etc.).")]
         public IconAlignment AudioIconAlignment { get; set; }
 
         [DisplayName("Subtitle Icon Alignment")]
-        [Description("Corner of the poster where subtitle icons are overlayed.")]
+        [Description("Which corner of the poster to place the subtitle icons (e.g. top-left, bottom-right, etc.).")]
         public IconAlignment SubtitleIconAlignment { get; set; }
 
         [DisplayName("Audio Icon Vertical Offset (%)")]
-        [Description("Vertical offset as % of the poster's shorter dimension. Positive moves down, negative moves up.")]
+        [Description("Move audio icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int AudioIconVerticalOffset { get; set; }
 
         [DisplayName("Subtitle Icon Vertical Offset (%)")]
-        [Description("Vertical offset as % of the poster's shorter dimension. Positive moves down, negative moves up.")]
+        [Description("Move subtitle icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int SubtitleIconVerticalOffset { get; set; }
 
         [DisplayName("Audio Languages to Detect")]
-        [Description("Comma-separated audio language codes (e.g., eng,dan,jpn). Only these audio languages will have icons overlaid.")]
+        [Description("List of language codes (e.g., eng,fre,jpn). Only these languages will trigger audio icon overlays. Separate multiple codes with commas.")]
         public string AudioLanguages { get; set; }
 
         [DisplayName("Subtitle Languages to Detect")]
-        [Description("Comma-separated subtitle language codes (e.g., eng,dan,jpn). Only these subtitle languages will have icons overlaid.")]
+        [Description("List of subtitle language codes (e.g., eng,fre,jpn). Only these languages will trigger subtitle icon overlays. Separate multiple codes with commas.")]
         public string SubtitleLanguages { get; set; }
 
         [DisplayName("Show Audio Icons")]
-        [Description("Enable or disable overlaying audio language icons.")]
+        [Description("Enable or disable drawing audio language icons on posters.")]
         public bool ShowAudioIcons { get; set; }
 
         [DisplayName("Show Subtitle Icons")]
-        [Description("Enable or disable overlaying subtitle language icons.")]
+        [Description("Enable or disable drawing subtitle language icons on posters.")]
         public bool ShowSubtitleIcons { get; set; }
 
         [DisplayName("Restrict to Libraries (comma separated names)")]
-        [Description("Comma-separated list of library names to restrict plugin operation. Leave empty to process all libraries.")]
+        [Description("Optional: limit icon overlays to specific Emby libraries. Use the library names shown in the dashboard, separated by commas. Leave blank to apply everywhere.")]
         public string SelectedLibraries { get; set; }
 
         [DisplayName("Show Series Icons If All Episodes Have Language")]
-        [Description("Show icons on series posters if all episodes have the specified audio/subtitle languages.")]
+        [Description("Only show icons on series or season posters if every episode contains the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
 
-        [DisplayName("Poster Overlay Update Delay (seconds)")]
-        [Description("How many seconds to wait after a change before refreshing a TV series poster overlay. Increase if your server is slow to scan new files.")]
-        [Range(0, 120)]
-        public int PosterUpdateDelaySeconds { get; set; } = 7;
-
         [DisplayName("Enable Overlay Logging")]
-        [Description("Enable detailed plugin overlay logging for troubleshooting (resource-intensive on large libraries).")]
+        [Description("Enable verbose overlay logging to help debug language detection. May affect performance on large libraries. Recommended only when troubleshooting.")]
         public bool EnableOverlayLogging { get; set; } = false;
-
-        // ---- HIDDEN COUNTER FOR FORCING OVERLAY REFRESH ----
-        [Browsable(false)]
-        public int OverlayRefreshCounter { get; set; } = 0;
 
         public static ValidationResult? ValidateIconsFolder(string? folderPath, ValidationContext context)
         {

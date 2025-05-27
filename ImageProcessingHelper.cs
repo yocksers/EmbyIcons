@@ -23,12 +23,18 @@ namespace EmbyIcons
                                                      CancellationToken cancellationToken)
         {
             var options = Plugin.Instance!.GetConfiguredOptions();
+            if (!Helpers.IconDrawer.ShouldDrawAnyOverlays(item, options))
+            {
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                return;
+            }
 
             var allowedLibs = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
             var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
             if (allowedLibs.Count > 0 && (libraryId == null || !allowedLibs.Contains(libraryId)))
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+            // Always regenerate overlays — mimic CoverArt style
+            // await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 

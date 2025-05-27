@@ -54,18 +54,28 @@ namespace EmbyIcons
                     {
                         var norm = Helpers.LanguageHelper.NormalizeLangCode(stream.Language);
                         epAudioLangs.Add(norm);
-                        }
+                    }
                     if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
                     {
                         var norm = Helpers.LanguageHelper.NormalizeLangCode(stream.Language);
                         epSubtitleLangs.Add(norm);
-                        }
+                    }
                 }
 
                 episodeAudioLangCache[ep.Id] = epAudioLangs;
                 episodeSubtitleLangCache[ep.Id] = epSubtitleLangs;
 
                 cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            // --- LOGGING PATCH: Print detected audio/subtitle languages per episode ---
+            if (Plugin.Instance?.Logger != null)
+            {
+                foreach (var ep in episodes)
+                {
+                    var audios = episodeAudioLangCache.TryGetValue(ep.Id, out var a) ? string.Join(",", a) : "none";
+                    var subs = episodeSubtitleLangCache.TryGetValue(ep.Id, out var s) ? string.Join(",", s) : "none";
+                }
             }
 
             foreach (var lang in audioLangsAllowed)
@@ -85,12 +95,6 @@ namespace EmbyIcons
                 if (allHaveLanguage)
                     subtitleLangsDetected.Add(lang);
             }
-
-            if (!options.ShowAudioIcons)
-                audioLangsDetected.Clear();
-
-            if (!options.ShowSubtitleIcons)
-                subtitleLangsDetected.Clear();
 
             return Task.FromResult((audioLangsDetected, subtitleLangsDetected));
         }
