@@ -22,7 +22,8 @@ namespace EmbyIcons
                                                      int imageIndex,
                                                      CancellationToken cancellationToken)
         {
-            var options = Plugin.Instance!.GetConfiguredOptions();
+            var options = Plugin.Instance!.GetConfiguredOptions()
+                ?? throw new InvalidOperationException("Plugin options not initialized");
             if (!Helpers.IconDrawer.ShouldDrawAnyOverlays(item, options))
             {
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
@@ -33,8 +34,8 @@ namespace EmbyIcons
             var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
             if (allowedLibs.Count > 0 && (libraryId == null || !allowedLibs.Contains(libraryId)))
             {
-            // Always regenerate overlays — mimic CoverArt style
-            // await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
+                // Always regenerate overlays — mimic CoverArt style
+                // await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
@@ -62,13 +63,13 @@ namespace EmbyIcons
                     {
                         var norm = LanguageHelper.NormalizeLangCode(stream.Language);
                         audioLangsDetected.Add(norm);
-                        }
+                    }
 
                     if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
                     {
                         var norm = LanguageHelper.NormalizeLangCode(stream.Language);
                         subtitleLangsDetected.Add(norm);
-                        }
+                    }
                 }
             }
 

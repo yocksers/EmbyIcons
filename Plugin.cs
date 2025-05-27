@@ -6,13 +6,14 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Collections; // Required for IUserViewManager
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic; // ✅ Needed for HashSet
+using System.Collections.Generic; // Needed for HashSet
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -24,6 +25,7 @@ namespace EmbyIcons
     public class Plugin : BasePluginSimpleUI<PluginOptions>, IHasThumbImage, IDisposable
     {
         private readonly ILibraryManager _libraryManager;
+        private readonly IUserViewManager _userViewManager; // ADDED
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _logger;
         private EmbyIconsEnhancer? _enhancer;
@@ -31,7 +33,9 @@ namespace EmbyIcons
         public static Plugin? Instance { get; private set; }
 
         public ILogger Logger => _logger;
-        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager);
+
+        // Pass both dependencies to Enhancer
+        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager);
 
         public HashSet<string> AudioLangSet { get; private set; } = new();
         public HashSet<string> SubtitleLangSet { get; private set; } = new();
@@ -39,11 +43,13 @@ namespace EmbyIcons
         public Plugin(
             IApplicationHost appHost,
             ILibraryManager libraryManager,
+            IUserViewManager userViewManager, // ADDED
             ILogManager logManager,
             IFileSystem fileSystem)
             : base(appHost)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
+            _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
             _logger = logManager.GetLogger(nameof(Plugin));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
             Instance = this;

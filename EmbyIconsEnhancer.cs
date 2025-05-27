@@ -21,18 +21,28 @@ namespace EmbyIcons
     {
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
         private readonly ILibraryManager _libraryManager;
+        private readonly IUserViewManager _userViewManager;
         internal readonly IconCacheManager _iconCacheManager;
 
         private static string _iconCacheVersion = string.Empty;
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager, IUserViewManager userViewManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
+            _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
             _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), maxParallelism: 4);
             _iconCacheManager.CacheRefreshedWithVersion += (sender, version) =>
             {
                 _iconCacheVersion = version ?? string.Empty;
             };
+        }
+
+        // Helper: Check if overlays should be applied to this item based on library restrictions
+        private bool IsLibraryAllowed(BaseItem item, PluginOptions options)
+        {
+            var allowedLibs = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
+            var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
+            return allowedLibs.Count == 0 || (libraryId != null && allowedLibs.Contains(libraryId));
         }
 
         public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false)
@@ -48,15 +58,21 @@ namespace EmbyIcons
             if (item == null || imageType != ImageType.Primary) return false;
             if (item is Person) return false;
 
+            var options = Plugin.Instance?.GetConfiguredOptions();
+            if (options == null) return false;
+            if (!IsLibraryAllowed(item, options)) return false;
+
             return item is Movie || item is Episode || item is Series ||
                    item is Season || item is BoxSet || item is MusicVideo;
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
-            var o = Plugin.Instance!.GetConfiguredOptions();
+            var options = Plugin.Instance?.GetConfiguredOptions();
+            if (options == null || !IsLibraryAllowed(item, options))
+                return ""; // Ensures no cache or fallback to default
 
-            var libs = (o.SelectedLibraries ?? "")
+            var libs = (options.SelectedLibraries ?? "")
                         .Replace(',', '-')
                         .Replace(" ", "");
 
@@ -65,19 +81,19 @@ namespace EmbyIcons
                                         .Replace(" ", "")
                                         .ToLowerInvariant();
 
-            var aLangs = Norm(o.AudioLanguages);
-            var sLangs = Norm(o.SubtitleLanguages);
+            var aLangs = Norm(options.AudioLanguages);
+            var sLangs = Norm(options.SubtitleLanguages);
 
-            var aAlign = o.AudioIconAlignment.ToString();
-            var sAlign = o.SubtitleIconAlignment.ToString();
+            var aAlign = options.AudioIconAlignment.ToString();
+            var sAlign = options.SubtitleIconAlignment.ToString();
 
-            var showA = o.ShowAudioIcons ? "1" : "0";
-            var showS = o.ShowSubtitleIcons ? "1" : "0";
+            var showA = options.ShowAudioIcons ? "1" : "0";
+            var showS = options.ShowSubtitleIcons ? "1" : "0";
 
-            var series = o.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0";
+            var series = options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0";
 
-            var aVertOffset = o.AudioIconVerticalOffset.ToString();
-            var sVertOffset = o.SubtitleIconVerticalOffset.ToString();
+            var aVertOffset = options.AudioIconVerticalOffset.ToString();
+            var sVertOffset = options.SubtitleIconVerticalOffset.ToString();
 
             string mediaFileTimestamp = "";
             string subtitleTimestamp = "";
@@ -92,7 +108,6 @@ namespace EmbyIcons
                     {
                         mediaFileTimestamp = File.GetLastWriteTimeUtc(path).Ticks.ToString();
                     }
-
                     subtitleTimestamp = "";
                 }
             }
@@ -148,7 +163,7 @@ namespace EmbyIcons
 
             return
               $"embyicons_{item.Id}_{imageType}" +
-              $"_sz{o.IconSize}" +
+              $"_sz{options.IconSize}" +
               $"_libs{libs}" +
               $"_aLangs{aLangs}" +
               $"_sLangs{sLangs}" +
@@ -167,19 +182,32 @@ namespace EmbyIcons
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
-           => new() { RequiresTransparency = true };
+        {
+            var options = Plugin.Instance?.GetConfiguredOptions();
+            if (options == null || !IsLibraryAllowed(item, options)) return null;
+
+            return new() { RequiresTransparency = true };
+        }
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize)
-           => originalSize;
+            => originalSize;
 
         Task IImageEnhancer.EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                               ImageType imageType, int imageIndex)
-           => EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
+            => EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
 
         public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                             ImageType imageType, int imageIndex,
                                             CancellationToken cancellationToken)
         {
+            var options = Plugin.Instance?.GetConfiguredOptions();
+            if (options == null || !IsLibraryAllowed(item, options))
+            {
+                // Copy the original image, or do nothing, to ensure fallback works gracefully.
+                // await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // You may want to enable this if needed.
+                return;
+            }
+
             var key = item.Id.ToString();
 
             var sem = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
