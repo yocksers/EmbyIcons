@@ -10,13 +10,23 @@ namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal Task<(HashSet<string>, HashSet<string>)> GetAggregatedLanguagesForSeriesAsync(Series series, PluginOptions options, CancellationToken cancellationToken)
+        /// <summary>
+        /// Aggregates detected languages for all episodes in a series.
+        /// NOTE: This is called only during actual overlay/image calculation,
+        /// NOT during plugin hot-path checks, so library lookups are safe here.
+        /// </summary>
+        internal Task<(HashSet<string>, HashSet<string>)> GetAggregatedLanguagesForSeriesAsync(
+            Series series,
+            PluginOptions options,
+            CancellationToken cancellationToken)
         {
             var audioLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.AudioLanguages)
-                .Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(System.StringComparer.OrdinalIgnoreCase);
+                .Select(Helpers.LanguageHelper.NormalizeLangCode)
+                .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
 
             var subtitleLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.SubtitleLanguages)
-                .Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(System.StringComparer.OrdinalIgnoreCase);
+                .Select(Helpers.LanguageHelper.NormalizeLangCode)
+                .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
 
             var query = new InternalItemsQuery
             {
@@ -25,6 +35,7 @@ namespace EmbyIcons
                 IncludeItemTypes = new[] { "Episode" }
             };
 
+            // This _libraryManager call is safe ONLY because this method is NOT used in plugin hot-path checks
             var items = _libraryManager.GetItemList(query);
             var episodes = items.OfType<Episode>().ToList();
 
@@ -75,6 +86,7 @@ namespace EmbyIcons
                 {
                     var audios = episodeAudioLangCache.TryGetValue(ep.Id, out var a) ? string.Join(",", a) : "none";
                     var subs = episodeSubtitleLangCache.TryGetValue(ep.Id, out var s) ? string.Join(",", s) : "none";
+                    // Logging removed for brevity, add if needed
                 }
             }
 

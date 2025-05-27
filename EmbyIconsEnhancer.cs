@@ -38,9 +38,10 @@ namespace EmbyIcons
             };
         }
 
-        // Helper: Check if overlays should be applied to this item based on library restrictions (CACHED SET ONLY)
+        // Uses the cached library ID set ONLY - never queries libraries directly.
         private bool IsLibraryAllowed(BaseItem item)
         {
+            // This is ALWAYS safe in Emby 4.9+, because it's cached on config save.
             var allowedLibs = Plugin.Instance?.AllowedLibraryIds ?? new HashSet<string>();
             var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
             return allowedLibs.Count == 0 || (libraryId != null && allowedLibs.Contains(libraryId));
@@ -58,10 +59,8 @@ namespace EmbyIcons
         {
             if (item == null || imageType != ImageType.Primary) return false;
             if (item is Person) return false;
-
-            // Use cached set for library restriction!
+            // Only use cached allowedLibs!
             if (!IsLibraryAllowed(item)) return false;
-
             return item is Movie || item is Episode || item is Series ||
                    item is Season || item is BoxSet || item is MusicVideo;
         }
@@ -69,7 +68,7 @@ namespace EmbyIcons
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
             if (!IsLibraryAllowed(item))
-                return ""; // Ensures no cache or fallback to default
+                return ""; // No cache/fallback to default
 
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (options == null) return "";
@@ -120,6 +119,7 @@ namespace EmbyIcons
             // --------- PER-SERIES/SEASON CHILD LANGUAGES HASH ----------
             string childLangsHash = "";
 
+            // This block is safe, as it is only executed for overlays
             if (item is Series || item is Season)
             {
                 try
@@ -136,10 +136,10 @@ namespace EmbyIcons
                         .AsParallel().OrderBy(e => e.Id)
                         .Select(e =>
                         {
-                            var audio = string.Join(",", (e.GetMediaStreams() ?? new System.Collections.Generic.List<MediaBrowser.Model.Entities.MediaStream>())
+                            var audio = string.Join(",", (e.GetMediaStreams() ?? new List<MediaBrowser.Model.Entities.MediaStream>())
                                 .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language))
                                 .Select(s => s.Language));
-                            var subs = string.Join(",", (e.GetMediaStreams() ?? new System.Collections.Generic.List<MediaBrowser.Model.Entities.MediaStream>())
+                            var subs = string.Join(",", (e.GetMediaStreams() ?? new List<MediaBrowser.Model.Entities.MediaStream>())
                                 .Where(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language))
                                 .Select(s => s.Language));
                             return $"{e.Id}:{audio}|{subs}";

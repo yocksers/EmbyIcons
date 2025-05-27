@@ -9,9 +9,11 @@ namespace EmbyIcons.Helpers
 {
     internal static class FileUtils
     {
+        /// <summary>
+        /// Asynchronous file copy with buffer.
+        /// </summary>
         public static async Task SafeCopyAsync(string source, string dest)
         {
-            // Asynchronous file copy with buffer
             const int bufferSize = 81920; // 80 KB buffer
 
             using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true))
@@ -22,17 +24,23 @@ namespace EmbyIcons.Helpers
             }
         }
 
+        /// <summary>
+        /// Get the set of allowed library IDs based on names (from options).
+        /// WARNING: Never call this in plugin "hot path" checks (e.g., Supports, GetEnhancedImageInfo, etc).
+        /// Only call this on plugin options load/save, and cache the result for use everywhere else.
+        /// </summary>
         public static HashSet<string> GetAllowedLibraryIds(ILibraryManager libraryManager, string? selectedLibrariesCsv)
         {
             var allowedIds = new HashSet<string>();
 
             if (string.IsNullOrWhiteSpace(selectedLibrariesCsv))
-                return allowedIds; // no restriction
+                return allowedIds; // No restriction if empty
 
             var selectedNames = selectedLibrariesCsv.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim().Trim('"', '\''))
                 .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
 
+            // This will enumerate all virtual folders - do not call in overlay/image check methods!
             foreach (var lib in libraryManager.GetVirtualFolders())
                 if (selectedNames.Contains(lib.Name))
                     allowedIds.Add(lib.Id);
@@ -40,6 +48,10 @@ namespace EmbyIcons.Helpers
             return allowedIds;
         }
 
+        /// <summary>
+        /// Get the library ID for a media item based on its path.
+        /// This can be called in plugin "hot path" methods as it's just a simple lookup.
+        /// </summary>
         public static string? GetLibraryIdForItem(ILibraryManager libraryManager, BaseItem item)
         {
             if (item == null) return null;
