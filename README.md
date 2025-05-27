@@ -65,7 +65,7 @@
 
 ---
 
-- Many thanks to Neminem and keitaro26 Bakes82 in the Emby Forums for the help with this plugin!!
+- Many thanks to Neminem, keitaro26 and Bakes82 in the Emby Forums for the help with this plugin!!
 - A shoutout to Craggles for the awesome icons!!
 
 ---
