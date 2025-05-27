@@ -25,7 +25,7 @@ namespace EmbyIcons
     public class Plugin : BasePluginSimpleUI<PluginOptions>, IHasThumbImage, IDisposable
     {
         private readonly ILibraryManager _libraryManager;
-        private readonly IUserViewManager _userViewManager; // ADDED
+        private readonly IUserViewManager _userViewManager;
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _logger;
         private EmbyIconsEnhancer? _enhancer;
@@ -34,7 +34,11 @@ namespace EmbyIcons
 
         public ILogger Logger => _logger;
 
-        // Pass both dependencies to Enhancer
+        // === Library overlay restriction cache ===
+        private HashSet<string> _allowedLibraryIds = new();
+        public HashSet<string> AllowedLibraryIds => _allowedLibraryIds;
+        // ==========================================
+
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager);
 
         public HashSet<string> AudioLangSet { get; private set; } = new();
@@ -43,7 +47,7 @@ namespace EmbyIcons
         public Plugin(
             IApplicationHost appHost,
             ILibraryManager libraryManager,
-            IUserViewManager userViewManager, // ADDED
+            IUserViewManager userViewManager,
             ILogManager logManager,
             IFileSystem fileSystem)
             : base(appHost)
@@ -74,9 +78,13 @@ namespace EmbyIcons
             AudioLangSet = new((options.AudioLanguages ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
             SubtitleLangSet = new((options.SubtitleLanguages ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
 
+            // === PATCHED: Cache allowed libraries set on settings change ===
+            _allowedLibraryIds = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
+            // ===============================================================
+
             _logger.Info($"[EmbyIcons] Loaded settings: IconsFolder={options.IconsFolder}, " +
                          $"IconSize={options.IconSize}, AudioLanguages={options.AudioLanguages}, " +
-                         $"SubtitleLanguages={options.SubtitleLanguages}");
+                         $"SubtitleLanguages={options.SubtitleLanguages}, AllowedLibraries={options.SelectedLibraries}");
         }
 
         public override string Name => "EmbyIcons";

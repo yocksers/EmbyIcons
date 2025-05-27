@@ -8,6 +8,7 @@ using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -37,10 +38,10 @@ namespace EmbyIcons
             };
         }
 
-        // Helper: Check if overlays should be applied to this item based on library restrictions
-        private bool IsLibraryAllowed(BaseItem item, PluginOptions options)
+        // Helper: Check if overlays should be applied to this item based on library restrictions (CACHED SET ONLY)
+        private bool IsLibraryAllowed(BaseItem item)
         {
-            var allowedLibs = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
+            var allowedLibs = Plugin.Instance?.AllowedLibraryIds ?? new HashSet<string>();
             var libraryId = Helpers.FileUtils.GetLibraryIdForItem(_libraryManager, item);
             return allowedLibs.Count == 0 || (libraryId != null && allowedLibs.Contains(libraryId));
         }
@@ -58,9 +59,8 @@ namespace EmbyIcons
             if (item == null || imageType != ImageType.Primary) return false;
             if (item is Person) return false;
 
-            var options = Plugin.Instance?.GetConfiguredOptions();
-            if (options == null) return false;
-            if (!IsLibraryAllowed(item, options)) return false;
+            // Use cached set for library restriction!
+            if (!IsLibraryAllowed(item)) return false;
 
             return item is Movie || item is Episode || item is Series ||
                    item is Season || item is BoxSet || item is MusicVideo;
@@ -68,9 +68,11 @@ namespace EmbyIcons
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
-            var options = Plugin.Instance?.GetConfiguredOptions();
-            if (options == null || !IsLibraryAllowed(item, options))
+            if (!IsLibraryAllowed(item))
                 return ""; // Ensures no cache or fallback to default
+
+            var options = Plugin.Instance?.GetConfiguredOptions();
+            if (options == null) return "";
 
             var libs = (options.SelectedLibraries ?? "")
                         .Replace(',', '-')
@@ -183,9 +185,7 @@ namespace EmbyIcons
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
         {
-            var options = Plugin.Instance?.GetConfiguredOptions();
-            if (options == null || !IsLibraryAllowed(item, options)) return null;
-
+            if (!IsLibraryAllowed(item)) return null;
             return new() { RequiresTransparency = true };
         }
 
@@ -200,8 +200,7 @@ namespace EmbyIcons
                                             ImageType imageType, int imageIndex,
                                             CancellationToken cancellationToken)
         {
-            var options = Plugin.Instance?.GetConfiguredOptions();
-            if (options == null || !IsLibraryAllowed(item, options))
+            if (!IsLibraryAllowed(item))
             {
                 // Copy the original image, or do nothing, to ensure fallback works gracefully.
                 // await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // You may want to enable this if needed.
