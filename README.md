@@ -49,9 +49,6 @@
 | **Restrict to Libraries**     | Comma-separated list of library names to restrict icon overlays to; leave empty for all libraries.|
 | **Enable Logging**            | Enable or disable plugin logging.                                                                 |
 
-The task scheduler is to refresh icon overlays, TV show posters will often not update on their own so running this will fix that.
-Note: Run it once a day or more, depending on system it can be rather taxing as it has to redraw all posters.
-
 > **Important:**  
 > _Icons must me named "eng.png" for audio tracks and "srt.eng.png" for subtitles, change eng with the language code you want like dan or jpn._
 
