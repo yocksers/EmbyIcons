@@ -70,4 +70,4 @@
 
 ---
 
-If you like the plugin and want to [Buy me a coffee](https://www.paypal.com/donate/?hosted_button_id=KEXBXYM4KFPE8)
+If you like the plugin and want to [Buy me a coffee](https://buymeacoffee.com/yockser)
