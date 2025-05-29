@@ -57,13 +57,22 @@ namespace EmbyIcons
 
         public bool Supports(BaseItem? item, ImageType imageType)
         {
-            if (item == null || imageType != ImageType.Primary) return false;
-            if (item is Person) return false;
-            // Only use cached allowedLibs!
-            if (!IsLibraryAllowed(item)) return false;
-            return item is Movie || item is Episode || item is Series ||
-                   item is Season || item is BoxSet || item is MusicVideo;
-        }
+    if (item == null || imageType != ImageType.Primary) return false;
+    if (item is Person) return false;
+    if (!IsLibraryAllowed(item)) return false;
+
+    var options = Plugin.Instance?.GetConfiguredOptions();
+    bool showEpisodes = options?.ShowOverlaysForEpisodes ?? true;
+
+    if (item is Episode)
+        return showEpisodes;
+
+    return item is Movie
+        || item is Series
+        || item is Season
+        || item is BoxSet
+        || item is MusicVideo;
+}
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
@@ -82,8 +91,8 @@ namespace EmbyIcons
                                         .Replace(" ", "")
                                         .ToLowerInvariant();
 
-            var aLangs = Norm(options.AudioLanguages);
-            var sLangs = Norm(options.SubtitleLanguages);
+            var aLangs = Norm(null);
+            var sLangs = Norm(null);
 
             var aAlign = options.AudioIconAlignment.ToString();
             var sAlign = options.SubtitleIconAlignment.ToString();

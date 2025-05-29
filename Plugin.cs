@@ -75,16 +75,16 @@ namespace EmbyIcons
 
         public void ApplySettings(PluginOptions options)
         {
-            AudioLangSet = new((options.AudioLanguages ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
-            SubtitleLangSet = new((options.SubtitleLanguages ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
+            AudioLangSet = new((null ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
+            SubtitleLangSet = new((null ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
 
             // === PATCHED: Cache allowed libraries set on settings change ===
             _allowedLibraryIds = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
             // ===============================================================
 
             _logger.Info($"[EmbyIcons] Loaded settings: IconsFolder={options.IconsFolder}, " +
-                         $"IconSize={options.IconSize}, AudioLanguages={options.AudioLanguages}, " +
-                         $"SubtitleLanguages={options.SubtitleLanguages}, AllowedLibraries={options.SelectedLibraries}");
+                         $"IconSize={options.IconSize}, AudioLanguages={null}, " +
+                         $"SubtitleLanguages={null}, AllowedLibraries={options.SelectedLibraries}");
         }
 
         public override string Name => "EmbyIcons";

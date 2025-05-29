@@ -25,14 +25,12 @@ namespace EmbyIcons
             AudioIconAlignment = IconAlignment.TopLeft;
             SubtitleIconAlignment = IconAlignment.BottomLeft;
 
-            AudioLanguages = "eng,dan,fre,ger,spa,pol,jpn";
-            SubtitleLanguages = "eng,dan,fre,ger,spa,pol,jpn";
-
             ShowAudioIcons = true;
             ShowSubtitleIcons = true;
 
             SelectedLibraries = string.Empty;
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
+            ShowOverlaysForEpisodes = true;
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
         }
@@ -75,14 +73,8 @@ namespace EmbyIcons
         [Description("Move subtitle icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int SubtitleIconVerticalOffset { get; set; }
 
-        [DisplayName("Audio Languages to Detect")]
-        [Description("List of language codes (e.g., eng,fre,jpn). Only these languages will trigger audio icon overlays. Separate multiple codes with commas.")]
-        public string AudioLanguages { get; set; }
-
-        [DisplayName("Subtitle Languages to Detect")]
-        [Description("List of subtitle language codes (e.g., eng,fre,jpn). Only these languages will trigger subtitle icon overlays. Separate multiple codes with commas.")]
-        public string SubtitleLanguages { get; set; }
-
+        
+        
         [DisplayName("Show Audio Icons")]
         [Description("Enable or disable drawing audio language icons on posters.")]
         public bool ShowAudioIcons { get; set; }
@@ -91,18 +83,22 @@ namespace EmbyIcons
         [Description("Enable or disable drawing subtitle language icons on posters.")]
         public bool ShowSubtitleIcons { get; set; }
 
-        [DisplayName("Restrict to Libraries (comma separated names)")]
-        [Description("Optional: limit icon overlays to specific Emby libraries. Use the library names shown in the dashboard, separated by commas. Leave blank to apply everywhere.")]
-        public string SelectedLibraries { get; set; }
+        [DisplayName("Show Overlays For Episodes")]
+        [Description("Show language overlays on episode posters. If disabled, overlays are only shown on movies, series, etc.")]
+        public bool ShowOverlaysForEpisodes { get; set; } = true;
 
         [DisplayName("Show Series Icons If All Episodes Have Language")]
         [Description("Only show icons on series or season posters if every episode contains the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
 
+        [DisplayName("Restrict to Libraries (comma separated names)")]
+        [Description("Optional: limit icon overlays to specific Emby libraries. Use the library names shown in the dashboard, separated by commas. Leave blank to apply everywhere.")]
+        public string SelectedLibraries { get; set; }
+
         [DisplayName("Enable Overlay Logging")]
         [Description("Enable verbose overlay logging to help debug language detection. May affect performance on large libraries. Recommended only when troubleshooting.")]
         public bool EnableOverlayLogging { get; set; } = false;
-
+  
         public static ValidationResult? ValidateIconsFolder(string? folderPath, ValidationContext context)
         {
             if (string.IsNullOrWhiteSpace(folderPath))

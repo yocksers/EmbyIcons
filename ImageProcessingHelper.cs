@@ -45,6 +45,7 @@ namespace EmbyIcons
                 return;
             }
 
+            // --- PATCH: Only detect all languages, no filter ---
             HashSet<string> audioLangsDetected = new(StringComparer.OrdinalIgnoreCase);
             HashSet<string> subtitleLangsDetected = new(StringComparer.OrdinalIgnoreCase);
 
@@ -75,12 +76,7 @@ namespace EmbyIcons
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var audioLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.AudioLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var subtitleLangsAllowed = Helpers.LanguageHelper.ParseLanguageList(options.SubtitleLanguages).Select(Helpers.LanguageHelper.NormalizeLangCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            audioLangsDetected.IntersectWith(audioLangsAllowed);
-            subtitleLangsDetected.IntersectWith(subtitleLangsAllowed);
-
+            // PATCH: No more intersecting with allowed lists, just check icons enabled and non-empty
             if (!options.ShowAudioIcons || audioLangsDetected.Count == 0)
                 audioLangsDetected.Clear();
 
