@@ -52,33 +52,21 @@ namespace EmbyIcons.Helpers
             if (item == null || options == null)
                 return false;
 
+            // If both audio and subtitle icons are disabled, no overlays should be drawn
             if (!options.ShowAudioIcons && !options.ShowSubtitleIcons)
                 return false;
 
-            var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+            // If the item is an episode and showing overlays for episodes is disabled
+            if (item is MediaBrowser.Controller.Entities.TV.Episode && !options.ShowOverlaysForEpisodes)
+                return false;
 
-            bool hasAudio = false, hasSubs = false;
+            // If icon size is 0, nothing will be drawn
+            if (options.IconSize <= 0)
+                return false;
 
-            if (options.ShowAudioIcons)
-            {
-                var matchingAudio = streams
-                    .Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language))
-                    .Select(s => s.Language.ToLowerInvariant());
-
-                hasAudio = matchingAudio.Any(lang => Plugin.Instance?.AudioLangSet?.Contains(lang) == true);
-            }
-
-            if (options.ShowSubtitleIcons)
-            {
-                var matchingSubs = streams
-                    .Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language))
-                    .Select(s => s.Language.ToLowerInvariant());
-
-                hasSubs = matchingSubs.Any(lang => Plugin.Instance?.SubtitleLangSet?.Contains(lang) == true);
-            }
-
-            // ✅ If layout settings are present, allow overlay even if nothing matches yet
-            return hasAudio || hasSubs || options.IconSize > 0;
+            // This method only checks plugin-level enablement, not if actual languages are present.
+            // Language detection happens in EnhanceImageInternalAsync.
+            return true;
         }
     }
 }

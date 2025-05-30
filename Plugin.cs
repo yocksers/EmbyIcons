@@ -6,14 +6,14 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.Collections; // Required for IUserViewManager
+using MediaBrowser.Controller.Collections;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using MediaBrowser.Model.Logging;
+using MediaBrowser.Model.Logging; // Ensure this is present for ILogManager and ILogger
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic; // Needed for HashSet
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -27,34 +27,33 @@ namespace EmbyIcons
         private readonly ILibraryManager _libraryManager;
         private readonly IUserViewManager _userViewManager;
         private readonly IFileSystem _fileSystem;
-        private readonly ILogger _logger;
+        private readonly ILogger _logger; // Logger for the Plugin class itself
+        private readonly ILogManager _logManager; // Store ILogManager to pass to Enhancer
+
         private EmbyIconsEnhancer? _enhancer;
 
         public static Plugin? Instance { get; private set; }
 
         public ILogger Logger => _logger;
 
-        // === Library overlay restriction cache ===
         private HashSet<string> _allowedLibraryIds = new();
         public HashSet<string> AllowedLibraryIds => _allowedLibraryIds;
-        // ==========================================
 
-        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager);
-
-        public HashSet<string> AudioLangSet { get; private set; } = new();
-        public HashSet<string> SubtitleLangSet { get; private set; } = new();
+        // FIX: Pass the ILogger instance obtained from ILogManager to Enhancer
+        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
 
         public Plugin(
             IApplicationHost appHost,
             ILibraryManager libraryManager,
             IUserViewManager userViewManager,
-            ILogManager logManager,
+            ILogManager logManager, // Inject ILogManager
             IFileSystem fileSystem)
             : base(appHost)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
-            _logger = logManager.GetLogger(nameof(Plugin));
+            _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager)); // Store ILogManager
+            _logger = logManager.GetLogger(nameof(Plugin)); // Get logger for Plugin class
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
             Instance = this;
 
@@ -66,6 +65,23 @@ namespace EmbyIcons
         {
             base.OnOptionsSaved(options);
             ApplySettings(options);
+
+            try
+            {
+                var expandedPath = Environment.ExpandEnvironmentVariables(options.IconsFolder);
+                if (!_fileSystem.DirectoryExists(expandedPath))
+                {
+                    _logger.Error($"[EmbyIcons] Configured icons folder '{expandedPath}' does not exist. Overlays may not work.");
+                }
+                else if (!_fileSystem.GetFiles(expandedPath).Any(f => Path.GetExtension(f.FullName).Equals(".png", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger.Warn($"[EmbyIcons] No PNG icon files found in '{expandedPath}'. Overlays may not work.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error validating icons folder on save", ex);
+            }
         }
 
         public new void SaveOptions(PluginOptions options)
@@ -75,16 +91,12 @@ namespace EmbyIcons
 
         public void ApplySettings(PluginOptions options)
         {
-            AudioLangSet = new((null ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
-            SubtitleLangSet = new((null ?? "").Split(',').Select(x => x.Trim().ToLowerInvariant()));
+            options.IconsFolder = Environment.ExpandEnvironmentVariables(options.IconsFolder);
 
-            // === PATCHED: Cache allowed libraries set on settings change ===
             _allowedLibraryIds = Helpers.FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
-            // ===============================================================
 
             _logger.Info($"[EmbyIcons] Loaded settings: IconsFolder={options.IconsFolder}, " +
-                         $"IconSize={options.IconSize}, AudioLanguages={null}, " +
-                         $"SubtitleLanguages={null}, AllowedLibraries={options.SelectedLibraries}");
+                         $"IconSize={options.IconSize}, AllowedLibraries={options.SelectedLibraries}");
         }
 
         public override string Name => "EmbyIcons";

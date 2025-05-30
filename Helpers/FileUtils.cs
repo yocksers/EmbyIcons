@@ -1,26 +1,108 @@
+using System; // Added for Guid
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using System.Threading; // Added for Task.Delay
 
 namespace EmbyIcons.Helpers
 {
     internal static class FileUtils
     {
         /// <summary>
-        /// Asynchronous file copy with buffer.
+        /// Asynchronous file copy with buffer and robust retry logic for file locking issues.
+        /// Always writes to a temporary file and then moves it to the destination.
         /// </summary>
         public static async Task SafeCopyAsync(string source, string dest)
         {
-            const int bufferSize = 81920; // 80 KB buffer
+            const int bufferSize = 262144; // 256 KB buffer
+            const int maxRetries = 5;
+            int retries = 0;
+            int delayMs = 100;
 
-            using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true))
-            using (var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, useAsync: true))
+            // Ensure destination directory exists
+            var destDir = Path.GetDirectoryName(dest) ?? throw new ArgumentException("Invalid destination path for file copy.");
+            Directory.CreateDirectory(destDir);
+
+            // Generate a unique temporary file path for the destination
+            string tempDest = Path.Combine(destDir, Path.GetFileName(dest) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+
+            // Retry loop for the copy operation itself (source to temp dest)
+            while (true)
             {
-                await sourceStream.CopyToAsync(destStream);
-                await destStream.FlushAsync();
+                try
+                {
+                    using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true))
+                    using (var tempDestStream = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, useAsync: true))
+                    {
+                        await sourceStream.CopyToAsync(tempDestStream);
+                        await tempDestStream.FlushAsync();
+                    }
+                    break; // Copy successful, exit loop
+                }
+                catch (IOException ex)
+                {
+                    retries++;
+                    if (retries >= maxRetries)
+                    {
+                        // Log failure, but the calling EnhanceImageInternalAsync also has a fallback
+                        Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Failed to copy '{source}' to temporary '{tempDest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex);
+                        throw; // Re-throw to caller for outer handling
+                    }
+                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Retrying copy from '{source}' to temporary '{tempDest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}");
+                    await Task.Delay(delayMs);
+                    delayMs = Math.Min(5000, delayMs * 2); // Max 5 seconds delay
+                }
+                catch (Exception ex)
+                {
+                    // Catch other unexpected errors during copy
+                    Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Unexpected error copying '{source}' to temporary '{tempDest}'. Original message: {ex.Message}", ex);
+                    throw;
+                }
+            }
+
+            // Reset retries and delay for the move/delete operation
+            retries = 0;
+            delayMs = 100;
+
+            // Retry loop for replacing the final destination file
+            while (true)
+            {
+                try
+                {
+                    // Attempt to delete the old file first if it exists
+                    if (File.Exists(dest))
+                    {
+                        File.Delete(dest);
+                    }
+                    // Move the temporary file to the final destination
+                    File.Move(tempDest, dest);
+                    break; // Move successful, exit loop
+                }
+                catch (IOException ex)
+                {
+                    retries++;
+                    if (retries >= maxRetries)
+                    {
+                        // Log failure, but the calling EnhanceImageInternalAsync also has a fallback
+                        Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Failed to move temporary '{tempDest}' to final '{dest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex);
+                        // Clean up the temporary file if the move ultimately fails
+                        try { File.Delete(tempDest); } catch (Exception cleanupEx) { Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); }
+                        throw;
+                    }
+                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Retrying move of temporary '{tempDest}' to final '{dest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}");
+                    await Task.Delay(delayMs);
+                    delayMs = Math.Min(5000, delayMs * 2); // Max 5 seconds delay
+                }
+                catch (Exception ex)
+                {
+                    // Catch other unexpected errors during move
+                    Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Unexpected error moving temporary '{tempDest}' to final '{dest}'. Original message: {ex.Message}", ex);
+                    try { File.Delete(tempDest); } catch (Exception cleanupEx) { Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); }
+                    throw;
+                }
             }
         }
 

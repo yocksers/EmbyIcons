@@ -8,12 +8,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SkiaSharp;
+using MediaBrowser.Model.Logging;
 
 namespace EmbyIcons.Helpers
 {
     public class IconCacheManager : IDisposable
     {
         private readonly TimeSpan _cacheTtl;
+        private readonly ILogger _logger;
 
         private readonly ConcurrentDictionary<string, string?> _audioIconPathCache = new();
         private readonly ConcurrentDictionary<string, string?> _subtitleIconPathCache = new();
@@ -24,19 +26,18 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
 
-        // Track file last write times to detect changes
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
 
         private string _currentIconVersion = string.Empty;
 
         public event EventHandler<string>? CacheRefreshedWithVersion;
 
-        // Max degree of parallelism for icon loading to avoid overloading CPU/IO
         private readonly int _maxParallelism;
 
-        public IconCacheManager(TimeSpan cacheTtl, int maxParallelism = 4)
+        public IconCacheManager(TimeSpan cacheTtl, ILogger logger, int maxParallelism = 4)
         {
             _cacheTtl = cacheTtl;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _maxParallelism = maxParallelism;
         }
 
@@ -45,7 +46,7 @@ namespace EmbyIcons.Helpers
             if (_iconsFolder != iconsFolder)
             {
                 _iconsFolder = iconsFolder;
-                return RefreshCacheAsync(cancellationToken);
+                return RefreshCacheAsync(cancellationToken, force: true);
             }
             else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
             {
@@ -54,17 +55,18 @@ namespace EmbyIcons.Helpers
             return Task.CompletedTask;
         }
 
-        // PATCH: Add force parameter (default false)
         public Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken, bool force = false)
         {
             return RefreshCacheAsync(cancellationToken, force);
         }
 
-        // PATCH: Add force parameter (default false)
         private Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
             if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
+            {
+                _logger.Warn($"Icons folder '{_iconsFolder}' does not exist or is not set. Icon cache cannot be refreshed.");
                 return Task.CompletedTask;
+            }
 
             var pngFiles = Directory.GetFiles(_iconsFolder, "*.png");
 
@@ -91,7 +93,6 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            // PATCH: bypass cache short-circuit if force is true
             if (!force && !anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
                 return Task.CompletedTask;
 
@@ -115,20 +116,6 @@ namespace EmbyIcons.Helpers
                     _audioIconPathCache[name] = file;
             }
 
-            var po = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = _maxParallelism };
-
-            Parallel.ForEach(_audioIconPathCache.Values.Where(f => f != null)!, po, path =>
-            {
-                if (!string.IsNullOrEmpty(path))
-                    TryLoadAndCacheIcon(path!, false);
-            });
-
-            Parallel.ForEach(_subtitleIconPathCache.Values.Where(f => f != null)!, po, path =>
-            {
-                if (!string.IsNullOrEmpty(path))
-                    TryLoadAndCacheIcon(path!, true);
-            });
-
             _lastCacheRefreshTime = DateTime.UtcNow;
 
             var version = ComputeIconFilesVersion(pngFiles);
@@ -136,8 +123,11 @@ namespace EmbyIcons.Helpers
             bool versionChanged = version != _currentIconVersion;
             _currentIconVersion = version;
 
-            if (anyChanged && versionChanged)
+            if (anyChanged || versionChanged)
+            {
+                _logger.Info($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
                 CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
+            }
 
             return Task.CompletedTask;
         }
@@ -162,8 +152,9 @@ namespace EmbyIcons.Helpers
             }
             catch (Exception ex)
             {
-                // Log exception for diagnostics - replace with your logging system as needed
-                Console.WriteLine($"[IconCacheManager] Failed to load icon '{iconPath}': {ex.Message}");
+                // FIX: Use the ErrorException extension method provided by Emby's logging for exceptions and messages.
+                // This is the most robust way to log exceptions with Emby's ILogger.
+                _logger.ErrorException($"Failed to load icon '{iconPath}'.", ex);
                 CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
             }
         }
@@ -202,11 +193,14 @@ namespace EmbyIcons.Helpers
             if (imageCache.TryGetValue(iconPath, out var cached))
             {
                 if (cached.IsExpired(_cacheTtl) || cached.FileWriteTimeUtc != currentFileWrite)
+                {
+                    _logger.Debug($"Icon '{iconPath}' expired or file changed. Reloading.");
                     TryLoadAndCacheIcon(iconPath, isSubtitle);
-
+                }
                 return imageCache.TryGetValue(iconPath, out var latest) ? latest.Image : null;
             }
 
+            _logger.Debug($"Icon '{iconPath}' not in cache. Loading.");
             TryLoadAndCacheIcon(iconPath, isSubtitle);
             return imageCache.TryGetValue(iconPath, out var loaded) ? loaded.Image : null;
         }
@@ -234,15 +228,6 @@ namespace EmbyIcons.Helpers
                 {
                     cache[langCodeKey] = shortCandidate;
                     return shortCandidate;
-                }
-            }
-            else if (langCodeKey.Length == 2)
-            {
-                var possibleThreeLetterFiles = Directory.GetFiles(folderPath, $"{langCodeKey}??.png");
-                if (possibleThreeLetterFiles.Length > 0)
-                {
-                    cache[langCodeKey] = possibleThreeLetterFiles[0];
-                    return possibleThreeLetterFiles[0];
                 }
             }
 
