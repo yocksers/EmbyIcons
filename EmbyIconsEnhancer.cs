@@ -91,8 +91,8 @@ namespace EmbyIcons
                                         .Replace(" ", "")
                                         .ToLowerInvariant();
 
-            var aLangs = Norm(null);
-            var sLangs = Norm(null);
+            var aLangs = Norm(string.Empty);
+            var sLangs = Norm(string.Empty);
 
             var aAlign = options.AudioIconAlignment.ToString();
             var sAlign = options.SubtitleIconAlignment.ToString();
