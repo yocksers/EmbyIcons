@@ -33,16 +33,14 @@ namespace EmbyIcons
             // --- First level checks and early exits ---
             if (!Helpers.IconDrawer.ShouldDrawAnyOverlays(item, options))
             {
-                // If no overlays are configured to be drawn, just copy the original.
-                // Emby's pipeline expects an output file.
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // This might be the source of some IOExceptions
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
             if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
             {
                 _logger.Warn($"[EmbyIcons] Input file for image enhancement is invalid or missing: '{inputFile}'. Item: {item?.Name} ({item?.Id}). Copying original instead.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // This might be the source of some IOExceptions
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
@@ -85,7 +83,7 @@ namespace EmbyIcons
             if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0)
             {
                 _logger.Debug($"[EmbyIcons] No relevant audio or subtitle languages detected for overlays on item: {item?.Name} ({item?.Id}). Copying original.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // This might be the source of some IOExceptions
+                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
@@ -103,7 +101,7 @@ namespace EmbyIcons
                     }
                     break; // Success, exit retry loop
                 }
-                catch (IOException ioEx) // Catch IOExceptions specifically here for retries
+                catch (IOException ioEx)
                 {
                     fileOpRetries++;
                     if (fileOpRetries >= maxFileOpRetries)
@@ -114,7 +112,7 @@ namespace EmbyIcons
                     }
                     _logger.Warn($"[EmbyIcons] Retrying SKBitmap.Decode for '{inputFile}' due to IO error. Retry {fileOpRetries}/{maxFileOpRetries}. Error: {ioEx.Message}");
                     await Task.Delay(fileOpDelayMs, cancellationToken);
-                    fileOpDelayMs = Math.Min(5000, fileOpDelayMs * 2); // Exponential backoff, max 5s
+                    fileOpDelayMs = Math.Min(5000, fileOpDelayMs * 2);
                 }
                 catch (Exception ex)
                 {
@@ -124,7 +122,7 @@ namespace EmbyIcons
                     return;
                 }
             }
-            // Reset retry counters for next operations
+
             fileOpRetries = 0;
             fileOpDelayMs = 100;
 
@@ -144,9 +142,11 @@ namespace EmbyIcons
 
             canvas.Clear(SKColors.Transparent);
             canvas.DrawBitmap(surfBmp, 0, 0);
-            surfBmp.Dispose(); // Dispose original bitmap as it's now drawn to the surface
+            surfBmp.Dispose();
 
-            using var paint = new SKPaint { FilterQuality = SKFilterQuality.High };
+            // --- USE THE NEW SMOOTHING OPTION ---
+            var filterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None;
+            using var paint = new SKPaint { FilterQuality = filterQuality };
 
             var audioIconsToDraw =
                 audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
@@ -174,14 +174,14 @@ namespace EmbyIcons
                                              subtitleVerticalOffsetPx);
             }
 
-            canvas.Flush(); // Ensure all drawing operations are complete
+            canvas.Flush();
 
             try
             {
                 using var snapshot = surface.Snapshot();
-                using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Png, 100);
+                // --- USE THE NEW JPEG QUALITY OPTION ---
+                using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Jpeg, options.JpegQuality);
 
-                // Retry loop for directory creation and file saving
                 while (true)
                 {
                     try
@@ -190,17 +190,14 @@ namespace EmbyIcons
 
                         string tempOutput = outputFile + "." + Guid.NewGuid() + ".tmp";
 
-                        using (var fsOut = File.Create(tempOutput)) // This is where the IOException might occur if file is locked
+                        using (var fsOut = File.Create(tempOutput))
                         {
                             await encodedImg.AsStream().CopyToAsync(fsOut);
                             await fsOut.FlushAsync();
                         }
 
-                        // File.Move also has its own retry logic inside FileUtils, but adding a wrapper here for the entire save process.
-                        // The existing File.Move retry in FileUtils.SafeCopyAsync is good, but if the initial File.Create fails,
-                        // this outer retry catches it.
                         File.Move(tempOutput, outputFile, overwrite: true);
-                        break; // Success, exit retry loop
+                        break;
                     }
                     catch (IOException ioEx)
                     {
@@ -208,23 +205,22 @@ namespace EmbyIcons
                         if (fileOpRetries >= maxFileOpRetries)
                         {
                             _logger.ErrorException($"[EmbyIcons] Failed to save output image '{outputFile}' due to IO error after {maxFileOpRetries} retries. Item: {item?.Name} ({item?.Id}). Copying original as fallback.", ioEx);
-                            await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // Final fallback
+                            await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                             return;
                         }
                         _logger.Warn($"[EmbyIcons] Retrying image save for '{outputFile}' due to IO error. Retry {fileOpRetries}/{maxFileOpRetries}. Error: {ioEx.Message}");
                         await Task.Delay(fileOpDelayMs, cancellationToken);
-                        fileOpDelayMs = Math.Min(5000, fileOpDelayMs * 2); // Exponential backoff, max 5s
+                        fileOpDelayMs = Math.Min(5000, fileOpDelayMs * 2);
                     }
                     catch (Exception ex)
                     {
-                        // Catch any other non-IOException during saving/encoding
                         _logger.ErrorException($"[EmbyIcons] Unexpected critical error during image encoding or file saving for item: {item?.Name} ({item?.Id}). Copying original as fallback.", ex);
-                        await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile); // Final fallback
+                        await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                         return;
                     }
                 }
             }
-            catch (Exception ex) // This outer catch is primarily for unexpected errors beyond the retry loops
+            catch (Exception ex)
             {
                 _logger.ErrorException($"[EmbyIcons] Unhandled critical error during image enhancement for item: {item?.Name} ({item?.Id}). Copying original as fallback.", ex);
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);

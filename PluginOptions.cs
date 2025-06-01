@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.IO; // Still needed for Directory.Exists in static validation method - although this method is now commented out below.
+using System.IO;
 using Emby.Web.GenericEdit;
 
 namespace EmbyIcons
@@ -19,8 +19,6 @@ namespace EmbyIcons
         private string _iconsFolder = @"D:\icons";
         public PluginOptions()
         {
-            // Removed: Environment.ExpandEnvironmentVariables from constructor as it's handled in Plugin.cs ApplySettings
-            // _iconsFolder = Environment.ExpandEnvironmentVariables(_iconsFolder);
             IconSize = 10;
 
             AudioIconAlignment = IconAlignment.TopLeft;
@@ -34,6 +32,9 @@ namespace EmbyIcons
             ShowOverlaysForEpisodes = true;
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
+
+            JpegQuality = 75;
+            EnableImageSmoothing = false;
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -47,12 +48,9 @@ namespace EmbyIcons
         [DisplayName("Icons Folder Path")]
         [Description("Folder containing your PNG icon images. For audio icons, use language codes like 'eng.png', 'fre.png', etc. For subtitle icons, use 'srt.eng.png', 'srt.jpn.png', etc.")]
         [Required(ErrorMessage = "Icons folder path is required.")]
-        // PATCH: Removed CustomValidation attribute for IconsFolder, as validation is moved to Plugin.cs
-        // [CustomValidation(typeof(PluginOptions), nameof(ValidateIconsFolder))]
         public string IconsFolder
         {
             get => _iconsFolder;
-            // Removed: Environment.ExpandEnvironmentVariables from setter as it's handled in Plugin.cs ApplySettings
             set => _iconsFolder = value ?? @"D:\icons";
         }
 
@@ -76,8 +74,6 @@ namespace EmbyIcons
         [Description("Move subtitle icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int SubtitleIconVerticalOffset { get; set; }
 
-
-
         [DisplayName("Show Audio Icons")]
         [Description("Enable or disable drawing audio language icons on posters.")]
         public bool ShowAudioIcons { get; set; }
@@ -93,6 +89,15 @@ namespace EmbyIcons
         [DisplayName("Show Series Icons If All Episodes Have Language")]
         [Description("Only show icons on series or season posters if every episode contains the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
+
+        [DisplayName("Image Quality")]
+        [Description("Set the output image quality (1–100) for posters. Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]
+        [Range(1, 100)]
+        public int JpegQuality { get; set; } = 75;
+
+        [DisplayName("Enable Image Smoothing (Anti-Aliasing)")]
+        [Description("Enables smoothing/anti-aliasing for overlays. Not needed in most instances and disabling makes drawing the overlays slightly faster. Default: Off.")]
+        public bool EnableImageSmoothing { get; set; } = false;
 
         [DisplayName("Restrict to Libraries (comma separated names)")]
         [Description("Optional: limit icon overlays to specific Emby libraries. Use the library names shown in the dashboard, separated by commas. Leave blank to apply everywhere.")]

@@ -38,7 +38,6 @@ namespace EmbyIcons
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _userViewManager = userViewManager ?? throw new InvalidOperationException("IUserViewManager not initialized");
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer)); // Get logger for EmbyIconsEnhancer
-            // FIX CS0823: Pass required arguments first, then optional. No named arguments needed if order is correct.
             _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger, 4); // maxParallelism is 4 by default
             _iconCacheManager.CacheRefreshedWithVersion += (sender, version) =>
             {
@@ -131,6 +130,10 @@ namespace EmbyIcons
             var aVertOffset = options.AudioIconVerticalOffset.ToString();
             var sVertOffset = options.SubtitleIconVerticalOffset.ToString();
 
+            // NEW: Include JPEG quality and image smoothing in cache key!
+            var jpegQuality = options.JpegQuality.ToString();
+            var smoothing = options.EnableImageSmoothing ? "1" : "0";
+
             string itemMediaStreamHash = GetItemMediaStreamHash(item);
 
             string combinedChildrenMediaHash = "";
@@ -169,6 +172,8 @@ namespace EmbyIcons
               $"_showA{showA}" +
               $"_showS{showS}" +
               $"_seriesOpt{seriesOption}" +
+              $"_jpegq{jpegQuality}" +              // <--- JPEG Quality
+              $"_smoothing{smoothing}" +            // <--- Image Smoothing
               $"_aVertOffset{aVertOffset}" +
               $"_sVertOffset{sVertOffset}" +
               $"_iconVer{_iconCacheVersion}" +
@@ -180,7 +185,7 @@ namespace EmbyIcons
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
         {
             if (!IsLibraryAllowed(item)) return null;
-            return new() { RequiresTransparency = true };
+            return new() { RequiresTransparency = false };
         }
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize)
@@ -220,10 +225,8 @@ namespace EmbyIcons
             PluginOptions options,
             CancellationToken cancellationToken)
         {
-            // Add Task.Yield() to address CS1998 warning for async method that might run synchronously
             await Task.Yield();
 
-            // Check cache first
             if (_seriesLangCache.TryGetValue(series.Id, out var cachedResult) &&
                 (DateTime.UtcNow - cachedResult.timestamp) < SeriesLangCacheTTL)
             {
@@ -260,7 +263,6 @@ namespace EmbyIcons
 
             if (episodeAudioSets.Count == 0 && episodeSubtitleSets.Count == 0)
             {
-                // No streams at all across episodes
                 return (new HashSet<string>(), new HashSet<string>());
             }
 
