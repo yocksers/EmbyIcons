@@ -1,11 +1,10 @@
-using System; // Added for Guid
+using System; 
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using System.Threading; // Added for Task.Delay
 
 namespace EmbyIcons.Helpers
 {

@@ -1,34 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization; // Required for CultureInfo
+using System.Globalization;
 using System.Linq;
 
 namespace EmbyIcons.Helpers
 {
     internal static class LanguageHelper
     {
-        // Keep a smaller map for common aliases or specific Emby/media file quirks
-        // that CultureInfo might not resolve to your preferred 3-letter icon name directly.
-        // For example, Emby might report "jpn" but a user might name an icon "jp.png"
-        // Or if you prefer "ger" instead of "deu".
         private static readonly Dictionary<string, string> CustomLangCodeMap = new(StringComparer.OrdinalIgnoreCase)
         {
             // ISO 639-1 to preferred ISO 639-2/B or specific 3-letter icon name
             { "en", "eng" },
-            { "de", "ger" }, // Often preferred over "deu" for icons
-            { "fr", "fre" }, // Often preferred over "fra" for icons
+            { "de", "ger" },
+            { "fr", "fre" },
             { "ja", "jpn" },
             { "ko", "kor" },
-            { "zh", "chi" }, // Often preferred over "zho" for icons
+            { "zh", "chi" },
             { "es", "spa" },
             { "it", "ita" },
-            // Add other specific mappings you encounter or prefer
-            // Also map 3-letter codes to their preferred 3-letter codes if they have variants
             { "zho", "chi" },
             { "deu", "ger" },
             { "fra", "fre" },
-            { "jp", "jpn" }, // Example: if some media uses "jp"
-            // Ensure 3-letter codes already in your icon set map to themselves
+            { "jp", "jpn" }, 
             { "eng", "eng" },
             { "ger", "ger" },
             { "fre", "fre" },
@@ -85,12 +78,9 @@ namespace EmbyIcons.Helpers
             }
             catch (CultureNotFoundException)
             {
-                // CultureInfo couldn't resolve the code.
-                // This is expected for non-standard codes or Emby-specific internal codes.
+
             }
 
-            // 3. If CultureInfo fails, return the original code
-            // (or a value from a minimal fallback if you have very specific, non-standard needs)
             return code;
         }
     }

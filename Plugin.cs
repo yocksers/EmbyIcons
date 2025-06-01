@@ -1,18 +1,14 @@
-﻿using EmbyIcons.Helpers;
-using MediaBrowser.Common;
+﻿using MediaBrowser.Common;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.Collections;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using MediaBrowser.Model.Logging; // Ensure this is present for ILogManager and ILogger
+using MediaBrowser.Model.Logging;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -27,8 +23,8 @@ namespace EmbyIcons
         private readonly ILibraryManager _libraryManager;
         private readonly IUserViewManager _userViewManager;
         private readonly IFileSystem _fileSystem;
-        private readonly ILogger _logger; // Logger for the Plugin class itself
-        private readonly ILogManager _logManager; // Store ILogManager to pass to Enhancer
+        private readonly ILogger _logger; 
+        private readonly ILogManager _logManager; 
 
         private EmbyIconsEnhancer? _enhancer;
 
