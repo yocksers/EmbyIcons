@@ -108,15 +108,12 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_subtitleIconImageCache);
 
             // Map icon base names to file paths, supporting all Skia formats
-            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var file in allFiles)
             {
                 var ext = Path.GetExtension(file).ToLowerInvariant();
-                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue; // skip database/ini/hidden files
+                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
 
                 var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-
-                // Prefer the first found; warn if multiple files share the same name
                 var isSubtitle = name.StartsWith("srt.");
                 var dict = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
 
@@ -158,6 +155,14 @@ namespace EmbyIcons.Helpers
         {
             try
             {
+                var info = new FileInfo(iconPath);
+                if (info.Length < 50) // Arbitrary, real icon will be bigger than this
+                {
+                    _logger.Warn($"[EmbyIcons] Skipping icon '{iconPath}' because it is too small or corrupt.");
+                    CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
+                    return;
+                }
+
                 using var stream = File.OpenRead(iconPath);
                 var data = SKData.Create(stream);
                 var img = data != null ? SKImage.FromEncodedData(data) : null;
