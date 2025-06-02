@@ -68,12 +68,13 @@ namespace EmbyIcons.Helpers
                 return Task.CompletedTask;
             }
 
-            var pngFiles = Directory.GetFiles(_iconsFolder, "*.png");
+            // All files in icons folder, regardless of extension
+            var allFiles = Directory.GetFiles(_iconsFolder);
 
             bool anyChanged = false;
             var currentWriteTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var file in pngFiles)
+            foreach (var file in allFiles)
             {
                 var lastWrite = File.GetLastWriteTimeUtc(file);
                 currentWriteTimes[file] = lastWrite;
@@ -106,19 +107,32 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
 
-            foreach (var file in pngFiles)
+            // Map icon base names to file paths, supporting all Skia formats
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in allFiles)
             {
+                var ext = Path.GetExtension(file).ToLowerInvariant();
+                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue; // skip database/ini/hidden files
+
                 var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
 
-                if (name.StartsWith("srt."))
-                    _subtitleIconPathCache[name] = file;
+                // Prefer the first found; warn if multiple files share the same name
+                var isSubtitle = name.StartsWith("srt.");
+                var dict = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
+
+                if (!dict.ContainsKey(name))
+                {
+                    dict[name] = file;
+                }
                 else
-                    _audioIconPathCache[name] = file;
+                {
+                    _logger.Warn($"Duplicate icon name detected ('{name}'), files: '{dict[name]}' and '{file}'. Using '{dict[name]}' only.");
+                }
             }
 
             _lastCacheRefreshTime = DateTime.UtcNow;
 
-            var version = ComputeIconFilesVersion(pngFiles);
+            var version = ComputeIconFilesVersion(allFiles);
 
             bool versionChanged = version != _currentIconVersion;
             _currentIconVersion = version;
@@ -152,8 +166,6 @@ namespace EmbyIcons.Helpers
             }
             catch (Exception ex)
             {
-                // FIX: Use the ErrorException extension method provided by Emby's logging for exceptions and messages.
-                // This is the most robust way to log exceptions with Emby's ILogger.
                 _logger.ErrorException($"Failed to load icon '{iconPath}'.", ex);
                 CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
             }
@@ -183,7 +195,7 @@ namespace EmbyIcons.Helpers
             var pathCache = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
             var imageCache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
 
-            string? iconPath = ResolveIconPathWithFallback(langCodeKey, _iconsFolder, pathCache);
+            string? iconPath = ResolveIconPathWithFallback(langCodeKey, pathCache);
 
             if (iconPath == null || !File.Exists(iconPath))
                 return null;
@@ -205,30 +217,19 @@ namespace EmbyIcons.Helpers
             return imageCache.TryGetValue(iconPath, out var loaded) ? loaded.Image : null;
         }
 
-        private string? ResolveIconPathWithFallback(string langCodeKey, string folderPath,
-                                                   ConcurrentDictionary<string, string?> cache)
+        private string? ResolveIconPathWithFallback(string langCodeKey, ConcurrentDictionary<string, string?> cache)
         {
             langCodeKey = langCodeKey.ToLowerInvariant();
 
             if (cache.TryGetValue(langCodeKey, out var path) && !string.IsNullOrEmpty(path))
                 return path;
 
-            var candidate = Path.Combine(folderPath, $"{langCodeKey}.png");
-            if (File.Exists(candidate))
-            {
-                cache[langCodeKey] = candidate;
-                return candidate;
-            }
-
+            // If langCodeKey is 3 letters, try the first two as a short code
             if (langCodeKey.Length == 3)
             {
                 var shortCode = langCodeKey.Substring(0, 2);
-                var shortCandidate = Path.Combine(folderPath, $"{shortCode}.png");
-                if (File.Exists(shortCandidate))
-                {
-                    cache[langCodeKey] = shortCandidate;
-                    return shortCandidate;
-                }
+                if (cache.TryGetValue(shortCode, out var path2) && !string.IsNullOrEmpty(path2))
+                    return path2;
             }
 
 #pragma warning disable CS8604 // Possible null reference argument.

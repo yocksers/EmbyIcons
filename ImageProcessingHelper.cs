@@ -1,5 +1,7 @@
 ﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using SkiaSharp;
 using System;
@@ -23,12 +25,10 @@ namespace EmbyIcons
             var options = Plugin.Instance!.GetConfiguredOptions()
                 ?? throw new InvalidOperationException("Plugin options not initialized");
 
-            // Define retry parameters for file operations
             const int maxFileOpRetries = 5;
             int fileOpRetries = 0;
             int fileOpDelayMs = 100;
 
-            // --- First level checks and early exits ---
             if (!Helpers.IconDrawer.ShouldDrawAnyOverlays(item, options))
             {
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
@@ -78,26 +78,49 @@ namespace EmbyIcons
             if (!options.ShowSubtitleIcons)
                 subtitleLangsDetected.Clear();
 
-            if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0)
+            // --- Detect channel count ---
+            int maxChannels = 0;
+            var streamsForDetection = item.GetMediaStreams() ?? new List<MediaStream>();
+            foreach (var stream in streamsForDetection)
             {
-                _logger.Debug($"[EmbyIcons] No relevant audio or subtitle languages detected for overlays on item: {item?.Name} ({item?.Id}). Copying original.");
+                if (stream.Type == MediaStreamType.Audio)
+                {
+                    if (stream.Channels.HasValue)
+                        maxChannels = Math.Max(maxChannels, stream.Channels.Value);
+                }
+            }
+
+            // Map maxChannels to icon name
+            string? channelIconName = null;
+            if (options.ShowAudioChannelIcons && maxChannels > 0)
+            {
+                if (maxChannels == 1) channelIconName = "mono";
+                else if (maxChannels == 2) channelIconName = "stereo";
+                else if (maxChannels == 6) channelIconName = "5.1";
+                else if (maxChannels == 8) channelIconName = "7.1";
+                else channelIconName = $"{maxChannels}ch"; // fallback for unusual counts
+            }
+
+            if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0 && channelIconName == null)
+            {
+                _logger.Debug($"[EmbyIcons] No overlays for item: {item?.Name} ({item?.Id}). Copying original.");
                 await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                 return;
             }
 
             SKBitmap? surfBmp = null;
-            while (true) // Retry loop for decoding/opening input file
+            while (true)
             {
                 try
                 {
                     surfBmp = SKBitmap.Decode(inputFile);
                     if (surfBmp == null)
                     {
-                        _logger.Error($"[EmbyIcons] SKBitmap.Decode failed for input file: '{inputFile}'. Item: {item?.Name} ({item?.Id}). This usually means the image is corrupted or not a valid format. Copying original instead.");
+                        _logger.Error($"[EmbyIcons] SKBitmap.Decode failed for input file: '{inputFile}'. Item: {item?.Name} ({item?.Id}). Copying original instead.");
                         await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile);
                         return;
                     }
-                    break; // Success, exit retry loop
+                    break;
                 }
                 catch (IOException ioEx)
                 {
@@ -142,42 +165,76 @@ namespace EmbyIcons
             canvas.DrawBitmap(surfBmp, 0, 0);
             surfBmp.Dispose();
 
-            // --- USE THE NEW SMOOTHING OPTION ---
             var filterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None;
             using var paint = new SKPaint { FilterQuality = filterQuality };
 
-            var audioIconsToDraw =
-                audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, false)).Where(i => i != null).ToList();
+            // --- Build icon lists for each corner, stacking all icons that want that corner ---
+            var topLeftIcons = new List<SKImage>();
+            var topRightIcons = new List<SKImage>();
+            var bottomLeftIcons = new List<SKImage>();
+            var bottomRightIcons = new List<SKImage>();
 
-            if (audioIconsToDraw.Count > 0)
+            // Helper for getting list by alignment
+            List<SKImage> GetList(IconAlignment align)
             {
-                _logger.Debug($"[EmbyIcons] Drawing {audioIconsToDraw.Count} audio icons for item: {item?.Name} ({item?.Id})");
-                Helpers.IconDrawer.DrawIcons(canvas, audioIconsToDraw!, iconSize, padding,
-                                             width, height,
-                                             options.AudioIconAlignment,
-                                             paint,
-                                             audioVerticalOffsetPx);
+                return align switch
+                {
+                    IconAlignment.TopLeft => topLeftIcons,
+                    IconAlignment.TopRight => topRightIcons,
+                    IconAlignment.BottomLeft => bottomLeftIcons,
+                    IconAlignment.BottomRight => bottomRightIcons,
+                    _ => topLeftIcons,
+                };
             }
 
-            var subtitleIconsToDraw =
-                subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true)).Where(i => i != null).ToList();
-
-            if (subtitleIconsToDraw.Count > 0)
+            // AUDIO LANGUAGE ICONS
+            if (audioLangsDetected.Count > 0)
             {
-                _logger.Debug($"[EmbyIcons] Drawing {subtitleIconsToDraw.Count} subtitle icons for item: {item?.Name} ({item?.Id})");
-                Helpers.IconDrawer.DrawIcons(canvas, subtitleIconsToDraw!, iconSize, padding,
-                                             width, height,
-                                             options.SubtitleIconAlignment,
-                                             paint,
-                                             subtitleVerticalOffsetPx);
+                var audioIcons = audioLangsDetected.OrderBy(l => l)
+                    .Select(lang => _iconCacheManager.GetCachedIcon(lang, false))
+                    .Where(i => i != null)
+                    .ToList();
+                GetList(options.AudioIconAlignment).AddRange(audioIcons!);
             }
+
+            // CHANNEL ICON (using user-selected alignment)
+            if (channelIconName != null)
+            {
+                var icon = _iconCacheManager.GetCachedIcon(channelIconName, false);
+                if (icon != null)
+                {
+                    GetList(options.ChannelIconAlignment).Add(icon);
+                }
+            }
+
+            // SUBTITLE ICONS
+            if (subtitleLangsDetected.Count > 0)
+            {
+                var subIcons = subtitleLangsDetected.OrderBy(l => l)
+                    .Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true))
+                    .Where(i => i != null)
+                    .ToList();
+                GetList(options.SubtitleIconAlignment).AddRange(subIcons!);
+            }
+
+            // Draw all icons for each corner, stacked horizontally (default)
+            if (topLeftIcons.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, topLeftIcons, iconSize, padding, width, height, IconAlignment.TopLeft, paint, 0);
+
+            if (topRightIcons.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, topRightIcons, iconSize, padding, width, height, IconAlignment.TopRight, paint, 0);
+
+            if (bottomLeftIcons.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, bottomLeftIcons, iconSize, padding, width, height, IconAlignment.BottomLeft, paint, 0);
+
+            if (bottomRightIcons.Count > 0)
+                Helpers.IconDrawer.DrawIcons(canvas, bottomRightIcons, iconSize, padding, width, height, IconAlignment.BottomRight, paint, 0);
 
             canvas.Flush();
 
             try
             {
                 using var snapshot = surface.Snapshot();
-                // --- USE THE NEW JPEG QUALITY OPTION ---
                 using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Jpeg, options.JpegQuality);
 
                 while (true)

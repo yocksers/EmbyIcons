@@ -22,6 +22,7 @@ namespace EmbyIcons
 
             AudioIconAlignment = IconAlignment.TopLeft;
             SubtitleIconAlignment = IconAlignment.BottomLeft;
+            ChannelIconAlignment = IconAlignment.TopLeft;
 
             ShowAudioIcons = true;
             ShowSubtitleIcons = true;
@@ -34,6 +35,8 @@ namespace EmbyIcons
 
             JpegQuality = 75;
             EnableImageSmoothing = false;
+
+            ShowAudioChannelIcons = false;
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -65,6 +68,10 @@ namespace EmbyIcons
         [Description("Which corner of the poster to place the subtitle icons (e.g. top-left, bottom-right, etc.).")]
         public IconAlignment SubtitleIconAlignment { get; set; }
 
+        [DisplayName("Audio Channel Icon Alignment")]
+        [Description("Which corner of the poster to place the audio channel icons (mono, stereo, 5.1, 7.1, etc.).")]
+        public IconAlignment ChannelIconAlignment { get; set; } = IconAlignment.TopLeft;
+
         [DisplayName("Audio Icon Vertical Offset (%)")]
         [Description("Move audio icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int AudioIconVerticalOffset { get; set; }
@@ -89,13 +96,17 @@ namespace EmbyIcons
         [Description("Only show icons on series or season posters if every episode contains the specified audio/subtitle languages.")]
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; }
 
-        [DisplayName("Image Quality")]
-        [Description("Set the output image quality (1–100) for posters. Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]
+        [DisplayName("Show Audio Channel Overlay")]
+        [Description("Overlay an icon for the highest audio channel count (mono, stereo, 5.1, 7.1, etc.) on posters.")]
+        public bool ShowAudioChannelIcons { get; set; } = false;
+
+        [DisplayName("JPEG Quality")]
+        [Description("Set the output JPEG quality (1–100). Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]
         [Range(1, 100)]
         public int JpegQuality { get; set; } = 75;
 
         [DisplayName("Enable Image Smoothing (Anti-Aliasing)")]
-        [Description("Enables smoothing/anti-aliasing for overlays. Not needed in most instances and disabling makes drawing the overlays slightly faster. Default: Off.")]
+        [Description("Enables smoothing/anti-aliasing for overlays. Disabling makes drawing slightly faster. Default: Off.")]
         public bool EnableImageSmoothing { get; set; } = false;
 
         [DisplayName("Restrict to Libraries (comma separated names)")]
