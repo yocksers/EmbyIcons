@@ -23,8 +23,8 @@ namespace EmbyIcons
         private readonly ILibraryManager _libraryManager;
         private readonly IUserViewManager _userViewManager;
         private readonly IFileSystem _fileSystem;
-        private readonly ILogger _logger; 
-        private readonly ILogManager _logManager; 
+        private readonly ILogger _logger;
+        private readonly ILogManager _logManager;
 
         private EmbyIconsEnhancer? _enhancer;
 
@@ -69,9 +69,16 @@ namespace EmbyIcons
                 {
                     _logger.Error($"[EmbyIcons] Configured icons folder '{expandedPath}' does not exist. Overlays may not work.");
                 }
-                else if (!_fileSystem.GetFiles(expandedPath).Any(f => Path.GetExtension(f.FullName).Equals(".png", StringComparison.OrdinalIgnoreCase)))
+                // CHANGED: Accept all supported image formats, not just PNG
+                else if (!_fileSystem.GetFiles(expandedPath)
+                    .Any(f =>
+                    {
+                        var ext = Path.GetExtension(f.FullName).ToLowerInvariant();
+                        // Update the list if you add/remove supported types
+                        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp" || ext == ".gif" || ext == ".ico" || ext == ".svg" || ext == ".avif";
+                    }))
                 {
-                    _logger.Warn($"[EmbyIcons] No PNG icon files found in '{expandedPath}'. Overlays may not work.");
+                    _logger.Warn($"[EmbyIcons] No icon image files (.png, .jpg, .jpeg, .webp, .bmp, .gif, .ico, .svg, .avif) found in '{expandedPath}'. Overlays may not work.");
                 }
             }
             catch (Exception ex)
@@ -130,7 +137,7 @@ namespace EmbyIcons
 
         public void Dispose()
         {
-            _logger.Info("EmbyIcons plugin disposed.");
+            _logger.Debug("EmbyIcons plugin disposed.");
         }
     }
 }

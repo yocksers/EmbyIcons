@@ -121,10 +121,11 @@ namespace EmbyIcons.Helpers
                 {
                     dict[name] = file;
                 }
-                else
+                else if (!string.Equals(dict[name], file, StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.Warn($"Duplicate icon name detected ('{name}'), files: '{dict[name]}' and '{file}'. Using '{dict[name]}' only.");
                 }
+                // else: same file, ignore, do not warn
             }
 
             _lastCacheRefreshTime = DateTime.UtcNow;
@@ -136,7 +137,7 @@ namespace EmbyIcons.Helpers
 
             if (anyChanged || versionChanged)
             {
-                _logger.Info($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
+                _logger.Debug($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
                 CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
             }
 

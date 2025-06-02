@@ -26,7 +26,6 @@ namespace EmbyIcons
 
             ShowAudioIcons = true;
             ShowSubtitleIcons = true;
-
             SelectedLibraries = string.Empty;
             ShowSeriesIconsIfAllEpisodesHaveLanguage = true;
             ShowOverlaysForEpisodes = true;
@@ -55,6 +54,14 @@ namespace EmbyIcons
             get => _iconsFolder;
             set => _iconsFolder = value ?? @"D:\icons";
         }
+
+        [DisplayName("Refresh Icon Folder")]
+        [Description("Check this box and save settings to force a reload of all icons from the Icons Folder. The box will automatically uncheck itself after the refresh.")]
+        public bool RefreshIconCacheNow { get; set; }
+
+        [DisplayName("Allowed Libraries")]
+        [Description("A comma-separated list of libraries that should show overlays. Leave blank to allow all libraries.")]
+        public string SelectedLibraries { get; set; } = string.Empty;
 
         [DisplayName("Icon Size (% of shorter side)")]
         [Description("Size of icons relative to the shorter side of the poster (height or width). For example, 10 means the icon will be 10% of that dimension.")]
@@ -101,20 +108,12 @@ namespace EmbyIcons
         public bool ShowAudioChannelIcons { get; set; } = false;
 
         [DisplayName("JPEG Quality")]
-        [Description("Set the output JPEG quality (1–100). Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]
+        [Description("Set the output JPEG quality (1â€“100). Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]
         [Range(1, 100)]
         public int JpegQuality { get; set; } = 75;
 
         [DisplayName("Enable Image Smoothing (Anti-Aliasing)")]
-        [Description("Enables smoothing/anti-aliasing for overlays. Disabling makes drawing slightly faster. Default: Off.")]
-        public bool EnableImageSmoothing { get; set; } = false;
-
-        [DisplayName("Restrict to Libraries (comma separated names)")]
-        [Description("Optional: limit icon overlays to specific Emby libraries. Use the library names shown in the dashboard, separated by commas. Leave blank to apply everywhere.")]
-        public string SelectedLibraries { get; set; }
-
-        [DisplayName("Enable Overlay Logging")]
-        [Description("Enable verbose overlay logging to help debug language detection. May affect performance on large libraries. Recommended only when troubleshooting.")]
-        public bool EnableOverlayLogging { get; set; } = false;
+        [Description("Enables smoothing/anti-aliasing for overlays. Disabling makes drawing slightly faster. Default: false")]
+        public bool EnableImageSmoothing { get; set; }
     }
 }
