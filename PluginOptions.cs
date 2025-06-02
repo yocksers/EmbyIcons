@@ -48,7 +48,7 @@ namespace EmbyIcons
            "</ul>";
 
         [DisplayName("Icons Folder Path")]
-        [Description("Folder containing your PNG icon images. For audio icons, use language codes like 'eng.png', 'fre.png', etc. For subtitle icons, use 'srt.eng.png', 'srt.jpn.png', etc.")]
+        [Description("Folder containing your icon images. For audio icons use language codes like 'eng.png', 'fre.png', etc. For subtitle icons, use 'srt.eng.png', 'srt.jpn.png', etc.")]
         [Required(ErrorMessage = "Icons folder path is required.")]
         public string IconsFolder
         {
