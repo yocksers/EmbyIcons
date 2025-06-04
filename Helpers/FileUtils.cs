@@ -1,10 +1,11 @@
-using System; 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Logging; // Added for ILogger
 
 namespace EmbyIcons.Helpers
 {
@@ -14,7 +15,7 @@ namespace EmbyIcons.Helpers
         /// Asynchronous file copy with buffer and robust retry logic for file locking issues.
         /// Always writes to a temporary file and then moves it to the destination.
         /// </summary>
-        public static async Task SafeCopyAsync(string source, string dest)
+        public static async Task SafeCopyAsync(string source, string dest, ILogger? logger) // Accept logger
         {
             const int bufferSize = 262144; // 256 KB buffer
             const int maxRetries = 5;
@@ -46,18 +47,17 @@ namespace EmbyIcons.Helpers
                     retries++;
                     if (retries >= maxRetries)
                     {
-                        // Log failure, but the calling EnhanceImageInternalAsync also has a fallback
-                        Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Failed to copy '{source}' to temporary '{tempDest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex);
+                        logger?.ErrorException($"[EmbyIcons] Failed to copy '{source}' to temporary '{tempDest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex); // Use passed logger
                         throw; // Re-throw to caller for outer handling
                     }
-                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Retrying copy from '{source}' to temporary '{tempDest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}");
+                    logger?.Warn($"[EmbyIcons] Retrying copy from '{source}' to temporary '{tempDest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}"); // Use passed logger
                     await Task.Delay(delayMs);
                     delayMs = Math.Min(5000, delayMs * 2); // Max 5 seconds delay
                 }
                 catch (Exception ex)
                 {
                     // Catch other unexpected errors during copy
-                    Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Unexpected error copying '{source}' to temporary '{tempDest}'. Original message: {ex.Message}", ex);
+                    logger?.ErrorException($"[EmbyIcons] Unexpected error copying '{source}' to temporary '{tempDest}'. Original message: {ex.Message}", ex); // Use passed logger
                     throw;
                 }
             }
@@ -85,21 +85,20 @@ namespace EmbyIcons.Helpers
                     retries++;
                     if (retries >= maxRetries)
                     {
-                        // Log failure, but the calling EnhanceImageInternalAsync also has a fallback
-                        Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Failed to move temporary '{tempDest}' to final '{dest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex);
+                        logger?.ErrorException($"[EmbyIcons] Failed to move temporary '{tempDest}' to final '{dest}' after {maxRetries} retries due to IO error. Original message: {ex.Message}", ex); // Use passed logger
                         // Clean up the temporary file if the move ultimately fails
-                        try { File.Delete(tempDest); } catch (Exception cleanupEx) { Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); }
+                        try { File.Delete(tempDest); } catch (Exception cleanupEx) { logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); } // Use passed logger
                         throw;
                     }
-                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Retrying move of temporary '{tempDest}' to final '{dest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}");
+                    logger?.Warn($"[EmbyIcons] Retrying move of temporary '{tempDest}' to final '{dest}'. Retry {retries}/{maxRetries}. Error: {ex.Message}"); // Use passed logger
                     await Task.Delay(delayMs);
                     delayMs = Math.Min(5000, delayMs * 2); // Max 5 seconds delay
                 }
                 catch (Exception ex)
                 {
                     // Catch other unexpected errors during move
-                    Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] Unexpected error moving temporary '{tempDest}' to final '{dest}'. Original message: {ex.Message}", ex);
-                    try { File.Delete(tempDest); } catch (Exception cleanupEx) { Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); }
+                    logger?.ErrorException($"[EmbyIcons] Unexpected error moving temporary '{tempDest}' to final '{dest}'. Original message: {ex.Message}", ex); // Use passed logger
+                    try { File.Delete(tempDest); } catch (Exception cleanupEx) { logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempDest}': {cleanupEx.Message}"); } // Use passed logger
                     throw;
                 }
             }

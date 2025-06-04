@@ -33,6 +33,7 @@ namespace EmbyIcons.Helpers
         public event EventHandler<string>? CacheRefreshedWithVersion;
 
         private readonly int _maxParallelism;
+        private readonly SemaphoreSlim _refreshLock = new(1, 1); // Added SemaphoreSlim for refresh lock
 
         public IconCacheManager(TimeSpan cacheTtl, ILogger logger, int maxParallelism = 4)
         {
@@ -41,18 +42,17 @@ namespace EmbyIcons.Helpers
             _maxParallelism = maxParallelism;
         }
 
-        public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
+        public async Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
             if (_iconsFolder != iconsFolder)
             {
                 _iconsFolder = iconsFolder;
-                return RefreshCacheAsync(cancellationToken, force: true);
+                await RefreshCacheAsync(cancellationToken, force: true);
             }
             else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
             {
-                return RefreshCacheAsync(cancellationToken);
+                await RefreshCacheAsync(cancellationToken);
             }
-            return Task.CompletedTask;
         }
 
         public Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken, bool force = false)
@@ -60,88 +60,96 @@ namespace EmbyIcons.Helpers
             return RefreshCacheAsync(cancellationToken, force);
         }
 
-        private Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
+        private async Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
-            if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
+            await _refreshLock.WaitAsync(cancellationToken); // Acquire lock before refreshing cache
+            try
             {
-                _logger.Warn($"Icons folder '{_iconsFolder}' does not exist or is not set. Icon cache cannot be refreshed.");
-                return Task.CompletedTask;
-            }
-
-            // All files in icons folder, regardless of extension
-            var allFiles = Directory.GetFiles(_iconsFolder);
-
-            bool anyChanged = false;
-            var currentWriteTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var file in allFiles)
-            {
-                var lastWrite = File.GetLastWriteTimeUtc(file);
-                currentWriteTimes[file] = lastWrite;
-
-                if (!_iconFileLastWriteTimes.TryGetValue(file, out var knownWrite) || knownWrite != lastWrite)
+                if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
                 {
-                    anyChanged = true;
+                    _logger.Warn($"Icons folder '{_iconsFolder}' does not exist or is not set. Icon cache cannot be refreshed.");
+                    return;
+                }
+
+                // All files in icons folder, regardless of extension
+                var allFiles = Directory.GetFiles(_iconsFolder);
+
+                bool anyChanged = false;
+                var currentWriteTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var file in allFiles)
+                {
+                    var lastWrite = File.GetLastWriteTimeUtc(file);
+                    currentWriteTimes[file] = lastWrite;
+
+                    if (!_iconFileLastWriteTimes.TryGetValue(file, out var knownWrite) || knownWrite != lastWrite)
+                    {
+                        anyChanged = true;
+                    }
+                }
+
+                foreach (var cachedFile in _iconFileLastWriteTimes.Keys)
+                {
+                    if (!currentWriteTimes.ContainsKey(cachedFile))
+                    {
+                        anyChanged = true;
+                        break;
+                    }
+                }
+
+                if (!force && !anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
+                    return;
+
+                _iconFileLastWriteTimes.Clear();
+                foreach (var kvp in currentWriteTimes)
+                    _iconFileLastWriteTimes[kvp.Key] = kvp.Value;
+
+                _audioIconPathCache.Clear();
+                _subtitleIconPathCache.Clear();
+
+                ClearImageCache(_audioIconImageCache);
+                ClearImageCache(_subtitleIconImageCache);
+
+                // Map icon base names to file paths, supporting all Skia formats
+                foreach (var file in allFiles)
+                {
+                    var ext = Path.GetExtension(file).ToLowerInvariant();
+                    if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
+
+                    var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                    if (string.IsNullOrEmpty(name)) continue; // Skip files with no extension or only dots
+
+                    var isSubtitle = name.StartsWith("srt.");
+                    var dict = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
+
+                    if (!dict.ContainsKey(name))
+                    {
+                        dict[name] = file;
+                    }
+                    else if (!string.Equals(dict[name], file, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Warn($"Duplicate icon name detected ('{name}'), files: '{dict[name]}' and '{file}'. Using '{dict[name]}' only.");
+                    }
+                    // else: same file, ignore, do not warn
+                }
+
+                _lastCacheRefreshTime = DateTime.UtcNow;
+
+                var version = ComputeIconFilesVersion(allFiles);
+
+                bool versionChanged = version != _currentIconVersion;
+                _currentIconVersion = version;
+
+                if (anyChanged || versionChanged)
+                {
+                    _logger.Debug($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
+                    CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
                 }
             }
-
-            foreach (var cachedFile in _iconFileLastWriteTimes.Keys)
+            finally
             {
-                if (!currentWriteTimes.ContainsKey(cachedFile))
-                {
-                    anyChanged = true;
-                    break;
-                }
+                _refreshLock.Release(); // Release lock
             }
-
-            if (!force && !anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
-                return Task.CompletedTask;
-
-            _iconFileLastWriteTimes.Clear();
-            foreach (var kvp in currentWriteTimes)
-                _iconFileLastWriteTimes[kvp.Key] = kvp.Value;
-
-            _audioIconPathCache.Clear();
-            _subtitleIconPathCache.Clear();
-
-            ClearImageCache(_audioIconImageCache);
-            ClearImageCache(_subtitleIconImageCache);
-
-            // Map icon base names to file paths, supporting all Skia formats
-            foreach (var file in allFiles)
-            {
-                var ext = Path.GetExtension(file).ToLowerInvariant();
-                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
-
-                var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-                var isSubtitle = name.StartsWith("srt.");
-                var dict = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
-
-                if (!dict.ContainsKey(name))
-                {
-                    dict[name] = file;
-                }
-                else if (!string.Equals(dict[name], file, StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.Warn($"Duplicate icon name detected ('{name}'), files: '{dict[name]}' and '{file}'. Using '{dict[name]}' only.");
-                }
-                // else: same file, ignore, do not warn
-            }
-
-            _lastCacheRefreshTime = DateTime.UtcNow;
-
-            var version = ComputeIconFilesVersion(allFiles);
-
-            bool versionChanged = version != _currentIconVersion;
-            _currentIconVersion = version;
-
-            if (anyChanged || versionChanged)
-            {
-                _logger.Debug($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
-                CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
-            }
-
-            return Task.CompletedTask;
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
@@ -263,6 +271,7 @@ namespace EmbyIcons.Helpers
         {
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
+            _refreshLock.Dispose(); // Dispose the semaphore
         }
 
         private sealed class CachedIcon

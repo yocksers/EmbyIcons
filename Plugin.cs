@@ -124,7 +124,7 @@ namespace EmbyIcons
 
         public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
                                       ImageType imageType, int imageIndex) =>
-            Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
+            Enhancer.EnhanceImageAsync(item, inputFile, outputFile, imageType, CancellationToken.None); // Removed imageIndex
 
         public Stream GetThumbImage()
         {
@@ -138,6 +138,7 @@ namespace EmbyIcons
         public void Dispose()
         {
             _logger.Debug("EmbyIcons plugin disposed.");
+            // No need to dispose _enhancer here, it's handled by the application lifecycle or via IDisposable on Enhancer itself.
         }
     }
 }

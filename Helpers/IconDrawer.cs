@@ -34,7 +34,7 @@ namespace EmbyIcons.Helpers
                     ? height - size - pad
                     : pad;
 
-            startY += verticalOffset;
+            startY += verticalOffset; // Apply vertical offset
 
             for (int i = 0; i < count; i++)
             {
@@ -52,8 +52,8 @@ namespace EmbyIcons.Helpers
             if (item == null || options == null)
                 return false;
 
-            // If both audio and subtitle icons are disabled, no overlays should be drawn
-            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons)
+            // If audio, subtitle, and channel icons are all disabled, no overlays should be drawn
+            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons && !options.ShowAudioChannelIcons)
                 return false;
 
             // If the item is an episode and showing overlays for episodes is disabled

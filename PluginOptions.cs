@@ -15,7 +15,7 @@ namespace EmbyIcons
 
     public class PluginOptions : EditableOptionsBase
     {
-        private string _iconsFolder = @"D:\icons";
+        private string _iconsFolder = @"D:\icons"; // Default value remains as per original, but user is warned if not found
         public PluginOptions()
         {
             IconSize = 10;
@@ -31,11 +31,13 @@ namespace EmbyIcons
             ShowOverlaysForEpisodes = true;
             AudioIconVerticalOffset = 0;
             SubtitleIconVerticalOffset = 0;
+            ChannelIconVerticalOffset = 0; // Initialize new property
 
             JpegQuality = 75;
             EnableImageSmoothing = false;
 
             ShowAudioChannelIcons = false;
+            ShowChannelIconsIfAllEpisodesHaveChannelInfo = false; // Initialize new property
         }
 
         public override string EditorTitle => "EmbyIcons Settings";
@@ -87,6 +89,10 @@ namespace EmbyIcons
         [Description("Move subtitle icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
         public int SubtitleIconVerticalOffset { get; set; }
 
+        [DisplayName("Audio Channel Icon Vertical Offset (%)")]
+        [Description("Move audio channel icons up or down. Positive values move icons down, negative values move them up. Offset is relative to poster height.")]
+        public int ChannelIconVerticalOffset { get; set; } // New setting for channel icon offset
+
         [DisplayName("Show Audio Icons")]
         [Description("Enable or disable drawing audio language icons on posters.")]
         public bool ShowAudioIcons { get; set; }
@@ -106,6 +112,10 @@ namespace EmbyIcons
         [DisplayName("Show Audio Channel Overlay")]
         [Description("Overlay an icon for the highest audio channel count (mono, stereo, 5.1, 7.1, etc.) on posters.")]
         public bool ShowAudioChannelIcons { get; set; } = false;
+
+        [DisplayName("Show Audio Channel Overlay If All Episodes Have Channel Info")]
+        [Description("Only show audio channel icons on series or season posters if every episode contains the specified audio channel configuration.")]
+        public bool ShowChannelIconsIfAllEpisodesHaveChannelInfo { get; set; } = false; // New setting for channel aggregation
 
         [DisplayName("JPEG Quality")]
         [Description("Set the output JPEG quality (1–100). Lower values increase speed and reduce file size, but may reduce image quality. Default: 75")]

@@ -21,7 +21,7 @@ namespace EmbyIcons.Helpers
             { "zho", "chi" },
             { "deu", "ger" },
             { "fra", "fre" },
-            { "jp", "jpn" }, 
+            { "jp", "jpn" },
             { "eng", "eng" },
             { "ger", "ger" },
             { "fre", "fre" },
@@ -29,8 +29,19 @@ namespace EmbyIcons.Helpers
             { "kor", "kor" },
             { "chi", "chi" },
             { "spa", "spa" },
-            { "ita", "ita" }
-            // ... (only add mappings where CultureInfo might not give your desired icon name)
+            { "ita", "ita" },
+            // Added more common mappings for performance
+            { "pt", "por" },
+            { "ru", "rus" },
+            { "ar", "ara" },
+            { "hi", "hin" },
+            { "th", "tha" },
+            { "sv", "swe" },
+            { "da", "dan" },
+            { "fi", "fin" },
+            { "no", "nor" },
+            { "pl", "pol" },
+            { "nl", "dut" }
         };
 
         public static string NormalizeLangCode(string code)
