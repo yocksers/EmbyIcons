@@ -19,7 +19,15 @@ namespace EmbyIcons
         [DisplayName("Icons Folder Path")]
         [Description("Folder containing your icon images. For audio icons use language codes like 'eng.png', 'fre.png', etc. For subtitle icons, use 'srt.eng.png', 'srt.jpn.png', etc. For audio channel icons, use 'mono.png', 'stereo.png', '5.1.png', '7.1.png', etc. For HDR and Dolby Vision, use 'hdr.png' and 'dv.png'. If both HDR and DV are detected, 'dv.png' will be prioritized. For resolution icons, use '480p.png', '576p.png', '720p.png', '1080p.png', or '4k.png'. Supports all common image formats (PNG, JPG, WebP, etc.).")]
         [EditFolderPicker]
-        public string IconsFolder { get; set; } = @"D:\icons";
+        public string IconsFolder { get; set; } = GetDefaultIconsFolder();
+
+        private static string GetDefaultIconsFolder()
+        {
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                return @"D:\icons";
+            else
+                return "/var/lib/emby/plugins/EmbyIcons/icons";
+        }
 
         [DisplayName("Refresh Icon Folder")]
         [Description("Check this box and save settings to force a reload of all icons from the Icons Folder.")]
