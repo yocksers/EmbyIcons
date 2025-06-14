@@ -2,6 +2,7 @@
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Drawing;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using SkiaSharp;
 using System;
@@ -12,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace EmbyIcons
 {
@@ -166,13 +168,24 @@ namespace EmbyIcons
 
                 foreach (var alignmentGroup in overlays.GroupBy(x => x.Alignment))
                 {
-                    int cumulativeOffset = 0;
-                    foreach (var (_, _, icons, horizontal) in alignmentGroup.OrderBy(x => x.Priority))
+                    int cumulativeHorizontalOffset = 0;
+                    int cumulativeVerticalOffset = 0;
+                    foreach (var (alignment, _, icons, horizontal) in alignmentGroup.OrderBy(x => x.Priority))
                     {
-                        int totalHeight = horizontal ? iconSize : icons.Count * iconSize + (icons.Count - 1) * padding;
-                        int actualVerticalOffset = alignmentGroup.Key is IconAlignment.TopLeft or IconAlignment.TopRight ? cumulativeOffset : -cumulativeOffset;
-                        IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignmentGroup.Key, paint, actualVerticalOffset, horizontal);
-                        cumulativeOffset += totalHeight + padding;
+                        if (!icons.Any()) continue;
+
+                        if (horizontal)
+                        {
+                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, 0, true, cumulativeHorizontalOffset);
+                            int groupWidth = icons.Count * iconSize + (icons.Count - 1) * padding;
+                            cumulativeHorizontalOffset += groupWidth + padding;
+                        }
+                        else // vertical
+                        {
+                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, cumulativeVerticalOffset, false, 0);
+                            int groupHeight = icons.Count * iconSize + (icons.Count - 1) * padding;
+                            cumulativeVerticalOffset += groupHeight + padding;
+                        }
                     }
                 }
 
