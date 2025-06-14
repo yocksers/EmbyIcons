@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using MediaBrowser.Controller.Entities;
+﻿using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
 using SkiaSharp;
+using System.Collections.Generic;
+using System.Linq;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace EmbyIcons.Helpers
 {
@@ -17,7 +18,8 @@ namespace EmbyIcons.Helpers
                                      IconAlignment alignment,
                                      SKPaint paint,
                                      int verticalOffset = 0,
-                                     bool horizontal = true)
+                                     bool horizontal = true,
+                                     int horizontalOffset = 0)
         {
             int count = icons.Count;
             if (count == 0) return;
@@ -25,17 +27,11 @@ namespace EmbyIcons.Helpers
             int totalWidth = horizontal ? count * size + (count - 1) * pad : size;
             int totalHeight = horizontal ? size : count * size + (count - 1) * pad;
 
-            float startX =
-                alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight
-                    ? width - totalWidth - pad
-                    : pad;
+            bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
+            bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
 
-            float startY =
-                alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight
-                    ? height - totalHeight - pad
-                    : pad;
-
-            startY += verticalOffset;
+            float startX = isRight ? width - totalWidth - pad - horizontalOffset : pad + horizontalOffset;
+            float startY = isBottom ? height - totalHeight - pad - verticalOffset : pad + verticalOffset;
 
             for (int i = 0; i < count; i++)
             {
