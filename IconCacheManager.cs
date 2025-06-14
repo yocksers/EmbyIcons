@@ -16,24 +16,24 @@ namespace EmbyIcons.Helpers
     {
         private readonly TimeSpan _cacheTtl;
         private readonly ILogger _logger;
-
-        private readonly ConcurrentDictionary<string, string?> _audioIconPathCache = new();
-        private readonly ConcurrentDictionary<string, string?> _subtitleIconPathCache = new();
-
+        private readonly int _maxParallelism;
+        private readonly ConcurrentDictionary<string, string> _audioIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _subtitleIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _channelIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _videoFormatIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _resolutionIconPathCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _audioIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _subtitleIconImageCache = new();
-
+        private readonly ConcurrentDictionary<string, CachedIcon> _channelIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _videoFormatIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _resolutionIconImageCache = new();
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
-
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
-
         private string _currentIconVersion = string.Empty;
-
         public event EventHandler<string>? CacheRefreshedWithVersion;
 
-        private readonly int _maxParallelism;
-        private readonly SemaphoreSlim _refreshLock = new(1, 1); // Added SemaphoreSlim for refresh lock
+        public enum IconType { Audio, Subtitle, Channel, VideoFormat, Resolution }
 
         public IconCacheManager(TimeSpan cacheTtl, ILogger logger, int maxParallelism = 4)
         {
@@ -42,252 +42,156 @@ namespace EmbyIcons.Helpers
             _maxParallelism = maxParallelism;
         }
 
-        public async Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
+        public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
-            if (_iconsFolder != iconsFolder)
+            if (_iconsFolder != iconsFolder || (DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
             {
                 _iconsFolder = iconsFolder;
-                await RefreshCacheAsync(cancellationToken, force: true);
+                return RefreshCacheAsync(cancellationToken, force: _iconsFolder != iconsFolder);
             }
-            else if ((DateTime.UtcNow - _lastCacheRefreshTime) > _cacheTtl)
-            {
-                await RefreshCacheAsync(cancellationToken);
-            }
+            return Task.CompletedTask;
         }
 
-        public Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken, bool force = false)
+        public Task RefreshCacheOnDemandAsync(CancellationToken cancellationToken, bool force = false) => RefreshCacheAsync(cancellationToken, force);
+
+        private Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
         {
-            return RefreshCacheAsync(cancellationToken, force);
-        }
-
-        private async Task RefreshCacheAsync(CancellationToken cancellationToken, bool force = false)
-        {
-            await _refreshLock.WaitAsync(cancellationToken); // Acquire lock before refreshing cache
-            try
+            if (string.IsNullOrEmpty(_iconsFolder) || !Directory.Exists(_iconsFolder))
             {
-                if (_iconsFolder == null || !Directory.Exists(_iconsFolder))
-                {
-                    _logger.Warn($"Icons folder '{_iconsFolder}' does not exist or is not set. Icon cache cannot be refreshed.");
-                    return;
-                }
-
-                // All files in icons folder, regardless of extension
-                var allFiles = Directory.GetFiles(_iconsFolder);
-
-                bool anyChanged = false;
-                var currentWriteTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-
-                foreach (var file in allFiles)
-                {
-                    var lastWrite = File.GetLastWriteTimeUtc(file);
-                    currentWriteTimes[file] = lastWrite;
-
-                    if (!_iconFileLastWriteTimes.TryGetValue(file, out var knownWrite) || knownWrite != lastWrite)
-                    {
-                        anyChanged = true;
-                    }
-                }
-
-                foreach (var cachedFile in _iconFileLastWriteTimes.Keys)
-                {
-                    if (!currentWriteTimes.ContainsKey(cachedFile))
-                    {
-                        anyChanged = true;
-                        break;
-                    }
-                }
-
-                if (!force && !anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl)
-                    return;
-
-                _iconFileLastWriteTimes.Clear();
-                foreach (var kvp in currentWriteTimes)
-                    _iconFileLastWriteTimes[kvp.Key] = kvp.Value;
-
-                _audioIconPathCache.Clear();
-                _subtitleIconPathCache.Clear();
-
-                ClearImageCache(_audioIconImageCache);
-                ClearImageCache(_subtitleIconImageCache);
-
-                // Map icon base names to file paths, supporting all Skia formats
-                foreach (var file in allFiles)
-                {
-                    var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
-
-                    var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-                    if (string.IsNullOrEmpty(name)) continue; // Skip files with no extension or only dots
-
-                    var isSubtitle = name.StartsWith("srt.");
-                    var dict = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
-
-                    if (!dict.ContainsKey(name))
-                    {
-                        dict[name] = file;
-                    }
-                    else if (!string.Equals(dict[name], file, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _logger.Warn($"Duplicate icon name detected ('{name}'), files: '{dict[name]}' and '{file}'. Using '{dict[name]}' only.");
-                    }
-                    // else: same file, ignore, do not warn
-                }
-
-                _lastCacheRefreshTime = DateTime.UtcNow;
-
-                var version = ComputeIconFilesVersion(allFiles);
-
-                bool versionChanged = version != _currentIconVersion;
-                _currentIconVersion = version;
-
-                if (anyChanged || versionChanged)
-                {
-                    _logger.Debug($"Icon cache refreshed. New version: {_currentIconVersion}. Files changed: {anyChanged}. Version changed: {versionChanged}.");
-                    CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
-                }
+                _logger.Warn($"[EmbyIcons] Icons folder '{_iconsFolder}' is not valid. Cache cannot be refreshed.");
+                return Task.CompletedTask;
             }
-            finally
+
+            var allFiles = Directory.GetFiles(_iconsFolder);
+            var currentWriteTimes = allFiles.ToDictionary(f => f, File.GetLastWriteTimeUtc, StringComparer.OrdinalIgnoreCase);
+            bool anyChanged = force || currentWriteTimes.Count != _iconFileLastWriteTimes.Count || currentWriteTimes.Any(kvp => !_iconFileLastWriteTimes.TryGetValue(kvp.Key, out var knownWrite) || knownWrite != kvp.Value);
+
+            if (!anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl) return Task.CompletedTask;
+
+            _iconFileLastWriteTimes.Clear();
+            foreach (var (key, value) in currentWriteTimes) _iconFileLastWriteTimes[key] = value;
+
+            _audioIconPathCache.Clear();
+            _subtitleIconPathCache.Clear();
+            _channelIconPathCache.Clear();
+            _videoFormatIconPathCache.Clear();
+            _resolutionIconPathCache.Clear();
+            ClearImageCache(_audioIconImageCache);
+            ClearImageCache(_subtitleIconImageCache);
+            ClearImageCache(_channelIconImageCache);
+            ClearImageCache(_videoFormatIconImageCache);
+            ClearImageCache(_resolutionIconImageCache);
+
+            var channelNames = new HashSet<string> { "mono", "stereo", "5.1", "7.1" };
+            var formatNames = new HashSet<string> { "hdr", "dv" };
+            var resolutionNames = new HashSet<string> { "480p", "576p", "720p", "1080p", "4k" };
+
+            foreach (var file in allFiles)
             {
-                _refreshLock.Release(); // Release lock
+                cancellationToken.ThrowIfCancellationRequested();
+                var ext = Path.GetExtension(file).ToLowerInvariant();
+                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
+
+                var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                var dict = name.StartsWith("srt.") ? _subtitleIconPathCache : channelNames.Contains(name) ? _channelIconPathCache : formatNames.Contains(name) ? _videoFormatIconPathCache : resolutionNames.Contains(name) ? _resolutionIconPathCache : _audioIconPathCache;
+                dict.TryAdd(name, file);
             }
+
+            _lastCacheRefreshTime = DateTime.UtcNow;
+            var newVersion = ComputeIconFilesVersion(allFiles);
+            if (newVersion != _currentIconVersion)
+            {
+                _currentIconVersion = newVersion;
+                CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
+                _logger.Debug($"[EmbyIcons] Icon cache refreshed. New version: {_currentIconVersion}");
+            }
+            return Task.CompletedTask;
         }
 
-        private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
+        public SKImage? GetCachedIcon(string iconNameKey, IconType iconType)
         {
-            foreach (var cached in cache.Values)
-                cached.Image?.Dispose();
+            if (_iconsFolder == null) return null;
+            iconNameKey = iconNameKey.ToLowerInvariant();
 
-            cache.Clear();
+            var (pathCache, imageCache) = GetCachesForType(iconType);
+            var iconPath = ResolveIconPathWithFallback(iconNameKey, pathCache);
+
+            if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath)) return null;
+
+            if (imageCache.TryGetValue(iconPath, out var cached) && cached.FileWriteTimeUtc == File.GetLastWriteTimeUtc(iconPath)) return cached.Image;
+
+            return TryLoadAndCacheIcon(iconPath, imageCache);
         }
 
-        private void TryLoadAndCacheIcon(string iconPath, bool isSubtitle)
+        private SKImage? TryLoadAndCacheIcon(string iconPath, ConcurrentDictionary<string, CachedIcon> imageCache)
         {
             try
             {
-                var info = new FileInfo(iconPath);
-                if (info.Length < 50) // Arbitrary, real icon will be bigger than this
+                if (new FileInfo(iconPath).Length < 50)
                 {
-                    _logger.Warn($"[EmbyIcons] Skipping icon '{iconPath}' because it is too small or corrupt.");
-                    CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
-                    return;
+                    _logger.Warn($"[EmbyIcons] Skipping small/corrupt icon: '{iconPath}'.");
+                    return null;
                 }
-
                 using var stream = File.OpenRead(iconPath);
-                var data = SKData.Create(stream);
-                var img = data != null ? SKImage.FromEncodedData(data) : null;
+                using var data = SKData.Create(stream);
+                var img = SKImage.FromEncodedData(data);
                 var lastWrite = File.GetLastWriteTimeUtc(iconPath);
-                CacheIcon(iconPath, img, lastWrite, isSubtitle);
+                imageCache[iconPath] = new CachedIcon(img, lastWrite);
+                return img;
             }
             catch (Exception ex)
             {
                 _logger.ErrorException($"Failed to load icon '{iconPath}'.", ex);
-                CacheIcon(iconPath, null, DateTime.MinValue, isSubtitle);
-            }
-        }
-
-        private void CacheIcon(string iconPath, SKImage? image, DateTime lastWrite, bool isSubtitle)
-        {
-            var cacheEntry = new CachedIcon(image, lastWrite);
-
-            var cache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
-
-            cache.AddOrUpdate(iconPath, cacheEntry,
-                (key, old) =>
-                {
-                    old.Image?.Dispose();
-                    return cacheEntry;
-                });
-        }
-
-        public SKImage? GetCachedIcon(string langCodeKey, bool isSubtitle)
-        {
-            if (_iconsFolder == null)
                 return null;
-
-            langCodeKey = langCodeKey.ToLowerInvariant();
-
-            var pathCache = isSubtitle ? _subtitleIconPathCache : _audioIconPathCache;
-            var imageCache = isSubtitle ? _subtitleIconImageCache : _audioIconImageCache;
-
-            string? iconPath = ResolveIconPathWithFallback(langCodeKey, pathCache);
-
-            if (iconPath == null || !File.Exists(iconPath))
-                return null;
-
-            var currentFileWrite = File.GetLastWriteTimeUtc(iconPath);
-
-            if (imageCache.TryGetValue(iconPath, out var cached))
-            {
-                if (cached.IsExpired(_cacheTtl) || cached.FileWriteTimeUtc != currentFileWrite)
-                {
-                    _logger.Debug($"Icon '{iconPath}' expired or file changed. Reloading.");
-                    TryLoadAndCacheIcon(iconPath, isSubtitle);
-                }
-                return imageCache.TryGetValue(iconPath, out var latest) ? latest.Image : null;
             }
-
-            _logger.Debug($"Icon '{iconPath}' not in cache. Loading.");
-            TryLoadAndCacheIcon(iconPath, isSubtitle);
-            return imageCache.TryGetValue(iconPath, out var loaded) ? loaded.Image : null;
         }
 
-        private string? ResolveIconPathWithFallback(string langCodeKey, ConcurrentDictionary<string, string?> cache)
+        private string ResolveIconPathWithFallback(string iconNameKey, ConcurrentDictionary<string, string> cache)
         {
-            langCodeKey = langCodeKey.ToLowerInvariant();
-
-            if (cache.TryGetValue(langCodeKey, out var path) && !string.IsNullOrEmpty(path))
-                return path;
-
-            // If langCodeKey is 3 letters, try the first two as a short code
-            if (langCodeKey.Length == 3)
-            {
-                var shortCode = langCodeKey.Substring(0, 2);
-                if (cache.TryGetValue(shortCode, out var path2) && !string.IsNullOrEmpty(path2))
-                    return path2;
-            }
-
-#pragma warning disable CS8604 // Possible null reference argument.
-            cache[langCodeKey] = null!;
-#pragma warning restore CS8604 // Possible null reference argument.
-
-            return null;
+            if (cache.TryGetValue(iconNameKey, out var path)) return path;
+            if (iconNameKey.Length == 3 && cache == _audioIconPathCache && cache.TryGetValue(iconNameKey.Substring(0, 2), out path)) return cache.GetOrAdd(iconNameKey, path);
+            cache.TryAdd(iconNameKey, string.Empty);
+            return string.Empty;
         }
+
+        private (ConcurrentDictionary<string, string>, ConcurrentDictionary<string, CachedIcon>) GetCachesForType(IconType iconType) => iconType switch
+        {
+            IconType.Audio => (_audioIconPathCache, _audioIconImageCache),
+            IconType.Subtitle => (_subtitleIconPathCache, _subtitleIconImageCache),
+            IconType.Channel => (_channelIconPathCache, _channelIconImageCache),
+            IconType.VideoFormat => (_videoFormatIconPathCache, _videoFormatIconImageCache),
+            IconType.Resolution => (_resolutionIconPathCache, _resolutionIconImageCache),
+            _ => throw new ArgumentOutOfRangeException(nameof(iconType))
+        };
 
         private static string ComputeIconFilesVersion(string[] files)
         {
             using var md5 = MD5.Create();
-
-            var combined =
-              string.Join("|", files.OrderBy(f => f).Select(f =>
-                  f.ToLowerInvariant() + ":" + File.GetLastWriteTimeUtc(f).Ticks));
-
+            var combined = string.Join("|", files.OrderBy(f => f).Select(f => $"{f.ToLowerInvariant()}:{File.GetLastWriteTimeUtc(f).Ticks}"));
             var bytes = Encoding.UTF8.GetBytes(combined);
-            var hashBytes = md5.ComputeHash(bytes);
-
-            return Convert.ToBase64String(hashBytes);
+            return Convert.ToBase64String(md5.ComputeHash(bytes));
         }
 
         public void Dispose()
         {
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
-            _refreshLock.Dispose(); // Dispose the semaphore
+            ClearImageCache(_channelIconImageCache);
+            ClearImageCache(_videoFormatIconImageCache);
+            ClearImageCache(_resolutionIconImageCache);
+        }
+
+        private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
+        {
+            foreach (var cached in cache.Values) cached.Image?.Dispose();
+            cache.Clear();
         }
 
         private sealed class CachedIcon
         {
             public SKImage? Image { get; }
             public DateTime FileWriteTimeUtc { get; }
-            private readonly DateTime _loadTimeUtc;
-
-            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc)
-            {
-                Image = image;
-                FileWriteTimeUtc = fileWriteTimeUtc;
-                _loadTimeUtc = DateTime.UtcNow;
-            }
-
-            public bool IsExpired(TimeSpan ttl) => DateTime.UtcNow - _loadTimeUtc > ttl;
+            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc) { Image = image; FileWriteTimeUtc = fileWriteTimeUtc; }
         }
     }
 }

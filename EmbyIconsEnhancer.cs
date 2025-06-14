@@ -1,404 +1,196 @@
 ﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
-using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
-    // The main partial class for EmbyIconsEnhancer.
-    // Other parts of this class are defined in EmbyIconsMetadataSupport.cs and EmbyIconsDataAggregator.cs
     public partial class EmbyIconsEnhancer : IImageEnhancer, IDisposable
     {
-        // SemaphoreSlims to prevent concurrent image processing for the same item.
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
         private readonly ILibraryManager _libraryManager;
         private readonly IUserViewManager _userViewManager;
         internal readonly IconCacheManager _iconCacheManager;
-        private readonly ILogger _logger; // Injected ILogger
+        private readonly ILogger _logger;
 
-        // Static string to hold the current version of the icon cache, updated by IconCacheManager.
+        private static readonly SemaphoreSlim _globalConcurrencyLock = new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)), Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
         private static string _iconCacheVersion = string.Empty;
+        private readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="EmbyIconsEnhancer"/> class.
-        /// </summary>
-        /// <param name="libraryManager">The library manager.</param>
-        /// <param name="userViewManager">The user view manager.</param>
-        /// <param name="logManager">The log manager for logging.</param>
+        private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
+        private static readonly TimeSpan SeriesAggregationCacheTTL = TimeSpan.FromDays(365);
+
         public EmbyIconsEnhancer(ILibraryManager libraryManager, IUserViewManager userViewManager, ILogManager logManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-            _userViewManager = userViewManager ?? throw new InvalidOperationException("IUserViewManager not initialized");
+            _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
-            // Initialize the IconCacheManager with a TTL and logger.
             _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger, 4);
-            // Subscribe to the CacheRefreshedWithVersion event to update the internal version string.
-            _iconCacheManager.CacheRefreshedWithVersion += (sender, version) =>
-            {
-                _iconCacheVersion = version ?? string.Empty;
-            };
+            _iconCacheManager.CacheRefreshedWithVersion += (sender, version) => { _iconCacheVersion = version ?? string.Empty; };
+
+            PruneSeriesAggregationCache();
         }
 
-        /// <summary>
-        /// Enhances an image asynchronously by overlaying icons. This is the public interface method.
-        /// </summary>
-        /// <param name="item">The media item.</param>
-        /// <param name="inputFile">The path to the input image file.</param>
-        /// <param name="outputFile">The path where the enhanced image will be saved.</param>
-        /// <param name="imageType">The type of the image being enhanced.</param>
-        /// <param name="imageIndex">The index of the image (if multiple images of the same type exist).</param>
-        /// <returns>A Task representing the asynchronous operation.</returns>
-        Task IImageEnhancer.EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
-                                              ImageType imageType, int imageIndex)
-            => EnhanceImageAsync(item, inputFile, outputFile, imageType, CancellationToken.None);
-
-        /// <summary>
-        /// Enhances an image asynchronously by overlaying icons. This method acquires a lock per item.
-        /// </summary>
-        /// <param name="item">The media item.</param>
-        /// <param name="inputFile">The path to the input image file.</param>
-        /// <param name="outputFile">The path where the enhanced image will be saved.</param>
-        /// <param name="imageType">The type of the image being enhanced.</param>
-        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
-        /// <returns>A Task representing the asynchronous operation.</returns>
-        public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile,
-                                            ImageType imageType,
-                                            CancellationToken cancellationToken)
+        public void PruneSeriesAggregationCache()
         {
-            // Check if the library is allowed to have icons. If not, just copy the original file.
-            if (!IsLibraryAllowed(item))
+            var now = DateTime.UtcNow;
+            int removed = 0;
+            foreach (var kvp in _seriesAggregationCache.ToList())
             {
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
+                var age = now - kvp.Value.Timestamp;
+                if (age > SeriesAggregationPruneInterval)
+                {
+                    if (_seriesAggregationCache.TryRemove(kvp.Key, out _))
+                        removed++;
+                }
             }
-
-            // Get or add a semaphore for the current item to prevent concurrent processing.
-            var key = item.Id.ToString();
-            var sem = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-            await sem.WaitAsync(cancellationToken); // Acquire the lock
-
-            try
-            {
-                // Call the internal enhancement logic.
-                await EnhanceImageInternalAsync(item, inputFile, outputFile, imageType, cancellationToken);
-            }
-            finally
-            {
-                sem.Release(); // Release the lock
-            }
+            if (removed > 0)
+                _logger.Info($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
         }
 
-        /// <summary>
-        /// Internal method to enhance an image by drawing overlays.
-        /// </summary>
-        /// <param name="item">The media item.</param>
-        /// <param name="inputFile">The path to the input image file.</param>
-        /// <param name="outputFile">The path where the enhanced image will be saved.</param>
-        /// <param name="imageType">The type of the image being enhanced.</param>
-        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
-        /// <returns>A Task representing the asynchronous operation.</returns>
-        internal async Task EnhanceImageInternalAsync(
-            BaseItem item,
-            string inputFile,
-            string outputFile,
-            ImageType imageType,
-            CancellationToken cancellationToken)
+        public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false) => _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken, force);
+        public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
+
+        public bool Supports(BaseItem? item, ImageType imageType)
         {
+            if (item == null || imageType != ImageType.Primary || item is Person || !IsLibraryAllowed(item)) return false;
+
             var options = Plugin.Instance?.GetConfiguredOptions();
-            if (options == null)
-            {
-                _logger.Error("[EmbyIcons] Plugin options not initialized. Copying original image.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
+            if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
 
-            // Check if any overlays should be drawn based on general plugin settings.
-            if (!Helpers.IconDrawer.ShouldDrawAnyOverlays(item, options))
-            {
-                _logger.Debug($"[EmbyIcons] No overlays configured for item: {item?.Name} ({item?.Id}). Copying original.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
+            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false);
+        }
 
-            // Validate input file.
-            if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
-            {
-                _logger.Warn($"[EmbyIcons] Input file for image enhancement is invalid or missing: '{inputFile}'. Item: {item?.Name} ({item?.Id}). Copying original instead.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
-
-            var inputInfo = new FileInfo(inputFile);
-            if (inputInfo.Length < 100) // Basic check for potentially corrupt/empty image files.
-            {
-                _logger.Warn($"[EmbyIcons] Input file for image enhancement is too small or corrupt: '{inputFile}'. Skipping overlays and copying original.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
-
-            HashSet<string> audioLangsDetected = new(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> subtitleLangsDetected = new(StringComparer.OrdinalIgnoreCase);
-            int? detectedChannelCount = null;
-
-            // Determine detected languages and channel count based on item type (series/season vs. individual item).
-            if (item is MediaBrowser.Controller.Entities.TV.Series || item is MediaBrowser.Controller.Entities.TV.Season)
-            {
-                // For series/season, aggregate info from all episodes.
-                var (audio, subtitle, channels) = await GetAggregatedInfoForSeriesAsync(item, options, cancellationToken);
-                audioLangsDetected = audio;
-                subtitleLangsDetected = subtitle;
-                detectedChannelCount = channels;
-            }
-            else
-            {
-                // For individual items, get info directly from its media streams.
-                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                int maxChannelsForSingleItem = 0;
-                foreach (var stream in streams)
-                {
-                    if (stream?.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.Language))
-                    {
-                        var norm = LanguageHelper.NormalizeLangCode(stream.Language);
-                        audioLangsDetected.Add(norm);
-                    }
-
-                    if (stream?.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
-                    {
-                        var norm = LanguageHelper.NormalizeLangCode(stream.Language);
-                        subtitleLangsDetected.Add(norm);
-                    }
-
-                    if (stream?.Type == MediaStreamType.Audio && stream.Channels.HasValue)
-                    {
-                        maxChannelsForSingleItem = Math.Max(maxChannelsForSingleItem, stream.Channels.Value);
-                    }
-                }
-                if (maxChannelsForSingleItem > 0)
-                {
-                    detectedChannelCount = maxChannelsForSingleItem;
-                }
-            }
-
-            cancellationToken.ThrowIfCancellationRequested(); // Check for cancellation.
-
-            // Map detected channel count to a specific icon name (e.g., "5.1", "stereo").
-            string? channelIconName = null;
-            if (options.ShowAudioChannelIcons && detectedChannelCount.HasValue)
-            {
-                if (detectedChannelCount.Value == 1) channelIconName = "mono";
-                else if (detectedChannelCount.Value == 2) channelIconName = "stereo";
-                else if (detectedChannelCount.Value == 6) channelIconName = "5.1";
-                else if (detectedChannelCount.Value == 8) channelIconName = "7.1";
-                else if (detectedChannelCount.Value > 0) channelIconName = $"{detectedChannelCount.Value}ch"; // Fallback for other channel counts.
-            }
-
-            // If no icons are enabled or detected, copy the original image and return.
-            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons && !options.ShowAudioChannelIcons)
-            {
-                _logger.Debug($"[EmbyIcons] All icon types disabled for item: {item?.Name} ({item?.Id}). Copying original.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
-
-            if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0 && channelIconName == null)
-            {
-                _logger.Debug($"[EmbyIcons] No relevant audio, subtitle, or channel info found for item: {item?.Name} ({item?.Id}). Copying original.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
-
-            // Load the input image using SkiaSharp.
-            using var surfBmp = SKBitmap.Decode(inputFile);
-            if (surfBmp == null)
-            {
-                _logger.Error($"[EmbyIcons] SKBitmap.Decode failed for input file: '{inputFile}'. Item: {item?.Name} ({item?.Id}). Copying original instead.");
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                return;
-            }
-
-            // Initialize the icon cache manager with the configured icons folder.
-            await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
-
-            int width = surfBmp.Width;
-            int height = surfBmp.Height;
-            int shortSide = Math.Min(width, height);
-
-            // Calculate icon size and padding based on plugin options and image dimensions.
-            int iconSize = Math.Clamp((shortSide * options.IconSize) / 100, 8, 512);
-            int padding = Math.Clamp(iconSize / 4, 2, 128);
-
-            // Calculate vertical offsets in pixels for each icon type.
-            int audioVerticalOffsetPx = (shortSide * options.AudioIconVerticalOffset) / 100;
-            int subtitleVerticalOffsetPx = (shortSide * options.SubtitleIconVerticalOffset) / 100;
-            int channelVerticalOffsetPx = (shortSide * options.ChannelIconVerticalOffset) / 100;
-
-            // Create a new SkiaSharp surface to draw on.
-            using var surface = SKSurface.Create(new SKImageInfo(width, height));
-            var canvas = surface.Canvas;
-            canvas.Clear(SKColors.Transparent); // Ensure transparency
-            canvas.DrawBitmap(surfBmp, 0, 0); // Draw the original image.
-
-            // Set up the paint for drawing icons (with or without smoothing).
-            var filterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None;
-            using var paint = new SKPaint { FilterQuality = filterQuality };
-
-            // Dictionary to group icons by their alignment, along with their vertical offset and type order.
-            // Item1: SKImage, Item2: verticalOffset, Item3: typeOrder (0=audio, 1=subtitle, 2=channel)
-            var iconsToDrawByAlignment = new Dictionary<IconAlignment, List<(SKImage image, int verticalOffset, int typeOrder)>>();
-
-            // Local helper function to add icons to the grouped dictionary.
-            void AddIconsToAlignment(IconAlignment alignment, List<SKImage> icons, int verticalOffset, int typeOrder)
-            {
-                if (!iconsToDrawByAlignment.ContainsKey(alignment))
-                {
-                    iconsToDrawByAlignment[alignment] = new List<(SKImage image, int verticalOffset, int typeOrder)>();
-                }
-                foreach (var icon in icons)
-                {
-                    iconsToDrawByAlignment[alignment].Add((icon, verticalOffset, typeOrder));
-                }
-            }
-
-            // Process and collect audio language icons.
-            if (options.ShowAudioIcons && audioLangsDetected.Count > 0)
-            {
-                var audioIcons = audioLangsDetected.OrderBy(l => l)
-                    .Select(lang => _iconCacheManager.GetCachedIcon(lang, false))
-                    .Where(i => i != null)
-                    .ToList();
-                if (audioIcons.Any())
-                {
-                    AddIconsToAlignment(options.AudioIconAlignment, audioIcons!, audioVerticalOffsetPx, 0); // Type order 0 for audio.
-                }
-            }
-
-            // Process and collect subtitle icons.
-            if (options.ShowSubtitleIcons && subtitleLangsDetected.Count > 0)
-            {
-                var subIcons = subtitleLangsDetected.OrderBy(l => l)
-                    .Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", true))
-                    .Where(i => i != null)
-                    .ToList();
-                if (subIcons.Any())
-                {
-                    AddIconsToAlignment(options.SubtitleIconAlignment, subIcons!, subtitleVerticalOffsetPx, 1); // Type order 1 for subtitles.
-                }
-            }
-
-            // Process and collect audio channel icons.
-            if (options.ShowAudioChannelIcons && channelIconName != null)
-            {
-                var icon = _iconCacheManager.GetCachedIcon(channelIconName, false);
-                if (icon != null)
-                {
-                    AddIconsToAlignment(options.ChannelIconAlignment, new List<SKImage> { icon }, channelVerticalOffsetPx, 2); // Type order 2 for channels.
-                }
-            }
-
-            // Iterate through the grouped icons by alignment and draw them.
-            foreach (var entry in iconsToDrawByAlignment)
-            {
-                var alignment = entry.Key;
-                var iconsWithOrder = entry.Value;
-
-                // Sort icons based on the specified order (audio, then subtitle, then channel) within each alignment group.
-                var sortedIcons = iconsWithOrder.OrderBy(x => x.typeOrder).Select(x => x.image).ToList();
-
-                // Determine the vertical offset for this group. Use the offset of the first icon type in the sorted list.
-                // This ensures a consistent baseline for side-by-side icons.
-                int groupVerticalOffset = iconsWithOrder.OrderBy(x => x.typeOrder).Select(x => x.verticalOffset).FirstOrDefault();
-
-                if (sortedIcons.Any())
-                {
-                    Helpers.IconDrawer.DrawIcons(canvas, sortedIcons, iconSize, padding, width, height, alignment, paint, groupVerticalOffset);
-                }
-            }
-
-            canvas.Flush(); // Ensure all drawing operations are complete.
-
-            // Encode and save the enhanced image to the output file.
+        public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
+        {
             try
             {
-                using var snapshot = surface.Snapshot();
-                int jpegQuality = Math.Clamp(options.JpegQuality, 10, 100);
-                using var encodedImg = snapshot.Encode(SKEncodedImageFormat.Jpeg, jpegQuality);
+                if (!IsLibraryAllowed(item)) return "";
+                var options = Plugin.Instance?.GetConfiguredOptions();
+                if (options == null) return "";
 
-                int fileOpRetries = 0;
-                int fileOpDelayMs = 100;
-                const int maxFileOpRetries = 5;
+                var sb = new StringBuilder();
+                sb.Append("embyicons_").Append(item.Id).Append('_').Append(imageType)
+                  .Append("_sz").Append(options.IconSize)
+                  .Append("_libs").Append((options.SelectedLibraries ?? "").Replace(',', '-').Replace(" ", ""))
+                  .Append("_aAlign").Append(options.AudioIconAlignment)
+                  .Append("_sAlign").Append(options.SubtitleIconAlignment)
+                  .Append("_cAlign").Append(options.ChannelIconAlignment)
+                  .Append("_vfAlign").Append(options.VideoFormatIconAlignment)
+                  .Append("_resAlign").Append(options.ResolutionIconAlignment)
+                  .Append("_showA").Append(options.ShowAudioIcons ? "1" : "0")
+                  .Append("_showS").Append(options.ShowSubtitleIcons ? "1" : "0")
+                  .Append("_showC").Append(options.ShowAudioChannelIcons ? "1" : "0")
+                  .Append("_showVF").Append(options.ShowVideoFormatIcons ? "1" : "0")
+                  .Append("_showRes").Append(options.ShowResolutionIcons ? "1" : "0")
+                  .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
+                  .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
+                  .Append("_jpegq").Append(options.JpegQuality)
+                  .Append("_smoothing").Append(options.EnableImageSmoothing ? "1" : "0")
+                  .Append("_aHoriz").Append(options.AudioOverlayHorizontal ? "1" : "0")
+                  .Append("_sHoriz").Append(options.SubtitleOverlayHorizontal ? "1" : "0")
+                  .Append("_cHoriz").Append(options.ChannelOverlayHorizontal ? "1" : "0")
+                  .Append("_vfHoriz").Append(options.VideoFormatOverlayHorizontal ? "1" : "0")
+                  .Append("_resHoriz").Append(options.ResolutionOverlayHorizontal ? "1" : "0")
+                  .Append("_iconVer").Append(_iconCacheVersion)
+                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
 
-                // Retry loop for file saving to handle potential IO issues.
-                while (true)
+                if ((item is Series) && ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage && (options.ShowAudioIcons || options.ShowSubtitleIcons))
+                    || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
                 {
-                    try
-                    {
-                        string? dir = Path.GetDirectoryName(outputFile);
-                        if (!string.IsNullOrEmpty(dir))
-                            Directory.CreateDirectory(dir); // Ensure output directory exists.
+                    var aggResult = GetAggregatedDataForParentSync(item, options, ignoreCache: true); // <--- ignore cache
+                    sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
 
-                        string tempOutput = outputFile + "." + Guid.NewGuid() + ".tmp"; // Use a temporary file for atomic write.
-
-                        using (var fsOut = File.Create(tempOutput))
-                        {
-                            await encodedImg.AsStream().CopyToAsync(fsOut);
-                            await fsOut.FlushAsync();
-                        }
-
-                        File.Move(tempOutput, outputFile, overwrite: true); // Atomically replace the original.
-                        break; // Save successful, exit loop.
-                    }
-                    catch (IOException ioEx)
-                    {
-                        fileOpRetries++;
-                        if (fileOpRetries >= maxFileOpRetries)
-                        {
-                            _logger.ErrorException($"[EmbyIcons] Failed to save output image '{outputFile}' due to IO error after {maxFileOpRetries} retries. Item: {item?.Name} ({item?.Id}). Copying original as fallback.", ioEx);
-                            await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                            return;
-                        }
-                        _logger.Warn($"[EmbyIcons] Retrying image save for '{outputFile}' due to IO error. Retry {fileOpRetries}/{maxFileOpRetries}. Error: {ioEx.Message}");
-                        await Task.Delay(fileOpDelayMs, cancellationToken);
-                        fileOpDelayMs = Math.Min(5000, fileOpDelayMs * 2); // Exponential backoff.
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.ErrorException($"[EmbyIcons] Unexpected critical error during image encoding or file saving for item: {item?.Name} ({item?.Id}). Copying original as fallback.", ex);
-                        await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
-                        return;
-                    }
+                    sb.Append("_seriesDateMod").Append(item.DateModified.Ticks);
                 }
+
+                return sb.ToString();
             }
             catch (Exception ex)
             {
-                _logger.ErrorException($"[EmbyIcons] Unhandled critical error during image enhancement for item: {item?.Name} ({item?.Id}). Copying original as fallback.", ex);
-                await Helpers.FileUtils.SafeCopyAsync(inputFile!, outputFile, _logger);
+                _logger.ErrorException($"[EmbyIcons] Failed to generate configuration cache key for item {item.Name} ({item.Id}).", ex);
+                return $"{item.Id}_{imageType}";
             }
         }
 
-        /// <summary>
-        /// Disposes managed resources.
-        /// </summary>
+        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) => IsLibraryAllowed(item) ? new() { RequiresTransparency = false } : null;
+        public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
+
+        [Obsolete]
+        public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex) => EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
+
+        public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex, CancellationToken cancellationToken)
+        {
+            if (!IsLibraryAllowed(item))
+            {
+                await FileUtils.SafeCopyAsync(inputFile!, outputFile, cancellationToken);
+                return;
+            }
+
+            await _globalConcurrencyLock.WaitAsync(cancellationToken);
+            try
+            {
+                var key = item.Id.ToString();
+                var sem = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+                await sem.WaitAsync(cancellationToken);
+                try
+                {
+                    await EnhanceImageInternalAsync(item, inputFile, outputFile, imageType, imageIndex, cancellationToken);
+                }
+                finally
+                {
+                    sem.Release();
+                }
+            }
+            finally
+            {
+                _globalConcurrencyLock.Release();
+            }
+        }
+
+        public void ClearOverlayCacheForItem(BaseItem item)
+        {
+            // This plugin relies on Emby's ImageProcessor, which uses GetConfigurationCacheKey for caching.
+            // No action is needed here.
+        }
+
         public void Dispose()
         {
-            // Dispose all semaphores in the _locks dictionary.
-            foreach (var sem in _locks.Values)
+            var semaphoresToDispose = _locks.Values.ToList();
+            _locks.Clear();
+            foreach (var sem in semaphoresToDispose)
+            {
                 sem.Dispose();
+            }
+            _iconCacheManager.Dispose();
+            _globalConcurrencyLock.Dispose();
+        }
 
-            _locks.Clear(); // Clear the dictionary.
-            _iconCacheManager.Dispose(); // Dispose the IconCacheManager.
-            // The item media stream hash cache does not hold disposable resources, so just clear it.
-            _itemMediaStreamHashCache.Clear();
+        private bool IsLibraryAllowed(BaseItem item)
+        {
+            var allowedLibs = Plugin.Instance?.AllowedLibraryIds ?? new HashSet<string>();
+            return allowedLibs.Count == 0 || (FileUtils.GetLibraryIdForItem(_libraryManager, item) is { } libraryId && allowedLibs.Contains(libraryId));
+        }
+
+        public void ClearSeriesOverlayCache(BaseItem? item)
+        {
+            if (item == null) return;
+            bool removed = _seriesAggregationCache.TryRemove(item.Id, out _);
+            _logger.Debug($"[EmbyIcons] ClearSeriesOverlayCache: Series {item?.Name} ({item?.Id}) removed={removed}");
         }
     }
 }

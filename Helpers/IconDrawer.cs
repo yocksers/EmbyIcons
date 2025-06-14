@@ -16,13 +16,14 @@ namespace EmbyIcons.Helpers
                                      int height,
                                      IconAlignment alignment,
                                      SKPaint paint,
-                                     int verticalOffset = 0)
+                                     int verticalOffset = 0,
+                                     bool horizontal = true)
         {
             int count = icons.Count;
-
             if (count == 0) return;
 
-            int totalWidth = count * size + (count - 1) * pad;
+            int totalWidth = horizontal ? count * size + (count - 1) * pad : size;
+            int totalHeight = horizontal ? size : count * size + (count - 1) * pad;
 
             float startX =
                 alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight
@@ -31,19 +32,20 @@ namespace EmbyIcons.Helpers
 
             float startY =
                 alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight
-                    ? height - size - pad
+                    ? height - totalHeight - pad
                     : pad;
 
-            startY += verticalOffset; // Apply vertical offset
+            startY += verticalOffset;
 
             for (int i = 0; i < count; i++)
             {
                 var img = icons[i];
                 if (img == null) continue;
 
-                float xPos = startX + i * (size + pad);
+                float xPos = horizontal ? startX + i * (size + pad) : startX;
+                float yPos = horizontal ? startY : startY + i * (size + pad);
 
-                canvas.DrawImage(img, new SKRect(xPos, startY, xPos + size, startY + size), paint);
+                canvas.DrawImage(img, new SKRect(xPos, yPos, xPos + size, yPos + size), paint);
             }
         }
 
@@ -52,20 +54,15 @@ namespace EmbyIcons.Helpers
             if (item == null || options == null)
                 return false;
 
-            // If audio, subtitle, and channel icons are all disabled, no overlays should be drawn
-            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons && !options.ShowAudioChannelIcons)
+            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons && !options.ShowAudioChannelIcons && !options.ShowVideoFormatIcons && !options.ShowResolutionIcons)
                 return false;
 
-            // If the item is an episode and showing overlays for episodes is disabled
             if (item is MediaBrowser.Controller.Entities.TV.Episode && !options.ShowOverlaysForEpisodes)
                 return false;
 
-            // If icon size is 0, nothing will be drawn
             if (options.IconSize <= 0)
                 return false;
 
-            // This method only checks plugin-level enablement, not if actual languages are present.
-            // Language detection happens in EnhanceImageInternalAsync.
             return true;
         }
     }
