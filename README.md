@@ -6,12 +6,16 @@
 
 ## Overview
 
-**EmbyIcons** is a powerful plugin for [Emby Server](https://emby.media/) that enhances your media library by overlaying dynamic, informational icons directly onto your posters. Go beyond simple language flags with icons for audio channels, video resolution, HDR, and more. This provides a rich, at-a-glance summary of your media's technical specifications, making your library more informative and visually appealing.
+**EmbyIcons** is a powerful plugin for [Emby Server](https://emby.media/) that enhances your media library by overlaying dynamic, informational icons directly onto your posters. Shows overlays on both movie and TV show posters! Go beyond simple language flags with icons for audio channels, video resolution, HDR, and more. This provides a rich, at-a-glance summary of your media's technical specifications, making your library more informative and visually appealing.
 
 ---
 
 ## Features
 
+- **Smart TV Show Handling**:
+    - Show overlays on TV show posters!
+    - By default, icons only appear on a TV Show's main poster if **all** episodes in the series share the same property (e.g., all are 4K, all have a French audio track).
+    - Includes a **Lite Mode** for faster processing on large libraries by only checking the first episode of a series.
 - **Multiple Icon Types**: Displays overlays for:
     - Audio Languages
     - Subtitle Languages
@@ -23,9 +27,6 @@
     - Choose between horizontal or vertical stacking for multiple icons in the same corner.
     - Adjust icon size as a percentage of the poster's shorter dimension.
     - Control the final JPEG image quality to balance performance and visuals.
-- **Smart TV Show Handling**:
-    - By default, icons only appear on a TV Show's main poster if **all** episodes in the series share the same property (e.g., all are 4K, all have a French audio track).
-    - Includes a **Lite Mode** for faster processing on large libraries by only checking the first episode of a series.
 - **Library Control**: Restrict icon overlays to a specific list of your libraries, or apply them to all.
 
 ---
