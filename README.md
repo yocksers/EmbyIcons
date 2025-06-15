@@ -26,7 +26,6 @@
 - **Smart TV Show Handling**:
     - By default, icons only appear on a TV Show's main poster if **all** episodes in the series share the same property (e.g., all are 4K, all have a French audio track).
     - Includes a **Lite Mode** for faster processing on large libraries by only checking the first episode of a series.
-    - Overlays can also be enabled or disabled for individual episode posters.
 - **Library Control**: Restrict icon overlays to a specific list of your libraries, or apply them to all.
 
 ---
