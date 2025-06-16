@@ -21,9 +21,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="SkiaSharp">
-			<HintPath>C:\Users\yock1\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
-		</Reference>
+	  <Reference Include="SkiaSharp">
+	    <HintPath>..\..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 
 </Project>

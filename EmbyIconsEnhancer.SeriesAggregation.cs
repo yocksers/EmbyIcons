@@ -143,16 +143,21 @@ namespace EmbyIcons
             }
 
             var result = new AggregatedSeriesResult();
-            if (options.ShowAudioIcons && commonAudioLangs != null) result.AudioLangs = commonAudioLangs;
-            if (options.ShowSubtitleIcons && commonSubtitleLangs != null) result.SubtitleLangs = commonSubtitleLangs;
-            if (options.ShowAudioChannelIcons && commonChannelType != "none") result.ChannelTypes.Add(commonChannelType!);
-            if (options.ShowResolutionIcons && commonResolution != "none") result.Resolutions.Add(commonResolution!);
-
-            if (options.ShowVideoFormatIcons)
+            // FIX #3: Use renamed property. This logic now correctly applies to all aggregated types when the option is enabled.
+            if (options.AggregateSeriesProperties)
             {
-                if (allEpisodesHaveDV) result.VideoFormats.Add("dv");
-                else if (allEpisodesHaveHDR) result.VideoFormats.Add("hdr");
+                if (options.ShowAudioIcons && commonAudioLangs != null) result.AudioLangs = commonAudioLangs;
+                if (options.ShowSubtitleIcons && commonSubtitleLangs != null) result.SubtitleLangs = commonSubtitleLangs;
+                if (options.ShowAudioChannelIcons && commonChannelType != "none") result.ChannelTypes.Add(commonChannelType!);
+                if (options.ShowResolutionIcons && commonResolution != "none") result.Resolutions.Add(commonResolution!);
+
+                if (options.ShowVideoFormatIcons)
+                {
+                    if (allEpisodesHaveDV) result.VideoFormats.Add("dv");
+                    else if (allEpisodesHaveHDR) result.VideoFormats.Add("hdr");
+                }
             }
+
 
             var combinedHashString = string.Join(";", episodeHashes.OrderBy(h => h));
             var bytes = Encoding.UTF8.GetBytes(combinedHashString);
@@ -163,17 +168,20 @@ namespace EmbyIcons
             return result;
         }
 
-        internal Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs, HashSet<string> ChannelTypes, HashSet<string> VideoFormats, HashSet<string> Resolutions)>
+        internal async Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs, HashSet<string> ChannelTypes, HashSet<string> VideoFormats, HashSet<string> Resolutions)>
             GetAggregatedDataForParentAsync(BaseItem parent, PluginOptions options, System.Threading.CancellationToken cancellationToken)
         {
             if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && (DateTime.UtcNow - cachedResult.Timestamp) < SeriesAggregationCacheTTL)
             {
                 _logger.Debug($"[EmbyIcons] Using cached aggregated data for parent item {parent.Name} ({parent.Id}).");
-                return Task.FromResult((cachedResult.AudioLangs, cachedResult.SubtitleLangs, cachedResult.ChannelTypes, cachedResult.VideoFormats, cachedResult.Resolutions));
+                return (cachedResult.AudioLangs, cachedResult.SubtitleLangs, cachedResult.ChannelTypes, cachedResult.VideoFormats, cachedResult.Resolutions);
             }
-            _logger.Debug($"[EmbyIcons] Cache miss in async aggregator for {parent.Name} ({parent.Id}), recomputing synchronously.");
-            var result = GetAggregatedDataForParentSync(parent, options, ignoreCache: false);
-            return Task.FromResult((result.AudioLangs, result.SubtitleLangs, result.ChannelTypes, result.VideoFormats, result.Resolutions));
+
+            _logger.Debug($"[EmbyIcons] Cache miss in async aggregator for {parent.Name} ({parent.Id}), recomputing on a background thread.");
+
+            var result = await Task.Run(() => GetAggregatedDataForParentSync(parent, options, ignoreCache: false), cancellationToken);
+
+            return (result.AudioLangs, result.SubtitleLangs, result.ChannelTypes, result.VideoFormats, result.Resolutions);
         }
     }
 }

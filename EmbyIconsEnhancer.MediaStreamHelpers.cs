@@ -45,7 +45,7 @@ namespace EmbyIcons
             try
             {
                 var options = Plugin.Instance?.GetConfiguredOptions();
-                if (options == null) throw new InvalidOperationException("Plugin options not initialized");
+                if (options == null || Plugin.Instance == null) throw new InvalidOperationException("Plugin options not initialized");
 
                 if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
                 {
@@ -68,7 +68,7 @@ namespace EmbyIcons
                 string? videoFormatIconName = null;
                 string? resolutionIconName = null;
 
-                if (item is Series && options.ShowSeriesIconsIfAllEpisodesHaveLanguage)
+                if (item is Series && options.AggregateSeriesProperties)
                 {
                     var (AudioLangs, SubtitleLangs, ChannelTypes, VideoFormats, Resolutions) = await GetAggregatedDataForParentAsync(item, options, cancellationToken);
                     audioLangsDetected = AudioLangs;
@@ -129,7 +129,7 @@ namespace EmbyIcons
                     return;
                 }
 
-                await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
+                await _iconCacheManager.InitializeAsync(Plugin.Instance.ProcessedIconsFolder, cancellationToken);
 
                 int width = surfBmp.Width, height = surfBmp.Height;
                 int shortSide = Math.Min(width, height);
