@@ -1,4 +1,6 @@
-﻿using EmbyIcons.Helpers;
+﻿using Emby.Media.Common.Extensions;
+using Emby.Media.Model.Enums;
+using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Drawing;
@@ -13,7 +15,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace EmbyIcons
 {
@@ -45,7 +46,7 @@ namespace EmbyIcons
             try
             {
                 var options = Plugin.Instance?.GetConfiguredOptions();
-                if (options == null || Plugin.Instance == null) throw new InvalidOperationException("Plugin options not initialized");
+                if (options == null) throw new InvalidOperationException("Plugin options not initialized");
 
                 if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
                 {
@@ -68,7 +69,7 @@ namespace EmbyIcons
                 string? videoFormatIconName = null;
                 string? resolutionIconName = null;
 
-                if (item is Series && options.AggregateSeriesProperties)
+                if (item is Series && options.ShowSeriesIconsIfAllEpisodesHaveLanguage)
                 {
                     var (AudioLangs, SubtitleLangs, ChannelTypes, VideoFormats, Resolutions) = await GetAggregatedDataForParentAsync(item, options, cancellationToken);
                     audioLangsDetected = AudioLangs;
@@ -129,7 +130,7 @@ namespace EmbyIcons
                     return;
                 }
 
-                await _iconCacheManager.InitializeAsync(Plugin.Instance.ProcessedIconsFolder, cancellationToken);
+                await _iconCacheManager.InitializeAsync(options.IconsFolder!, cancellationToken);
 
                 int width = surfBmp.Width, height = surfBmp.Height;
                 int shortSide = Math.Min(width, height);
@@ -232,21 +233,25 @@ namespace EmbyIcons
         {
             var videoStream = (streams ?? item.GetMediaStreams() ?? new List<MediaStream>()).FirstOrDefault(s => s?.Type == MediaStreamType.Video);
             if (videoStream == null) return false;
-            return (videoStream.DisplayTitle ?? "").Contains("HDR", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.CodecTag ?? "").Contains("hvc", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.Profile ?? "").Contains("Main 10", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.ColorPrimaries ?? "").Contains("bt2020", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.ColorTransfer ?? "").Contains("smpte2084", StringComparison.OrdinalIgnoreCase);
+
+            var extendedVideoStream = videoStream.AsVideoStream();
+            if (extendedVideoStream?.ExtendedVideoType == null) return false;
+
+            string evtName = extendedVideoStream.ExtendedVideoType.ToString();
+            return evtName.Equals("Hdr10", StringComparison.OrdinalIgnoreCase) ||
+                   evtName.Equals("Hdr10Plus", StringComparison.OrdinalIgnoreCase) ||
+                   evtName.Equals("Hlg", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool HasDolbyVision(BaseItem item, IReadOnlyList<MediaStream>? streams)
         {
             var videoStream = (streams ?? item.GetMediaStreams() ?? new List<MediaStream>()).FirstOrDefault(s => s?.Type == MediaStreamType.Video);
             if (videoStream == null) return false;
-            return (videoStream.DisplayTitle ?? "").Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.DisplayTitle ?? "").Contains("DV", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.CodecTag ?? "").Contains("dvh", StringComparison.OrdinalIgnoreCase) ||
-                   (videoStream.Profile ?? "").Contains("dvhe", StringComparison.OrdinalIgnoreCase);
+
+            var extendedVideoStream = videoStream.AsVideoStream();
+            if (extendedVideoStream?.ExtendedVideoType == null) return false;
+
+            return extendedVideoStream.ExtendedVideoType.ToString().Equals("DolbyVision", StringComparison.OrdinalIgnoreCase);
         }
 
         private string? GetResolutionIconName(int? width, int? height)

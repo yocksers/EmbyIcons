@@ -97,7 +97,7 @@ namespace EmbyIcons
                   .Append("_showC").Append(options.ShowAudioChannelIcons ? "1" : "0")
                   .Append("_showVF").Append(options.ShowVideoFormatIcons ? "1" : "0")
                   .Append("_showRes").Append(options.ShowResolutionIcons ? "1" : "0")
-                  .Append("_seriesOpt").Append(options.AggregateSeriesProperties ? "1" : "0")
+                  .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
                   .Append("_smoothing").Append(options.EnableImageSmoothing ? "1" : "0")
@@ -109,10 +109,10 @@ namespace EmbyIcons
                   .Append("_iconVer").Append(_iconCacheVersion)
                   .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
 
-                if ((item is Series) && ((options.AggregateSeriesProperties && (options.ShowAudioIcons || options.ShowSubtitleIcons))
+                if ((item is Series) && ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage && (options.ShowAudioIcons || options.ShowSubtitleIcons))
                     || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
                 {
-                    var aggResult = GetAggregatedDataForParentSync(item, options, ignoreCache: true);
+                    var aggResult = GetAggregatedDataForParentSync(item, options, ignoreCache: true); // <--- ignore cache
                     sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
 
                     sb.Append("_seriesDateMod").Append(item.DateModified.Ticks);
@@ -164,8 +164,7 @@ namespace EmbyIcons
 
         public void ClearOverlayCacheForItem(BaseItem item)
         {
-            // This plugin relies on Emby's ImageProcessor, which uses GetConfigurationCacheKey for caching.
-            // No action is needed here.
+
         }
 
         public void Dispose()

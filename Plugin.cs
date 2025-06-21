@@ -36,7 +36,6 @@ namespace EmbyIcons
 
         private HashSet<string> _allowedLibraryIds = new();
         public HashSet<string> AllowedLibraryIds => _allowedLibraryIds;
-        public string ProcessedIconsFolder { get; private set; } = string.Empty;
 
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
 
@@ -110,19 +109,19 @@ namespace EmbyIcons
 
             try
             {
-                // FIX #4: Use the processed path for validation
-                if (!_fileSystem.DirectoryExists(ProcessedIconsFolder))
+                var expandedPath = Environment.ExpandEnvironmentVariables(options.IconsFolder);
+                if (!_fileSystem.DirectoryExists(expandedPath))
                 {
-                    _logger.Error($"[EmbyIcons] Configured icons folder '{ProcessedIconsFolder}' does not exist. Overlays may not work.");
+                    _logger.Error($"[EmbyIcons] Configured icons folder '{expandedPath}' does not exist. Overlays may not work.");
                 }
-                else if (!_fileSystem.GetFiles(ProcessedIconsFolder)
+                else if (!_fileSystem.GetFiles(expandedPath)
                     .Any(f =>
                     {
                         var ext = Path.GetExtension(f.FullName).ToLowerInvariant();
                         return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp" || ext == ".gif" || ext == ".ico" || ext == ".svg" || ext == ".avif";
                     }))
                 {
-                    _logger.Warn($"[EmbyIcons] No common icon image files found in '{ProcessedIconsFolder}'. Overlays may not work. Supported formats: PNG, JPG, JPEG, WebP, BMP, GIF, ICO, SVG, AVIF.");
+                    _logger.Warn($"[EmbyIcons] No common icon image files found in '{expandedPath}'. Overlays may not work. Supported formats: PNG, JPG, JPEG, WebP, BMP, GIF, ICO, SVG, AVIF.");
                 }
             }
             catch (Exception ex)
@@ -138,10 +137,9 @@ namespace EmbyIcons
 
         public void ApplySettings(PluginOptions options)
         {
-            // FIX #4: Apply settings to internal fields instead of modifying the options object
-            ProcessedIconsFolder = Environment.ExpandEnvironmentVariables(options.IconsFolder);
+            options.IconsFolder = Environment.ExpandEnvironmentVariables(options.IconsFolder);
             _allowedLibraryIds = FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
-            _logger.Debug($"[EmbyIcons] Loaded settings: IconsFolder={ProcessedIconsFolder}, IconSize={options.IconSize}, AllowedLibraries={options.SelectedLibraries}");
+            _logger.Debug($"[EmbyIcons] Loaded settings: IconsFolder={options.IconsFolder}, IconSize={options.IconSize}, AllowedLibraries={options.SelectedLibraries}");
         }
 
         public override string Name => "EmbyIcons";

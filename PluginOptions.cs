@@ -49,10 +49,9 @@ namespace EmbyIcons
         [Description("Show overlays on episode posters. If disabled, overlays are only shown on movies, TV shows, etc.")]
         public bool ShowOverlaysForEpisodes { get; set; } = true;
 
-        // FIX #3: Renamed property and updated description for clarity
-        [DisplayName("Aggregate Series Properties")]
-        [Description("For TV Shows, only show an icon on the series poster if the corresponding property (e.g., language, resolution, HDR) is consistent across all episodes. This ensures the series poster accurately reflects its entire contents. (Uses first episode in Lite Mode).")]
-        public bool AggregateSeriesProperties { get; set; } = true;
+        [DisplayName("Show TV show Icons")]
+        [Description("Only show icons on TV show posters if every episode contains the specified audio, subtitle languages, resulotion, HDR or amount of audio channels..")]
+        public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; } = true;
 
         [DisplayName("Show Audio Channel Overlay")]
         [Description("Overlay an icon for the highest audio channel count (mono, stereo, 5.1, 7.1, etc.) on posters.")]
