@@ -89,7 +89,6 @@ namespace EmbyIcons
                     break;
             }
 
-            // Invalidate overlay cache for the relevant series
             _enhancer?.ClearSeriesOverlayCache(seriesToClear);
         }
 
