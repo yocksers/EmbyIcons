@@ -65,6 +65,10 @@ namespace EmbyIcons
         [Description("Overlay an icon for the video resolution (e.g., 480p, 720p, 1080p, 4k).")]
         public bool ShowResolutionIcons { get; set; } = false;
 
+        [DisplayName("Show Community Score Overlay")]
+        [Description("Overlay a star icon and the community score on posters (e.g., from TMDb). Requires the item to have a community rating.")]
+        public bool ShowCommunityScoreIcon { get; set; } = false;
+
         [DisplayName("Audio Icon Alignment")]
         [Description("Which corner of the poster to place the audio icons.")]
         public IconAlignment AudioIconAlignment { get; set; } = IconAlignment.TopLeft;
@@ -104,6 +108,14 @@ namespace EmbyIcons
         [DisplayName("Resolution Overlay Horizontal")]
         [Description("Show resolution overlays horizontally if multiple overlays appear in the same corner.")]
         public bool ResolutionOverlayHorizontal { get; set; } = true;
+
+        [DisplayName("Community Score Icon Alignment")]
+        [Description("Which corner of the poster to place the community score overlay.")]
+        public IconAlignment CommunityScoreIconAlignment { get; set; } = IconAlignment.TopRight;
+
+        [DisplayName("Community Score Overlay Horizontal")]
+        [Description("Show community score overlay horizontally if multiple overlays appear in the same corner.")]
+        public bool CommunityScoreOverlayHorizontal { get; set; } = true;
 
         [DisplayName("Icon Size (% of shorter side)")]
         [Description("Size of icons relative to the shorter side of the poster (height or width). For example, 10 means the icon will be 10% of that dimension.")]

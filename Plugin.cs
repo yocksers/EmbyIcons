@@ -95,6 +95,7 @@ namespace EmbyIcons
         protected override void OnOptionsSaved(PluginOptions options)
         {
             base.OnOptionsSaved(options);
+            _logger.Info("[EmbyIcons] Saving new configuration.");
             ApplySettings(options);
 
             if (options.RefreshIconCacheNow)
@@ -139,6 +140,12 @@ namespace EmbyIcons
             options.IconsFolder = Environment.ExpandEnvironmentVariables(options.IconsFolder);
             _allowedLibraryIds = FileUtils.GetAllowedLibraryIds(_libraryManager, options.SelectedLibraries);
             _logger.Debug($"[EmbyIcons] Loaded settings: IconsFolder={options.IconsFolder}, IconSize={options.IconSize}, AllowedLibraries={options.SelectedLibraries}");
+            _logger.Debug($"[EmbyIcons] ShowAudioIcons: {options.ShowAudioIcons}");
+            _logger.Debug($"[EmbyIcons] ShowSubtitleIcons: {options.ShowSubtitleIcons}");
+            _logger.Debug($"[EmbyIcons] ShowAudioChannelIcons: {options.ShowAudioChannelIcons}");
+            _logger.Debug($"[EmbyIcons] ShowVideoFormatIcons: {options.ShowVideoFormatIcons}");
+            _logger.Debug($"[EmbyIcons] ShowResolutionIcons: {options.ShowResolutionIcons}");
+            _logger.Debug($"[EmbyIcons] ShowCommunityScoreIcon: {options.ShowCommunityScoreIcon}");
         }
 
         public override string Name => "EmbyIcons";

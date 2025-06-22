@@ -1,6 +1,5 @@
-﻿using Emby.Media.Common.Extensions;
-using Emby.Media.Model.Enums;
-using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
+using Emby.Media.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Drawing;
@@ -15,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace EmbyIcons
 {
@@ -47,6 +47,8 @@ namespace EmbyIcons
             {
                 var options = Plugin.Instance?.GetConfiguredOptions();
                 if (options == null) throw new InvalidOperationException("Plugin options not initialized");
+
+                _logger.Debug($"[EmbyIcons] Enhancing image for {item.Name} ({item.Id})");
 
                 if (string.IsNullOrEmpty(inputFile) || !File.Exists(inputFile))
                 {
@@ -116,11 +118,20 @@ namespace EmbyIcons
                 if (!options.ShowAudioIcons) audioLangsDetected.Clear();
                 if (!options.ShowSubtitleIcons) subtitleLangsDetected.Clear();
 
-                if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0 && channelIconName == null && videoFormatIconName == null && resolutionIconName == null)
+                _logger.Debug($"[EmbyIcons] Options Check - ShowCommunityScoreIcon: {options.ShowCommunityScoreIcon}");
+                _logger.Debug($"[EmbyIcons] Item Check - CommunityRating: {item.CommunityRating?.ToString() ?? "null"}");
+                bool hasCommunityScore = options.ShowCommunityScoreIcon && item.CommunityRating.HasValue && item.CommunityRating.Value > 0;
+                _logger.Debug($"[EmbyIcons] hasCommunityScore evaluation result: {hasCommunityScore}");
+
+
+                if (audioLangsDetected.Count == 0 && subtitleLangsDetected.Count == 0 && channelIconName == null && videoFormatIconName == null && resolutionIconName == null && !hasCommunityScore)
                 {
+                    _logger.Debug($"[EmbyIcons] No overlays to draw for {item.Name}. Copying original image.");
                     await FileUtils.SafeCopyAsync(inputFile!, outputFile, cancellationToken);
                     return;
                 }
+
+                _logger.Debug($"[EmbyIcons] At least one overlay will be drawn for {item.Name}.");
 
                 using var surfBmp = SKBitmap.Decode(inputFile);
                 if (surfBmp == null)
@@ -137,54 +148,71 @@ namespace EmbyIcons
                 int iconSize = Math.Clamp((shortSide * options.IconSize) / 100, 8, 512);
                 int padding = Math.Clamp(iconSize / 4, 2, 128);
 
+                using SKImage? ratingOverlayImage = hasCommunityScore && item.CommunityRating.HasValue
+                    ? CreateCommunityRatingOverlay(item.CommunityRating.Value, iconSize, options.EnableImageSmoothing)
+                    : null;
+
                 using var surface = SKSurface.Create(new SKImageInfo(width, height));
                 var canvas = surface.Canvas;
                 canvas.DrawBitmap(surfBmp, 0, 0);
 
                 var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
-                var overlays = new List<(IconAlignment Alignment, int Priority, List<SKImage> Icons, bool Horizontal)>();
+                var overlays = new List<(IconAlignment Alignment, int Priority, List<SKImage> Icons, bool Horizontal, bool UseActualSize)>();
 
                 if (audioLangsDetected.Any())
                 {
                     var audioIcons = audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, IconCacheManager.IconType.Audio)).Where(i => i != null).Cast<SKImage>().ToList();
-                    if (audioIcons.Any()) overlays.Add((options.AudioIconAlignment, 1, audioIcons, options.AudioOverlayHorizontal));
+                    if (audioIcons.Any()) overlays.Add((options.AudioIconAlignment, 1, audioIcons, options.AudioOverlayHorizontal, false));
                 }
                 if (subtitleLangsDetected.Any())
                 {
                     var subIcons = subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", IconCacheManager.IconType.Subtitle)).Where(i => i != null).Cast<SKImage>().ToList();
-                    if (subIcons.Any()) overlays.Add((options.SubtitleIconAlignment, 2, subIcons, options.SubtitleOverlayHorizontal));
+                    if (subIcons.Any()) overlays.Add((options.SubtitleIconAlignment, 2, subIcons, options.SubtitleOverlayHorizontal, false));
                 }
                 if (resolutionIconName != null && _iconCacheManager.GetCachedIcon(resolutionIconName, IconCacheManager.IconType.Resolution) is { } resIcon)
                 {
-                    overlays.Add((options.ResolutionIconAlignment, 3, new List<SKImage> { resIcon }, options.ResolutionOverlayHorizontal));
+                    overlays.Add((options.ResolutionIconAlignment, 3, new List<SKImage> { resIcon }, options.ResolutionOverlayHorizontal, false));
                 }
                 if (videoFormatIconName != null && _iconCacheManager.GetCachedIcon(videoFormatIconName, IconCacheManager.IconType.VideoFormat) is { } vfIcon)
                 {
-                    overlays.Add((options.VideoFormatIconAlignment, 4, new List<SKImage> { vfIcon }, options.VideoFormatOverlayHorizontal));
+                    overlays.Add((options.VideoFormatIconAlignment, 4, new List<SKImage> { vfIcon }, options.VideoFormatOverlayHorizontal, false));
                 }
                 if (channelIconName != null && _iconCacheManager.GetCachedIcon(channelIconName, IconCacheManager.IconType.Channel) is { } chIcon)
                 {
-                    overlays.Add((options.ChannelIconAlignment, 5, new List<SKImage> { chIcon }, options.ChannelOverlayHorizontal));
+                    overlays.Add((options.ChannelIconAlignment, 5, new List<SKImage> { chIcon }, options.ChannelOverlayHorizontal, false));
                 }
+                if (ratingOverlayImage != null)
+                {
+                    _logger.Debug($"[EmbyIcons] Community Rating overlay created successfully for {item.Name}.");
+                    overlays.Add((options.CommunityScoreIconAlignment, 6, new List<SKImage> { ratingOverlayImage }, options.CommunityScoreOverlayHorizontal, true));
+                }
+                else if (hasCommunityScore)
+                {
+                    _logger.Warn($"[EmbyIcons] Community score was present for {item.Name}, but overlay creation failed.");
+                }
+
 
                 foreach (var alignmentGroup in overlays.GroupBy(x => x.Alignment))
                 {
                     int cumulativeHorizontalOffset = 0;
                     int cumulativeVerticalOffset = 0;
-                    foreach (var (alignment, _, icons, horizontal) in alignmentGroup.OrderBy(x => x.Priority))
+                    foreach (var (alignment, _, icons, horizontal, useActualSize) in alignmentGroup.OrderBy(x => x.Priority))
                     {
                         if (!icons.Any()) continue;
 
+                        int GetIconWidth(SKImage icon) => useActualSize ? icon.Width : iconSize;
+                        int GetIconHeight(SKImage icon) => useActualSize ? icon.Height : iconSize;
+
                         if (horizontal)
                         {
-                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, 0, true, cumulativeHorizontalOffset);
-                            int groupWidth = icons.Count * iconSize + (icons.Count - 1) * padding;
+                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, 0, true, cumulativeHorizontalOffset, useActualSize);
+                            int groupWidth = icons.Sum(GetIconWidth) + (icons.Count - 1) * padding;
                             cumulativeHorizontalOffset += groupWidth + padding;
                         }
                         else // vertical
                         {
-                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, cumulativeVerticalOffset, false, 0);
-                            int groupHeight = icons.Count * iconSize + (icons.Count - 1) * padding;
+                            IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, cumulativeVerticalOffset, false, 0, useActualSize);
+                            int groupHeight = icons.Sum(GetIconHeight) + (icons.Count - 1) * padding;
                             cumulativeVerticalOffset += groupHeight + padding;
                         }
                     }
@@ -214,6 +242,73 @@ namespace EmbyIcons
             }
         }
 
+        private SKImage? CreateCommunityRatingOverlay(float score, int iconSize, bool enableSmoothing)
+        {
+            var starIcon = GetStarIcon();
+            if (starIcon == null)
+            {
+                _logger.Warn("[EmbyIcons] Cannot create rating overlay because star.png icon failed to load.");
+                return null;
+            }
+
+            var scoreText = score.ToString("F1");
+            var typeface = SKTypeface.FromFamilyName("sans-serif", SKFontStyle.Bold);
+            if (typeface == null)
+            {
+                _logger.Warn("[EmbyIcons] 'sans-serif' bold font not found, falling back to default.");
+                typeface = SKTypeface.Default ?? SKTypeface.CreateDefault();
+            }
+
+            if (typeface == null)
+            {
+                _logger.Error("[EmbyIcons] Could not load any typeface for drawing score. Aborting rating overlay.");
+                return null;
+            }
+
+            using var textPaint = new SKPaint
+            {
+                IsAntialias = enableSmoothing,
+                Color = SKColors.White,
+                TextSize = iconSize * 0.8f,
+                Typeface = typeface,
+                TextAlign = SKTextAlign.Left
+            };
+
+            using var textStrokePaint = new SKPaint
+            {
+                IsAntialias = enableSmoothing,
+                Color = SKColors.Black,
+                TextSize = textPaint.TextSize,
+                Typeface = typeface,
+                Style = SKPaintStyle.StrokeAndFill,
+                StrokeWidth = Math.Max(1f, iconSize / 16f),
+                TextAlign = SKTextAlign.Left
+            };
+
+            SKRect textBounds = new();
+            textPaint.MeasureText(scoreText, ref textBounds);
+
+            int padding = Math.Max(2, iconSize / 8);
+            int totalWidth = iconSize + padding + (int)Math.Ceiling(textBounds.Width);
+            int totalHeight = iconSize;
+
+            var imageInfo = new SKImageInfo(totalWidth, totalHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+            using var surface = SKSurface.Create(imageInfo);
+            if (surface == null) return null;
+
+            var canvas = surface.Canvas;
+            using var paint = new SKPaint { FilterQuality = enableSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
+            canvas.DrawImage(starIcon, new SKRect(0, 0, iconSize, iconSize), paint);
+
+            float y = (totalHeight - textBounds.Height) / 2 - textBounds.Top;
+            float x = iconSize + padding;
+
+            canvas.DrawText(scoreText, x, y, textStrokePaint);
+            canvas.DrawText(scoreText, x, y, textPaint);
+
+            return surface.Snapshot();
+        }
+
         private string? GetChannelIconName(int channels) => channels switch { 1 => "mono", 2 => "stereo", 6 => "5.1", 8 => "7.1", _ => null };
 
         private string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream>? streams)
@@ -221,7 +316,19 @@ namespace EmbyIcons
             streams ??= new List<MediaStream>();
             var audioLangs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).OrderBy(l => l);
             var subtitleLangs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).OrderBy(l => l);
-            int maxChannels = streams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max();
+
+            int maxChannels = 0;
+            foreach (var stream in streams)
+            {
+                if (stream.Type == MediaStreamType.Audio && stream.Channels.HasValue)
+                {
+                    if (stream.Channels.Value > maxChannels)
+                    {
+                        maxChannels = stream.Channels.Value;
+                    }
+                }
+            }
+
             string combinedString = $"{string.Join(",", audioLangs)};{string.Join(",", subtitleLangs)};{GetChannelIconName(maxChannels) ?? "none"};{(HasDolbyVision(item, streams) ? "dv" : HasHdr(item, streams) ? "hdr" : "none")};{GetResolutionIconName(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Width, streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Height) ?? "none"}";
             if (string.IsNullOrEmpty(combinedString) || combinedString == ";;none;none;none") return "no_streams";
             using var sha = SHA256.Create();
@@ -234,13 +341,10 @@ namespace EmbyIcons
             var videoStream = (streams ?? item.GetMediaStreams() ?? new List<MediaStream>()).FirstOrDefault(s => s?.Type == MediaStreamType.Video);
             if (videoStream == null) return false;
 
-            var extendedVideoStream = videoStream.AsVideoStream();
-            if (extendedVideoStream?.ExtendedVideoType == null) return false;
+            var extType = videoStream.AsVideoStream()?.ExtendedVideoType;
+            if (!extType.HasValue) return false;
 
-            string evtName = extendedVideoStream.ExtendedVideoType.ToString();
-            return evtName.Equals("Hdr10", StringComparison.OrdinalIgnoreCase) ||
-                   evtName.Equals("Hdr10Plus", StringComparison.OrdinalIgnoreCase) ||
-                   evtName.Equals("Hlg", StringComparison.OrdinalIgnoreCase);
+            return extType.Value == (ExtendedVideoTypes)100 || extType.Value == (ExtendedVideoTypes)110;
         }
 
         private bool HasDolbyVision(BaseItem item, IReadOnlyList<MediaStream>? streams)
@@ -248,10 +352,10 @@ namespace EmbyIcons
             var videoStream = (streams ?? item.GetMediaStreams() ?? new List<MediaStream>()).FirstOrDefault(s => s?.Type == MediaStreamType.Video);
             if (videoStream == null) return false;
 
-            var extendedVideoStream = videoStream.AsVideoStream();
-            if (extendedVideoStream?.ExtendedVideoType == null) return false;
+            var extType = videoStream.AsVideoStream()?.ExtendedVideoType;
+            if (!extType.HasValue) return false;
 
-            return extendedVideoStream.ExtendedVideoType.ToString().Equals("DolbyVision", StringComparison.OrdinalIgnoreCase);
+            return extType.Value == (ExtendedVideoTypes)130;
         }
 
         private string? GetResolutionIconName(int? width, int? height)

@@ -7,11 +7,13 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
+using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -27,6 +29,7 @@ namespace EmbyIcons
         internal readonly IconCacheManager _iconCacheManager;
         private readonly ILogger _logger;
 
+        private SKImage? _starIcon;
         private static readonly SemaphoreSlim _globalConcurrencyLock = new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)), Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
         private static string _iconCacheVersion = string.Empty;
         private readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
@@ -72,7 +75,7 @@ namespace EmbyIcons
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
 
-            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false);
+            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false);
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
@@ -92,11 +95,13 @@ namespace EmbyIcons
                   .Append("_cAlign").Append(options.ChannelIconAlignment)
                   .Append("_vfAlign").Append(options.VideoFormatIconAlignment)
                   .Append("_resAlign").Append(options.ResolutionIconAlignment)
+                  .Append("_scoreAlign").Append(options.CommunityScoreIconAlignment)
                   .Append("_showA").Append(options.ShowAudioIcons ? "1" : "0")
                   .Append("_showS").Append(options.ShowSubtitleIcons ? "1" : "0")
                   .Append("_showC").Append(options.ShowAudioChannelIcons ? "1" : "0")
                   .Append("_showVF").Append(options.ShowVideoFormatIcons ? "1" : "0")
                   .Append("_showRes").Append(options.ShowResolutionIcons ? "1" : "0")
+                  .Append("_showScore").Append(options.ShowCommunityScoreIcon ? "1" : "0")
                   .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
@@ -106,8 +111,10 @@ namespace EmbyIcons
                   .Append("_cHoriz").Append(options.ChannelOverlayHorizontal ? "1" : "0")
                   .Append("_vfHoriz").Append(options.VideoFormatOverlayHorizontal ? "1" : "0")
                   .Append("_resHoriz").Append(options.ResolutionOverlayHorizontal ? "1" : "0")
+                  .Append("_scoreHoriz").Append(options.CommunityScoreOverlayHorizontal ? "1" : "0")
                   .Append("_iconVer").Append(_iconCacheVersion)
-                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
+                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()))
+                  .Append("_rating").Append(item.CommunityRating.HasValue ? item.CommunityRating.Value.ToString("F1") : "none");
 
                 if ((item is Series) && ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage && (options.ShowAudioIcons || options.ShowSubtitleIcons))
                     || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
@@ -164,7 +171,6 @@ namespace EmbyIcons
 
         public void ClearOverlayCacheForItem(BaseItem item)
         {
-
         }
 
         public void Dispose()
@@ -175,6 +181,8 @@ namespace EmbyIcons
             {
                 sem.Dispose();
             }
+            _starIcon?.Dispose();
+            _starIcon = null;
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();
         }
@@ -190,6 +198,31 @@ namespace EmbyIcons
             if (item == null) return;
             bool removed = _seriesAggregationCache.TryRemove(item.Id, out _);
             _logger.Debug($"[EmbyIcons] ClearSeriesOverlayCache: Series {item?.Name} ({item?.Id}) removed={removed}");
+        }
+
+        internal SKImage? GetStarIcon()
+        {
+            if (_starIcon != null) return _starIcon;
+
+            try
+            {
+                var asm = Assembly.GetExecutingAssembly();
+                var name = $"{typeof(Plugin).Namespace}.Images.star.png";
+                using var stream = asm.GetManifestResourceStream(name);
+                if (stream == null || stream.Length == 0)
+                {
+                    _logger.Warn($"[EmbyIcons] Embedded resource '{name}' not found or is empty. Make sure its Build Action is set to Embedded Resource.");
+                    return null;
+                }
+                _starIcon = SKImage.FromEncodedData(stream);
+                _logger.Debug($"[EmbyIcons] Successfully loaded embedded star.png icon.");
+                return _starIcon;
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("[EmbyIcons] Failed to load embedded star.png icon.", ex);
+                return null;
+            }
         }
     }
 }
