@@ -55,7 +55,7 @@ You must supply your own icon images and place them in a folder on your server. 
 | **Audio Channel** | `<type>.png` | `5.1.png`, `7.1.png`, `stereo.png` |
 | **Video Format** | `<format>.png` | `hdr.png`, `hdrplus.png`, `dv.png` |
 | **Resolution** | `<resolution>.png`| `4k.png`, `1080p.png`, `720p.png` |
-| **IMDb rating** | `imdb.png` |
+| **IMDb rating** | |  `imdb.png` |
 
 ### Configuration Options
 
