@@ -259,7 +259,7 @@ namespace EmbyIcons
         private string? GetResolutionIconName(int? width, int? height)
         {
             if (width == null || height == null) return null;
-            if (height >= 2160) return "4k";
+            if (height >= 1500) return "4k";
             if (height >= 1440) return "1440p";
             if (height >= 1080) return "1080p";
             if (height >= 720) return "720p";
