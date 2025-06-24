@@ -1,0 +1,128 @@
+﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+
+    <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
+        <div class="readOnlyContent auto-center">
+            <form class="embyIconsForm">
+
+                <div class="flex align-items-center" style="margin: 2em 0 .5em;">
+                    <h2 style="margin: 0;">General Settings</h2>
+                </div>
+                <div class="inputContainer">
+                    <div style="display: flex; align-items: flex-end;">
+                        <div style="flex-grow: 1;">
+                            <input is="emby-input" type="text" id="txtIconsFolder" label="Icons Folder:" autocomplete="off" />
+                        </div>
+                        <button type="button" is="emby-button" class="raised" id="btnSelectIconsFolder" title="Browse for folder" style="margin-left: 1em;">
+                            <span>...</span>
+                        </button>
+                    </div>
+                    <div class="fieldDescription">The full path to the folder where your custom icons are stored.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="txtSelectedLibraries" label="Apply to these libraries (comma separated):" autocomplete="off" />
+                    <div class="fieldDescription">Leave blank to apply to all libraries.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="chkRefreshIconCacheNow" />
+                        <span>Refresh icon cache on next save</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">Check this if you have added, removed, or changed icons in your folder and want to force a refresh.</div>
+                </div>
+
+                <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                    <h2 style="margin: 0;">Overlay Toggles</h2>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em 2em;">
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioIcons" /><span>Show Audio Language Icons</span></label></div>
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowSubtitleIcons" /><span>Show Subtitle Language Icons</span></label></div>
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioChannelIcons" /><span>Show Audio Channel Icons (e.g., 7.1)</span></label></div>
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoFormatIcons" /><span>Show Video Format Icons (e.g., HDR)</span></label></div>
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowResolutionIcons" /><span>Show Resolution Icons (e.g., 4K)</span></label></div>
+                    <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowCommunityScoreIcon" /><span>Show Community Rating Icon</span></label></div>
+                </div>
+
+                <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                    <h2 style="margin: 0;">TV Show Settings</h2>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">When disabled, overlays will only appear on movies, series, and seasons.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on series/seasons</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Icons will only appear on a series/season poster if all child episodes share the same property.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkUseSeriesLiteMode" /><span>Use Lite Mode for series scans</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
+                </div>
+
+                <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                    <h2 style="margin: 0;">Alignment & Layout</h2>
+                </div>
+                <div class="paper-card" style="padding: 1.5em;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2em 2.5em;">
+
+                        <div>
+                            <select is="emby-select" id="selAudioIconAlignment" label="Audio Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+
+                        <div>
+                            <select is="emby-select" id="selSubtitleIconAlignment" label="Subtitle Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkSubtitleOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+
+                        <div>
+                            <select is="emby-select" id="selChannelIconAlignment" label="Channel Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkChannelOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+
+                        <div>
+                            <select is="emby-select" id="selVideoFormatIconAlignment" label="Video Format Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoFormatOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+
+                        <div>
+                            <select is="emby-select" id="selResolutionIconAlignment" label="Resolution Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkResolutionOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+
+                        <div>
+                            <select is="emby-select" id="selCommunityScoreIconAlignment" label="Rating Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                            <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkCommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                    <h2 style="margin: 0;">Advanced Settings</h2>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em 2em;">
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="txtIconSize" label="Icon Size (% of poster height):" min="1" max="100" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="txtJpegQuality" label="Image Quality (10-100):" min="10" max="100" />
+                    </div>
+                    <div class="checkboxContainer" style="grid-column: 1 / -1;">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="chkEnableImageSmoothing" />
+                            <span>Enable image smoothing (improves icon quality on scaled images)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 2em;">
+                    <img class="previewImage" alt="Loading Preview..." style="max-height: 24em; display: block; background-color: #101010; margin: auto;" />
+                </div>
+
+                <div style="margin-top: 2em;">
+                    <button is="emby-button" type="submit" class="raised button-submit block">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

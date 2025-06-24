@@ -113,16 +113,17 @@ namespace EmbyIcons
                   .Append("_resHoriz").Append(options.ResolutionOverlayHorizontal ? "1" : "0")
                   .Append("_scoreHoriz").Append(options.CommunityScoreOverlayHorizontal ? "1" : "0")
                   .Append("_iconVer").Append(_iconCacheVersion)
-                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()))
-                  .Append("_rating").Append(item.CommunityRating.HasValue ? item.CommunityRating.Value.ToString("F1") : "none");
+                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
 
-                if ((item is Series) && ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage && (options.ShowAudioIcons || options.ShowSubtitleIcons))
-                    || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
+                if (item is Series series && (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
                 {
-                    var aggResult = GetAggregatedDataForParentSync(item, options, ignoreCache: true); // <--- ignore cache
+                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: true);
                     sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
-
-                    sb.Append("_seriesDateMod").Append(item.DateModified.Ticks);
+                }
+                else
+                {
+                    sb.Append("_rating").Append(item.CommunityRating.HasValue ? item.CommunityRating.Value.ToString("F1") : "none");
+                    sb.Append("_dateMod").Append(item.DateModified.Ticks);
                 }
 
                 return sb.ToString();
@@ -148,6 +149,36 @@ namespace EmbyIcons
                 return;
             }
 
+            float? communityRating = null;
+
+            // Only check for ratings on items that can have them (Movies and Series)
+            // This avoids the performance hit on episodes.
+            if (item is Movie || item is Series)
+            {
+                // Retry logic to combat race conditions during metadata refresh
+                for (int i = 0; i < 3; i++)
+                {
+                    var freshItem = _libraryManager.GetItemById(item.Id);
+                    if (freshItem != null && freshItem.CommunityRating.HasValue && freshItem.CommunityRating.Value > 0)
+                    {
+                        _logger.Info($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name} on attempt {i + 1}.");
+                        communityRating = freshItem.CommunityRating.Value;
+                        break; // Exit loop once rating is found
+                    }
+
+                    if (i < 2) // Don't delay on the last attempt
+                    {
+                        _logger.Warn($"[EmbyIcons] Rating not found for {item.Name} on attempt {i + 1}. Retrying in 750ms.");
+                        await Task.Delay(750, cancellationToken);
+                    }
+                }
+
+                if (!communityRating.HasValue)
+                {
+                    _logger.Error($"[EmbyIcons] Could not find rating for {item.Name} after all attempts.");
+                }
+            }
+
             await _globalConcurrencyLock.WaitAsync(cancellationToken);
             try
             {
@@ -156,7 +187,7 @@ namespace EmbyIcons
                 await sem.WaitAsync(cancellationToken);
                 try
                 {
-                    await EnhanceImageInternalAsync(item, inputFile, outputFile, imageType, imageIndex, cancellationToken);
+                    await EnhanceImageInternalAsync(item, inputFile, outputFile, imageType, imageIndex, communityRating, cancellationToken);
                 }
                 finally
                 {

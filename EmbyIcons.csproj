@@ -12,8 +12,19 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="EmbyIconsConfiguration.html" />
+	  <None Remove="EmbyIconsConfiguration.js" />
+	  <None Remove="Images\preview.png" />
+	  <None Remove="plugin.js" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
+		<EmbeddedResource Include="EmbyIconsConfiguration.html" />
+		<EmbeddedResource Include="EmbyIconsConfiguration.js" />
 		<EmbeddedResource Include="Images\logo.png" />
-		<EmbeddedResource Include="Images\star.png" />
+		<EmbeddedResource Include="Images\preview.png" />
+		<EmbeddedResource Include="plugin.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -23,7 +34,7 @@
 
 	<ItemGroup>
 	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 

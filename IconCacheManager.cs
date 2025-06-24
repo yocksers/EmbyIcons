@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SkiaSharp;
 using MediaBrowser.Model.Logging;
+using System.Reflection;
 
 namespace EmbyIcons.Helpers
 {
@@ -83,7 +84,7 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_resolutionIconImageCache);
 
             var channelNames = new HashSet<string> { "mono", "stereo", "5.1", "7.1" };
-            var formatNames = new HashSet<string> { "hdr", "dv" };
+            var formatNames = new HashSet<string> { "hdr", "dv", "hdr10plus" };
             var resolutionNames = new HashSet<string> { "480p", "576p", "720p", "1080p", "4k" };
 
             foreach (var file in allFiles)
@@ -106,6 +107,21 @@ namespace EmbyIcons.Helpers
                 _logger.Debug($"[EmbyIcons] Icon cache refreshed. New version: {_currentIconVersion}");
             }
             return Task.CompletedTask;
+        }
+
+        public SKImage? GetFirstAvailableIcon(IconType iconType)
+        {
+            var (pathCache, _) = GetCachesForType(iconType);
+
+            var firstKey = pathCache.Keys.FirstOrDefault(key =>
+                pathCache.TryGetValue(key, out var path) && !string.IsNullOrEmpty(path));
+
+            if (firstKey != null)
+            {
+                return GetCachedIcon(firstKey, iconType);
+            }
+
+            return null;
         }
 
         public SKImage? GetCachedIcon(string iconNameKey, IconType iconType)

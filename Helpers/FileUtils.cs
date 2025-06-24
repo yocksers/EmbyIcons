@@ -21,7 +21,7 @@ namespace EmbyIcons.Helpers
                     return;
                 }
 
-                const int bufferSize = 262144; // 256 KB buffer
+                const int bufferSize = 262144; 
 
                 var destDir = Path.GetDirectoryName(dest);
                 if (string.IsNullOrEmpty(destDir))

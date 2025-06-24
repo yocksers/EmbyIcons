@@ -72,6 +72,7 @@ namespace EmbyIcons
             string? commonResolution = null;
 
             bool allEpisodesHaveDV = true;
+            bool allEpisodesHaveHDR10Plus = true;
             bool allEpisodesHaveHDR = true;
             bool isFirstEpisode = true;
 
@@ -99,10 +100,17 @@ namespace EmbyIcons
 
                 var channelType = GetChannelIconName(audioStreams.Where(s => s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max()) ?? "none";
                 var hasDV = HasDolbyVision(ep, streams);
+                var hasHDR10Plus = HasHdr10Plus(ep);
                 var hasHDR = HasHdr(ep, streams);
                 var resolution = GetResolutionIconName(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Width, streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Height) ?? "none";
 
-                var hashString = $"{string.Join(",", audioLangs.OrderBy(x => x))};{string.Join(",", subtitleLangs.OrderBy(x => x))};{channelType};{(hasDV ? "dv" : (hasHDR ? "hdr" : "none"))};{resolution}";
+                string videoFormat;
+                if (hasDV) videoFormat = "dv";
+                else if (hasHDR10Plus) videoFormat = "hdr10plus";
+                else if (hasHDR) videoFormat = "hdr";
+                else videoFormat = "none";
+
+                var hashString = $"{string.Join(",", audioLangs.OrderBy(x => x))};{string.Join(",", subtitleLangs.OrderBy(x => x))};{channelType};{videoFormat};{resolution}";
                 var hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(hashString))).Replace("-", "").Substring(0, 8);
                 episodeHashes.Add($"{ep.Id}:{hash}");
 
@@ -139,6 +147,7 @@ namespace EmbyIcons
                 }
 
                 allEpisodesHaveDV &= hasDV;
+                allEpisodesHaveHDR10Plus &= hasHDR10Plus;
                 allEpisodesHaveHDR &= hasHDR;
             }
 
@@ -151,6 +160,7 @@ namespace EmbyIcons
             if (options.ShowVideoFormatIcons)
             {
                 if (allEpisodesHaveDV) result.VideoFormats.Add("dv");
+                else if (allEpisodesHaveHDR10Plus) result.VideoFormats.Add("hdr10plus");
                 else if (allEpisodesHaveHDR) result.VideoFormats.Add("hdr");
             }
 
