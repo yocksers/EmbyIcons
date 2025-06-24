@@ -6,7 +6,7 @@
 
 ## Overview
 
-**EmbyIcons** is a powerful plugin for [Emby Server](https://emby.media/) that enhances your media library by overlaying dynamic, informational icons directly onto your posters. Shows overlays on both movie and TV show posters! Go beyond simple language flags with icons for audio channels, video resolution, HDR, and more. This provides a rich, at-a-glance summary of your media's technical specifications, making your library more informative and visually appealing.
+**EmbyIcons** is a powerful plugin for [Emby Server](https://emby.media/) that enhances your media library by overlaying dynamic, informational icons directly onto your posters. Shows overlays on both movie and TV show posters! Go beyond simple language flags with icons for audio channels, video resolution, HDR, and more. This provides a at-a-glance summary of your media's technical specifications, making your library more informative and visually appealing.
 
 ---
 
@@ -20,8 +20,9 @@
     - Audio Languages
     - Subtitle Languages
     - Audio Channels (e.g., Mono, Stereo, 5.1, 7.1)
-    - Video Format (HDR and Dolby Vision)
+    - Video Format (HDR, HDR10Plus and Dolby Vision)
     - Video Resolution (e.g., 480p, 720p, 1080p, 4K)
+    - IMDb rating
 - **Deep Customization**:
     - Independently set the on-screen corner alignment for each icon type (`TopLeft`, `TopRight`, etc.).
     - Choose between horizontal or vertical stacking for multiple icons in the same corner.
@@ -43,7 +44,7 @@
 
 ## Configuration and Icon Naming
 
-You must supply your own icon images and place them in a folder on your server. Point the plugin to this folder and name your files according to the convention below. A size of 100x100 pixels in PNG format is recommended.
+You must supply your own icon images and place them in a folder on your server. Point the plugin to this folder and name your files according to the convention below. A size of 100x100 pixels in PNG format is recommended but any file format like jpg will work.
 
 ### Icon Naming Convention
 
@@ -52,8 +53,9 @@ You must supply your own icon images and place them in a folder on your server. 
 | **Audio** | `<lang_code>.png` | `eng.png`, `fre.png`, `jpn.png` |
 | **Subtitle** | `srt.<lang_code>.png` | `srt.eng.png`, `srt.ger.png` |
 | **Audio Channel** | `<type>.png` | `5.1.png`, `7.1.png`, `stereo.png` |
-| **Video Format** | `<format>.png` | `hdr.png`, `dv.png` |
+| **Video Format** | `<format>.png` | `hdr.png`, `hdrplus.png`, `dv.png` |
 | **Resolution** | `<resolution>.png`| `4k.png`, `1080p.png`, `720p.png` |
+| **IMDb rating** | `imdb.png` |
 
 ### Configuration Options
 
