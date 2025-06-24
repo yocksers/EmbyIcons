@@ -110,7 +110,7 @@ namespace EmbyIcons
                     if (options.ShowAudioChannelIcons && maxChannels > 0)
                     {
                         channelIconName = GetChannelIconName(maxChannels);
-                        audioChannelsIconName = maxChannels.ToString(); // for showing number of audio channels as an icon, if you have such an icon
+                        audioChannelsIconName = maxChannels.ToString(); 
                     }
 
                     if (options.ShowVideoFormatIcons)
@@ -166,48 +166,39 @@ namespace EmbyIcons
 
                 var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
 
-                // --- PRIORITY ORDER STACKING ---
                 var overlays = new List<(IconAlignment Alignment, int Priority, List<SKImage> Icons, bool Horizontal, bool UseActualSize)>();
 
-                // 1. Audio language
                 if (audioLangsDetected.Any())
                 {
                     var audioIcons = audioLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon(lang, IconCacheManager.IconType.Audio)).Where(i => i != null).Cast<SKImage>().ToList();
                     if (audioIcons.Any()) overlays.Add((options.AudioIconAlignment, 1, audioIcons, options.AudioOverlayHorizontal, false));
                 }
-                // 2. Resolution
                 if (resolutionIconName != null && _iconCacheManager.GetCachedIcon(resolutionIconName, IconCacheManager.IconType.Resolution) is { } resIcon)
                 {
                     overlays.Add((options.ResolutionIconAlignment, 2, new List<SKImage> { resIcon }, options.ResolutionOverlayHorizontal, false));
                 }
-                // 3. HDR/Video format
                 if (videoFormatIconName != null && _iconCacheManager.GetCachedIcon(videoFormatIconName, IconCacheManager.IconType.VideoFormat) is { } vfIcon)
                 {
                     overlays.Add((options.VideoFormatIconAlignment, 3, new List<SKImage> { vfIcon }, options.VideoFormatOverlayHorizontal, false));
                 }
-                // 4. Audio channel
                 if (channelIconName != null && _iconCacheManager.GetCachedIcon(channelIconName, IconCacheManager.IconType.Channel) is { } chIcon)
                 {
                     overlays.Add((options.ChannelIconAlignment, 4, new List<SKImage> { chIcon }, options.ChannelOverlayHorizontal, false));
                 }
-                // 5. Number of audio channels (as its own icon, optional)
                 if (audioChannelsIconName != null && _iconCacheManager.GetCachedIcon(audioChannelsIconName, IconCacheManager.IconType.Channel) is { } channelsIcon)
                 {
                     overlays.Add((options.ChannelIconAlignment, 5, new List<SKImage> { channelsIcon }, options.ChannelOverlayHorizontal, false));
                 }
-                // 6. Subtitle languages
                 if (subtitleLangsDetected.Any())
                 {
                     var subIcons = subtitleLangsDetected.OrderBy(l => l).Select(lang => _iconCacheManager.GetCachedIcon($"srt.{lang}", IconCacheManager.IconType.Subtitle)).Where(i => i != null).Cast<SKImage>().ToList();
                     if (subIcons.Any()) overlays.Add((options.SubtitleIconAlignment, 6, subIcons, options.SubtitleOverlayHorizontal, false));
                 }
-                // 7. IMDb rating
                 if (ratingOverlayImage != null)
                 {
                     overlays.Add((options.CommunityScoreIconAlignment, 7, new List<SKImage> { ratingOverlayImage }, options.CommunityScoreOverlayHorizontal, useActualSizeForRating));
                 }
 
-                // --- STACKING LOGIC ---
                 foreach (var alignmentGroup in overlays.GroupBy(x => x.Alignment))
                 {
                     int cumulativeHorizontalOffset = 0;
@@ -289,7 +280,6 @@ namespace EmbyIcons
 
         private bool HasHdr10Plus(BaseItem item)
         {
-            // As requested, check filename first as Emby may not report this in streams.
             if (!string.IsNullOrEmpty(item.Path))
             {
                 var fileName = Path.GetFileName(item.Path);
@@ -302,7 +292,6 @@ namespace EmbyIcons
 
             var streams = item.GetMediaStreams();
             if (streams == null) return false;
-            // Fallback to checking stream VideoRange property
             return streams.Any(s => s.Type == MediaStreamType.Video &&
                 (!string.IsNullOrEmpty(s.VideoRange) && s.VideoRange.IndexOf("hdr10plus", StringComparison.OrdinalIgnoreCase) >= 0));
         }

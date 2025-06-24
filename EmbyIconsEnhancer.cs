@@ -151,11 +151,8 @@ namespace EmbyIcons
 
             float? communityRating = null;
 
-            // Only check for ratings on items that can have them (Movies and Series)
-            // This avoids the performance hit on episodes.
             if (item is Movie || item is Series)
             {
-                // Retry logic to combat race conditions during metadata refresh
                 for (int i = 0; i < 3; i++)
                 {
                     var freshItem = _libraryManager.GetItemById(item.Id);
@@ -163,10 +160,10 @@ namespace EmbyIcons
                     {
                         _logger.Info($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name} on attempt {i + 1}.");
                         communityRating = freshItem.CommunityRating.Value;
-                        break; // Exit loop once rating is found
+                        break; 
                     }
 
-                    if (i < 2) // Don't delay on the last attempt
+                    if (i < 2) 
                     {
                         _logger.Warn($"[EmbyIcons] Rating not found for {item.Name} on attempt {i + 1}. Retrying in 750ms.");
                         await Task.Delay(750, cancellationToken);

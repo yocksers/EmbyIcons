@@ -78,34 +78,28 @@ namespace EmbyIcons
             var overlays = new List<(IconAlignment Alignment, int Priority, List<SKImage> Icons, bool Horizontal, bool UseActualSize)>();
             var disposableImages = new List<SKImage>();
 
-            // 1. Audio Language
             if (options.ShowAudioIcons && iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.Audio) is { } audioIcon)
             {
                 var audioIcons = new List<SKImage> { audioIcon };
                 overlays.Add((options.AudioIconAlignment, 1, audioIcons, options.AudioOverlayHorizontal, false));
             }
-            // 2. Subtitle Language
             if (options.ShowSubtitleIcons && iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.Subtitle) is { } subIcon)
             {
                 var subIcons = new List<SKImage> { subIcon };
                 overlays.Add((options.SubtitleIconAlignment, 2, subIcons, options.SubtitleOverlayHorizontal, false));
             }
-            // 3. Resolution
             if (options.ShowResolutionIcons && iconCache.GetCachedIcon("4k", IconCacheManager.IconType.Resolution) is { } resIcon)
             {
                 overlays.Add((options.ResolutionIconAlignment, 3, new List<SKImage> { resIcon }, options.ResolutionOverlayHorizontal, false));
             }
-            // 4. Video Format
             if (options.ShowVideoFormatIcons && (iconCache.GetCachedIcon("dv", IconCacheManager.IconType.VideoFormat) ?? iconCache.GetCachedIcon("hdr", IconCacheManager.IconType.VideoFormat)) is { } formatIcon)
             {
                 overlays.Add((options.VideoFormatIconAlignment, 4, new List<SKImage> { formatIcon }, options.VideoFormatOverlayHorizontal, false));
             }
-            // 5. Audio Channel
             if (options.ShowAudioChannelIcons && iconCache.GetCachedIcon("5.1", IconCacheManager.IconType.Channel) is { } channelIcon)
             {
                 overlays.Add((options.ChannelIconAlignment, 5, new List<SKImage> { channelIcon }, options.ChannelOverlayHorizontal, false));
             }
-            // 6. Community Rating
             if (options.ShowCommunityScoreIcon)
             {
                 var finalRatingIcon = CreateCommunityRatingOverlay(iconCache, 6.9f, iconSize, options.EnableImageSmoothing);
@@ -125,7 +119,6 @@ namespace EmbyIcons
                 int currentVerticalOffset = 0;
                 int maxHeightOfHorizontalRow = 0;
 
-                // 1. Draw all horizontal groups in a single row
                 foreach (var (alignment, _, icons, horizontal, useActualSize) in horizontalGroups)
                 {
                     if (!icons.Any()) continue;
@@ -142,13 +135,12 @@ namespace EmbyIcons
                     maxHeightOfHorizontalRow = Math.Max(maxHeightOfHorizontalRow, groupHeight);
                 }
 
-                // 2. Draw all vertical groups in a single column, starting below the horizontal row
                 if (horizontalGroups.Any())
                 {
                     currentVerticalOffset += maxHeightOfHorizontalRow + padding;
                 }
 
-                currentHorizontalOffset = 0; // Reset horizontal offset for the vertical column
+                currentHorizontalOffset = 0; 
 
                 foreach (var (alignment, _, icons, horizontal, useActualSize) in verticalGroups)
                 {
