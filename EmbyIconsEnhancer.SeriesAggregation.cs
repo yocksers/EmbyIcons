@@ -28,9 +28,10 @@ namespace EmbyIcons
 
         internal AggregatedSeriesResult GetAggregatedDataForParentSync(BaseItem parent, PluginOptions options, bool ignoreCache = false)
         {
-            if (!ignoreCache)
+            if (!ignoreCache && !options.DisableSeriesAggregationCache)
             {
-                if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && (DateTime.UtcNow - cachedResult.Timestamp) < SeriesAggregationCacheTTL)
+                var cacheTtl = TimeSpan.FromMinutes(Math.Max(1, options.SeriesAggregationCacheTTLMinutes));
+                if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && (DateTime.UtcNow - cachedResult.Timestamp) < cacheTtl)
                 {
                     _logger.Debug($"[EmbyIcons] (SYNC) Using cached aggregated data for parent item {parent.Name} ({parent.Id}).");
                     return cachedResult;
@@ -176,12 +177,6 @@ namespace EmbyIcons
         internal Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs, HashSet<string> ChannelTypes, HashSet<string> VideoFormats, HashSet<string> Resolutions)>
             GetAggregatedDataForParentAsync(BaseItem parent, PluginOptions options, System.Threading.CancellationToken cancellationToken)
         {
-            if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && (DateTime.UtcNow - cachedResult.Timestamp) < SeriesAggregationCacheTTL)
-            {
-                _logger.Debug($"[EmbyIcons] Using cached aggregated data for parent item {parent.Name} ({parent.Id}).");
-                return Task.FromResult((cachedResult.AudioLangs, cachedResult.SubtitleLangs, cachedResult.ChannelTypes, cachedResult.VideoFormats, cachedResult.Resolutions));
-            }
-            _logger.Debug($"[EmbyIcons] Cache miss in async aggregator for {parent.Name} ({parent.Id}), recomputing synchronously.");
             var result = GetAggregatedDataForParentSync(parent, options, ignoreCache: false);
             return Task.FromResult((result.AudioLangs, result.SubtitleLangs, result.ChannelTypes, result.VideoFormats, result.Resolutions));
         }

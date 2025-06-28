@@ -21,7 +21,7 @@ namespace EmbyIcons.Helpers
                     return;
                 }
 
-                const int bufferSize = 262144; 
+                const int bufferSize = 262144;
 
                 var destDir = Path.GetDirectoryName(dest);
                 if (string.IsNullOrEmpty(destDir))
@@ -56,47 +56,7 @@ namespace EmbyIcons.Helpers
             }
         }
 
-        public static HashSet<string> GetAllowedLibraryIds(ILibraryManager libraryManager, string? selectedLibrariesCsv)
-        {
-            var allowedIds = new HashSet<string>();
-
-            if (string.IsNullOrWhiteSpace(selectedLibrariesCsv))
-                return allowedIds;
-
-            var selectedNames = selectedLibrariesCsv.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim().Trim('"', '\''))
-                .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
-
-            foreach (var lib in libraryManager.GetVirtualFolders())
-                if (selectedNames.Contains(lib.Name))
-                    allowedIds.Add(lib.Id);
-
-            return allowedIds;
-        }
-
-        public static string? GetLibraryIdForItem(ILibraryManager libraryManager, BaseItem item)
-        {
-            if (item == null) return null;
-
-            var itemPath = item.Path;
-
-            if (string.IsNullOrEmpty(itemPath)) return null;
-
-            string NormalizePath(string path) =>
-                path.TrimEnd('\\', '/').ToLowerInvariant();
-
-            var normItemPath = NormalizePath(itemPath);
-
-            foreach (var lib in libraryManager.GetVirtualFolders())
-                if (lib.Locations != null)
-                    foreach (var loc in lib.Locations)
-                    {
-                        var normLoc = NormalizePath(loc);
-                        if (!string.IsNullOrEmpty(normLoc) && normItemPath.StartsWith(normLoc))
-                            return lib.Id;
-                    }
-
-            return null;
-        }
+        // --- BEGIN REWRITE: The old library checking methods are no longer used and have been removed. ---
+        // --- END REWRITE ---
     }
 }

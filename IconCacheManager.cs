@@ -64,7 +64,7 @@ namespace EmbyIcons.Helpers
             }
 
             var allFiles = Directory.GetFiles(_iconsFolder);
-            var currentWriteTimes = allFiles.ToDictionary(f => f, File.GetLastWriteTimeUtc, StringComparer.OrdinalIgnoreCase);
+            var currentWriteTimes = allFiles.ToDictionary(f => f, File.GetLastWriteTimeUtc, StringComparer.Ordinal);
             bool anyChanged = force || currentWriteTimes.Count != _iconFileLastWriteTimes.Count || currentWriteTimes.Any(kvp => !_iconFileLastWriteTimes.TryGetValue(kvp.Key, out var knownWrite) || knownWrite != kvp.Value);
 
             if (!anyChanged && (DateTime.UtcNow - _lastCacheRefreshTime) <= _cacheTtl) return Task.CompletedTask;

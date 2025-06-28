@@ -59,11 +59,19 @@
     View.prototype.loadData = function () {
         loading.show();
         const view = this.view;
+        const self = this;
 
-        ApiClient.getPluginConfiguration(pluginId).then((config) => {
-
+        Promise.all([
+            ApiClient.getPluginConfiguration(pluginId),
+            ApiClient.getVirtualFolders()
+        ]).then(function ([config, virtualFolders]) {
             view.querySelector('#txtIconsFolder').value = config.IconsFolder || '';
+
+            // BEGIN MODIFICATION: Library Selection
+            self.populateLibraries(virtualFolders.Items, config.SelectedLibraries);
             view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
+            // END MODIFICATION
+
             view.querySelector('#chkRefreshIconCacheNow').checked = config.RefreshIconCacheNow || false;
 
             view.querySelector('#chkShowAudioIcons').checked = config.ShowAudioIcons;
@@ -76,6 +84,8 @@
             view.querySelector('#chkShowOverlaysForEpisodes').checked = config.ShowOverlaysForEpisodes;
             view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked = config.ShowSeriesIconsIfAllEpisodesHaveLanguage;
             view.querySelector('#chkUseSeriesLiteMode').checked = config.UseSeriesLiteMode;
+            view.querySelector('#txtSeriesAggregationCacheTTLMinutes').value = config.SeriesAggregationCacheTTLMinutes || 720;
+            view.querySelector('#chkDisableSeriesAggregationCache').checked = config.DisableSeriesAggregationCache;
 
             view.querySelector('#selAudioIconAlignment').value = config.AudioIconAlignment || 'TopLeft';
             view.querySelector('#selSubtitleIconAlignment').value = config.SubtitleIconAlignment || 'BottomLeft';
@@ -95,10 +105,47 @@
             view.querySelector('#txtJpegQuality').value = config.JpegQuality || 75;
             view.querySelector('#chkEnableImageSmoothing').checked = config.EnableImageSmoothing;
 
-            this.updatePreview();
+            self.updatePreview();
             loading.hide();
         });
     };
+
+    // BEGIN MODIFICATION: New function to handle library list
+    View.prototype.populateLibraries = function (libraries, selectedLibrariesCsv) {
+        const view = this.view;
+        const container = view.querySelector('#librarySelectionContainer');
+
+        let html = '';
+        libraries.forEach(library => {
+            const checkboxId = 'chk_lib_' + library.Id;
+            html += `<div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="${checkboxId}" data-library-name="${library.Name}" /><span>${library.Name}</span></label></div>`;
+        });
+        container.innerHTML = html;
+
+        // Restore saved selections
+        const selectedNames = (selectedLibrariesCsv || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
+            const libName = checkbox.getAttribute('data-library-name').toLowerCase();
+            if (selectedNames.includes(libName)) {
+                checkbox.checked = true;
+            }
+        });
+
+        // Add event listener to update the hidden text field when a checkbox is changed
+        container.addEventListener('change', (e) => {
+            if (e.target.type === 'checkbox') {
+                const selectedNames = [];
+                container.querySelectorAll('input[type=checkbox]:checked').forEach(chk => {
+                    selectedNames.push(chk.getAttribute('data-library-name'));
+                });
+                const hiddenInput = view.querySelector('#txtSelectedLibraries');
+                hiddenInput.value = selectedNames.join(',');
+                // Manually dispatch a change event on the hidden input to trigger the preview update
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+            }
+        });
+    };
+    // END MODIFICATION
 
     View.prototype.getFormOptions = function () {
         const view = this.view;
@@ -115,6 +162,8 @@
             ShowOverlaysForEpisodes: view.querySelector('#chkShowOverlaysForEpisodes').checked,
             ShowSeriesIconsIfAllEpisodesHaveLanguage: view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked,
             UseSeriesLiteMode: view.querySelector('#chkUseSeriesLiteMode').checked,
+            SeriesAggregationCacheTTLMinutes: parseInt(view.querySelector('#txtSeriesAggregationCacheTTLMinutes').value) || 720,
+            DisableSeriesAggregationCache: view.querySelector('#chkDisableSeriesAggregationCache').checked,
             AudioIconAlignment: view.querySelector('#selAudioIconAlignment').value,
             SubtitleIconAlignment: view.querySelector('#selSubtitleIconAlignment').value,
             ChannelIconAlignment: view.querySelector('#selChannelIconAlignment').value,

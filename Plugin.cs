@@ -31,14 +31,14 @@ namespace EmbyIcons
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _logger;
         private readonly ILogManager _logManager;
-
         private EmbyIconsEnhancer? _enhancer;
+
+        private static List<(string Path, string Name)>? _libraryPathCache;
+        private static readonly object _libraryPathCacheLock = new object();
 
         public static Plugin? Instance { get; private set; }
 
         public ILogger Logger => _logger;
-
-        public HashSet<string> AllowedLibraryIds => FileUtils.GetAllowedLibraryIds(_libraryManager, Configuration.SelectedLibraries);
 
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
 
@@ -50,7 +50,7 @@ namespace EmbyIcons
             ILogManager logManager,
             IFileSystem fileSystem,
             IXmlSerializer xmlSerializer)
-            : base(appPaths, xmlSerializer) 
+            : base(appPaths, xmlSerializer)
         {
             _appHost = appHost;
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
@@ -62,6 +62,78 @@ namespace EmbyIcons
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
+        }
+
+        private void PopulateLibraryPathCache()
+        {
+            _logger.Debug("[EmbyIcons] Populating library path cache (This should only happen once per change).");
+            var newCache = new List<(string Path, string Name)>();
+            try
+            {
+                foreach (var lib in _libraryManager.GetVirtualFolders())
+                {
+                    if (lib?.Locations == null) continue;
+                    foreach (var loc in lib.Locations)
+                    {
+                        if (!string.IsNullOrEmpty(loc))
+                        {
+                            newCache.Add((loc, lib.Name));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to get virtual folders from LibraryManager.", ex);
+            }
+            // Sort by longest path first to ensure most specific match is found first.
+            _libraryPathCache = newCache.OrderByDescending(i => i.Path.Length).ToList();
+        }
+
+        public bool IsLibraryAllowed(BaseItem item)
+        {
+            var selectedLibraries = (Configuration.SelectedLibraries ?? "")
+                .Split(',')
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (selectedLibraries.Count == 0)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(item.Path))
+            {
+                return false;
+            }
+
+            if (_libraryPathCache == null)
+            {
+                lock (_libraryPathCacheLock)
+                {
+                    if (_libraryPathCache == null)
+                    {
+                        PopulateLibraryPathCache();
+                    }
+                }
+            }
+
+            if (_libraryPathCache == null)
+            {
+                _logger.Warn("[EmbyIcons] Library path cache is null, cannot check library restrictions.");
+                return false;
+            }
+
+            foreach (var libInfo in _libraryPathCache)
+            {
+                if (item.Path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return selectedLibraries.Contains(libInfo.Name);
+                }
+            }
+
+            return false;
         }
 
         public IEnumerable<PluginPageInfo> GetPages()
@@ -97,6 +169,19 @@ namespace EmbyIcons
 
         private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
         {
+            // --- BEGIN MODIFICATION: Event-driven cache invalidation ---
+            // A library is a type of Folder. If a folder is added, removed, or updated,
+            // our library structure may have changed. Invalidate the cache to force a rebuild on next access.
+            if (e.Item is Folder)
+            {
+                _logger.Info("[EmbyIcons] A library folder has changed. Clearing the library path cache.");
+                lock (_libraryPathCacheLock)
+                {
+                    _libraryPathCache = null;
+                }
+            }
+            // --- END MODIFICATION ---
+
             BaseItem? seriesToClear = null;
             switch (e.Item)
             {
@@ -118,12 +203,12 @@ namespace EmbyIcons
         {
             var options = (PluginOptions)configuration;
             _logger.Info("[EmbyIcons] Saving new configuration.");
+            base.UpdateConfiguration(configuration);
 
             if (options.RefreshIconCacheNow)
             {
                 _logger.Info("[EmbyIcons] User requested an icon cache refresh via plugin settings.");
                 Enhancer.RefreshIconCacheAsync(CancellationToken.None, force: true).ConfigureAwait(false);
-
                 options.RefreshIconCacheNow = false;
             }
 
@@ -148,8 +233,6 @@ namespace EmbyIcons
             {
                 _logger.ErrorException("Error validating icons folder on save", ex);
             }
-
-            base.UpdateConfiguration(configuration);
         }
 
         public override string Name => "EmbyIcons";

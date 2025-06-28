@@ -35,7 +35,6 @@ namespace EmbyIcons
         private readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
-        private static readonly TimeSpan SeriesAggregationCacheTTL = TimeSpan.FromDays(365);
 
         public EmbyIconsEnhancer(ILibraryManager libraryManager, IUserViewManager userViewManager, ILogManager logManager)
         {
@@ -70,7 +69,9 @@ namespace EmbyIcons
 
         public bool Supports(BaseItem? item, ImageType imageType)
         {
-            if (item == null || imageType != ImageType.Primary || item is Person || !IsLibraryAllowed(item)) return false;
+            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
+            if (item == null || imageType != ImageType.Primary || item is Person || !(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return false;
+            // --- END REWRITE ---
 
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
@@ -82,7 +83,10 @@ namespace EmbyIcons
         {
             try
             {
-                if (!IsLibraryAllowed(item)) return "";
+                // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
+                if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return "";
+                // --- END REWRITE ---
+
                 var options = Plugin.Instance?.GetConfiguredOptions();
                 if (options == null) return "";
 
@@ -104,6 +108,8 @@ namespace EmbyIcons
                   .Append("_showScore").Append(options.ShowCommunityScoreIcon ? "1" : "0")
                   .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
+                  .Append("_seriesTTL").Append(options.SeriesAggregationCacheTTLMinutes)
+                  .Append("_seriesCacheOff").Append(options.DisableSeriesAggregationCache ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
                   .Append("_smoothing").Append(options.EnableImageSmoothing ? "1" : "0")
                   .Append("_aHoriz").Append(options.AudioOverlayHorizontal ? "1" : "0")
@@ -117,7 +123,13 @@ namespace EmbyIcons
 
                 if (item is Series series && (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
                 {
-                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: true);
+                    if (series.Id == Guid.Empty && series.InternalId > 0)
+                    {
+                        _logger.Debug($"[EmbyIcons] Detected lightweight Series object for {series.Name}. Fetching full item by InternalId {series.InternalId}.");
+                        var fullSeries = _libraryManager.GetItemById(series.InternalId);
+                        if (fullSeries is Series s) series = s;
+                    }
+                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: false);
                     sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
                 }
                 else
@@ -135,7 +147,13 @@ namespace EmbyIcons
             }
         }
 
-        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) => IsLibraryAllowed(item) ? new() { RequiresTransparency = false } : null;
+        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
+        {
+            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
+            return (Plugin.Instance?.IsLibraryAllowed(item) ?? false) ? new() { RequiresTransparency = false } : null;
+            // --- END REWRITE ---
+        }
+
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
 
         [Obsolete]
@@ -143,15 +161,18 @@ namespace EmbyIcons
 
         public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex, CancellationToken cancellationToken)
         {
-            if (!IsLibraryAllowed(item))
+            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
+            if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false))
+            // --- END REWRITE ---
             {
                 await FileUtils.SafeCopyAsync(inputFile!, outputFile, cancellationToken);
                 return;
             }
 
             float? communityRating = null;
+            var options = Plugin.Instance?.GetConfiguredOptions();
 
-            if (item is Movie || item is Series)
+            if (options?.ShowCommunityScoreIcon == true && (item is Movie || item is Series))
             {
                 for (int i = 0; i < 3; i++)
                 {
@@ -160,10 +181,10 @@ namespace EmbyIcons
                     {
                         _logger.Info($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name} on attempt {i + 1}.");
                         communityRating = freshItem.CommunityRating.Value;
-                        break; 
+                        break;
                     }
 
-                    if (i < 2) 
+                    if (i < 2)
                     {
                         _logger.Warn($"[EmbyIcons] Rating not found for {item.Name} on attempt {i + 1}. Retrying in 750ms.");
                         await Task.Delay(750, cancellationToken);
@@ -215,11 +236,8 @@ namespace EmbyIcons
             _globalConcurrencyLock.Dispose();
         }
 
-        private bool IsLibraryAllowed(BaseItem item)
-        {
-            var allowedLibs = Plugin.Instance?.AllowedLibraryIds ?? new HashSet<string>();
-            return allowedLibs.Count == 0 || (FileUtils.GetLibraryIdForItem(_libraryManager, item) is { } libraryId && allowedLibs.Contains(libraryId));
-        }
+        // --- BEGIN REWRITE: The IsLibraryAllowed method is now removed from this file and lives in Plugin.cs ---
+        // --- END REWRITE ---
 
         public void ClearSeriesOverlayCache(BaseItem? item)
         {

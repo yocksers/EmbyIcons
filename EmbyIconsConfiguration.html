@@ -18,9 +18,13 @@
                     </div>
                     <div class="fieldDescription">The full path to the folder where your custom icons are stored.</div>
                 </div>
+
                 <div class="inputContainer">
-                    <input is="emby-input" type="text" id="txtSelectedLibraries" label="Apply to these libraries (comma separated):" autocomplete="off" />
-                    <div class="fieldDescription">Leave blank to apply to all libraries.</div>
+                    <h3 style="margin-bottom: 0.5em;">Apply to these libraries</h3>
+                    <div id="librarySelectionContainer" class="paper-card" style="padding: 0.5em 1.5em;">
+                    </div>
+                    <div class="fieldDescription" style="margin-top: 0.5em;">Leave all unchecked to apply to all libraries.</div>
+                    <input type="hidden" id="txtSelectedLibraries" />
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label>
@@ -56,6 +60,22 @@
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label><input is="emby-checkbox" type="checkbox" id="chkUseSeriesLiteMode" /><span>Use Lite Mode for series scans</span></label>
                     <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="txtSeriesAggregationCacheTTLMinutes" label="Series Overlay Cache TTL (minutes):" min="1" />
+                    <div class="fieldDescription">How long before TV show overlays get refreshed. Higher values improve performance but may show stale icons if episodes are changed. Recommended and default is 720 (12 hours).</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="chkDisableSeriesAggregationCache" />
+                        <span>Disable series overlay cache</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription" style="display: flex; align-items: start; gap: 0.5em;">
+                        <span style="color: #FFC107; font-size: 1.2em; line-height: 1.2;">⚠</span>
+                        <span>
+                            Advanced: Check this to have TV show overlays refresh instantly on scans. This can negatively impact performance and causes overlays to be refreshed every time libraries are opened, but will make overlays refresh much faster when episodes have changed.
+                        </span>
+                    </div>
                 </div>
 
                 <div class="flex align-items-center" style="margin: 3em 0 .5em;">
