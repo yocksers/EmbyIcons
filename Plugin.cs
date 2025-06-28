@@ -86,7 +86,6 @@ namespace EmbyIcons
             {
                 _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to get virtual folders from LibraryManager.", ex);
             }
-            // Sort by longest path first to ensure most specific match is found first.
             _libraryPathCache = newCache.OrderByDescending(i => i.Path.Length).ToList();
         }
 
@@ -169,9 +168,6 @@ namespace EmbyIcons
 
         private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
         {
-            // --- BEGIN MODIFICATION: Event-driven cache invalidation ---
-            // A library is a type of Folder. If a folder is added, removed, or updated,
-            // our library structure may have changed. Invalidate the cache to force a rebuild on next access.
             if (e.Item is Folder)
             {
                 _logger.Info("[EmbyIcons] A library folder has changed. Clearing the library path cache.");
@@ -180,7 +176,6 @@ namespace EmbyIcons
                     _libraryPathCache = null;
                 }
             }
-            // --- END MODIFICATION ---
 
             BaseItem? seriesToClear = null;
             switch (e.Item)

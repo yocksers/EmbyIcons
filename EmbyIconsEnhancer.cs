@@ -69,9 +69,7 @@ namespace EmbyIcons
 
         public bool Supports(BaseItem? item, ImageType imageType)
         {
-            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
             if (item == null || imageType != ImageType.Primary || item is Person || !(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return false;
-            // --- END REWRITE ---
 
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
@@ -83,9 +81,7 @@ namespace EmbyIcons
         {
             try
             {
-                // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
                 if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return "";
-                // --- END REWRITE ---
 
                 var options = Plugin.Instance?.GetConfiguredOptions();
                 if (options == null) return "";
@@ -149,9 +145,7 @@ namespace EmbyIcons
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex)
         {
-            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
             return (Plugin.Instance?.IsLibraryAllowed(item) ?? false) ? new() { RequiresTransparency = false } : null;
-            // --- END REWRITE ---
         }
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
@@ -161,9 +155,7 @@ namespace EmbyIcons
 
         public async Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex, CancellationToken cancellationToken)
         {
-            // --- BEGIN REWRITE: Call new logic in Plugin.cs ---
             if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false))
-            // --- END REWRITE ---
             {
                 await FileUtils.SafeCopyAsync(inputFile!, outputFile, cancellationToken);
                 return;
@@ -236,8 +228,6 @@ namespace EmbyIcons
             _globalConcurrencyLock.Dispose();
         }
 
-        // --- BEGIN REWRITE: The IsLibraryAllowed method is now removed from this file and lives in Plugin.cs ---
-        // --- END REWRITE ---
 
         public void ClearSeriesOverlayCache(BaseItem? item)
         {

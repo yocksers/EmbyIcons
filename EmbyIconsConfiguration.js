@@ -67,10 +67,8 @@
         ]).then(function ([config, virtualFolders]) {
             view.querySelector('#txtIconsFolder').value = config.IconsFolder || '';
 
-            // BEGIN MODIFICATION: Library Selection
             self.populateLibraries(virtualFolders.Items, config.SelectedLibraries);
             view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
-            // END MODIFICATION
 
             view.querySelector('#chkRefreshIconCacheNow').checked = config.RefreshIconCacheNow || false;
 
@@ -110,7 +108,6 @@
         });
     };
 
-    // BEGIN MODIFICATION: New function to handle library list
     View.prototype.populateLibraries = function (libraries, selectedLibrariesCsv) {
         const view = this.view;
         const container = view.querySelector('#librarySelectionContainer');
@@ -122,7 +119,6 @@
         });
         container.innerHTML = html;
 
-        // Restore saved selections
         const selectedNames = (selectedLibrariesCsv || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
             const libName = checkbox.getAttribute('data-library-name').toLowerCase();
@@ -131,7 +127,6 @@
             }
         });
 
-        // Add event listener to update the hidden text field when a checkbox is changed
         container.addEventListener('change', (e) => {
             if (e.target.type === 'checkbox') {
                 const selectedNames = [];
@@ -140,12 +135,10 @@
                 });
                 const hiddenInput = view.querySelector('#txtSelectedLibraries');
                 hiddenInput.value = selectedNames.join(',');
-                // Manually dispatch a change event on the hidden input to trigger the preview update
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
             }
         });
     };
-    // END MODIFICATION
 
     View.prototype.getFormOptions = function () {
         const view = this.view;

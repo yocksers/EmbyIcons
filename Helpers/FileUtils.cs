@@ -55,8 +55,5 @@ namespace EmbyIcons.Helpers
                 throw;
             }
         }
-
-        // --- BEGIN REWRITE: The old library checking methods are no longer used and have been removed. ---
-        // --- END REWRITE ---
     }
 }
