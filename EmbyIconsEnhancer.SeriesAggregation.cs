@@ -24,24 +24,23 @@ namespace EmbyIcons
             public HashSet<string> Resolutions = new(StringComparer.OrdinalIgnoreCase);
             public string CombinedEpisodesHashShort = "";
             public DateTime Timestamp = DateTime.MinValue;
+            public DateTimeOffset ParentDateModified = DateTimeOffset.MinValue;
         }
 
         internal AggregatedSeriesResult GetAggregatedDataForParentSync(BaseItem parent, PluginOptions options, bool ignoreCache = false)
         {
-            if (!ignoreCache && !options.DisableSeriesAggregationCache)
+            if (!ignoreCache && _seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult))
             {
-                var cacheTtl = TimeSpan.FromMinutes(Math.Max(1, options.SeriesAggregationCacheTTLMinutes));
-                if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && (DateTime.UtcNow - cachedResult.Timestamp) < cacheTtl)
-                {
-                    _logger.Debug($"[EmbyIcons] (SYNC) Using cached aggregated data for parent item {parent.Name} ({parent.Id}).");
-                    return cachedResult;
-                }
+                _logger.Debug($"[EmbyIcons] Using in-memory aggregated data for parent item {parent.Name} ({parent.Id}).");
+                return cachedResult;
             }
+
+            _logger.Debug($"[EmbyIcons] Re-aggregating data for series '{parent.Name}' ({parent.Id}).");
 
             List<Episode> episodes;
             if (options.UseSeriesLiteMode)
             {
-                _logger.Debug($"[EmbyIcons] (SYNC) LITE MODE: Fetching first episode only for {parent.Name} ({parent.Id}).");
+                _logger.Debug($"[EmbyIcons] LITE MODE: Fetching first episode only for {parent.Name} ({parent.Id}).");
                 var query = new InternalItemsQuery
                 {
                     Parent = parent,
@@ -54,7 +53,7 @@ namespace EmbyIcons
             }
             else
             {
-                _logger.Debug($"[EmbyIcons] (SYNC) FULL MODE: Aggregating data from all episodes for {parent.Name} ({parent.Id}).");
+                _logger.Debug($"[EmbyIcons] FULL MODE: Aggregating data from all episodes for {parent.Name} ({parent.Id}).");
                 var query = new InternalItemsQuery { Parent = parent, Recursive = true, IncludeItemTypes = new[] { "Episode" } };
                 episodes = _libraryManager.GetItemList(query).OfType<Episode>().ToList();
             }
@@ -62,7 +61,7 @@ namespace EmbyIcons
 
             if (episodeCount == 0)
             {
-                var empty = new AggregatedSeriesResult { Timestamp = DateTime.UtcNow };
+                var empty = new AggregatedSeriesResult { Timestamp = DateTime.UtcNow, ParentDateModified = parent.DateModified };
                 _seriesAggregationCache.AddOrUpdate(parent.Id, empty, (_, __) => empty);
                 return empty;
             }
@@ -169,6 +168,7 @@ namespace EmbyIcons
             var bytes = Encoding.UTF8.GetBytes(combinedHashString);
             result.CombinedEpisodesHashShort = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").Substring(0, 8);
             result.Timestamp = DateTime.UtcNow;
+            result.ParentDateModified = parent.DateModified;
 
             _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
             return result;

@@ -8,6 +8,20 @@
 
         this.previewUpdateTimer = null;
 
+        view.querySelector('.nav-settings').addEventListener('click', () => {
+            view.querySelector('#settingsPage').classList.remove('hide');
+            view.querySelector('#readmePage').classList.add('hide');
+            view.querySelector('.nav-settings').classList.add('ui-btn-active');
+            view.querySelector('.nav-readme').classList.remove('ui-btn-active');
+        });
+
+        view.querySelector('.nav-readme').addEventListener('click', () => {
+            view.querySelector('#settingsPage').classList.add('hide');
+            view.querySelector('#readmePage').classList.remove('hide');
+            view.querySelector('.nav-settings').classList.remove('ui-btn-active');
+            view.querySelector('.nav-readme').classList.add('ui-btn-active');
+        });
+
         view.querySelector('.embyIconsForm').addEventListener('submit', (e) => {
             e.preventDefault();
             this.saveData();
@@ -67,7 +81,15 @@
         ]).then(function ([config, virtualFolders]) {
             view.querySelector('#txtIconsFolder').value = config.IconsFolder || '';
 
-            self.populateLibraries(virtualFolders.Items, config.SelectedLibraries);
+            const ignoredLibraryTypes = ['music', 'photos', 'collections'];
+            const filteredLibraries = virtualFolders.Items.filter(lib => {
+                if (!lib.CollectionType) {
+                    return true; 
+                }
+                return !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase());
+            });
+
+            self.populateLibraries(filteredLibraries, config.SelectedLibraries);
             view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
 
             view.querySelector('#chkRefreshIconCacheNow').checked = config.RefreshIconCacheNow || false;
@@ -82,8 +104,6 @@
             view.querySelector('#chkShowOverlaysForEpisodes').checked = config.ShowOverlaysForEpisodes;
             view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked = config.ShowSeriesIconsIfAllEpisodesHaveLanguage;
             view.querySelector('#chkUseSeriesLiteMode').checked = config.UseSeriesLiteMode;
-            view.querySelector('#txtSeriesAggregationCacheTTLMinutes').value = config.SeriesAggregationCacheTTLMinutes || 720;
-            view.querySelector('#chkDisableSeriesAggregationCache').checked = config.DisableSeriesAggregationCache;
 
             view.querySelector('#selAudioIconAlignment').value = config.AudioIconAlignment || 'TopLeft';
             view.querySelector('#selSubtitleIconAlignment').value = config.SubtitleIconAlignment || 'BottomLeft';
@@ -155,8 +175,6 @@
             ShowOverlaysForEpisodes: view.querySelector('#chkShowOverlaysForEpisodes').checked,
             ShowSeriesIconsIfAllEpisodesHaveLanguage: view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked,
             UseSeriesLiteMode: view.querySelector('#chkUseSeriesLiteMode').checked,
-            SeriesAggregationCacheTTLMinutes: parseInt(view.querySelector('#txtSeriesAggregationCacheTTLMinutes').value) || 720,
-            DisableSeriesAggregationCache: view.querySelector('#chkDisableSeriesAggregationCache').checked,
             AudioIconAlignment: view.querySelector('#selAudioIconAlignment').value,
             SubtitleIconAlignment: view.querySelector('#selSubtitleIconAlignment').value,
             ChannelIconAlignment: view.querySelector('#selChannelIconAlignment').value,
@@ -177,10 +195,11 @@
 
     View.prototype.saveData = function () {
         loading.show();
+        const instance = this;
 
         ApiClient.getPluginConfiguration(pluginId).then((config) => {
 
-            const formOptions = this.getFormOptions();
+            const formOptions = instance.getFormOptions();
             for (const key in formOptions) {
                 config[key] = formOptions[key];
             }
@@ -190,6 +209,11 @@
                 require(['toast'], function (toast) {
                     toast('EmbyIcons settings saved.');
                 });
+
+                const chkRefresh = instance.view.querySelector('#chkRefreshIconCacheNow');
+                if (chkRefresh) {
+                    chkRefresh.checked = false;
+                }
             });
         });
     };

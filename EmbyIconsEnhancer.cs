@@ -43,8 +43,6 @@ namespace EmbyIcons
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
             _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger, 4);
             _iconCacheManager.CacheRefreshedWithVersion += (sender, version) => { _iconCacheVersion = version ?? string.Empty; };
-
-            PruneSeriesAggregationCache();
         }
 
         public void PruneSeriesAggregationCache()
@@ -104,8 +102,6 @@ namespace EmbyIcons
                   .Append("_showScore").Append(options.ShowCommunityScoreIcon ? "1" : "0")
                   .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
-                  .Append("_seriesTTL").Append(options.SeriesAggregationCacheTTLMinutes)
-                  .Append("_seriesCacheOff").Append(options.DisableSeriesAggregationCache ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
                   .Append("_smoothing").Append(options.EnableImageSmoothing ? "1" : "0")
                   .Append("_aHoriz").Append(options.AudioOverlayHorizontal ? "1" : "0")
@@ -125,7 +121,7 @@ namespace EmbyIcons
                         var fullSeries = _libraryManager.GetItemById(series.InternalId);
                         if (fullSeries is Series s) series = s;
                     }
-                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: false);
+                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: true);
                     sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
                 }
                 else
@@ -166,26 +162,15 @@ namespace EmbyIcons
 
             if (options?.ShowCommunityScoreIcon == true && (item is Movie || item is Series))
             {
-                for (int i = 0; i < 3; i++)
+                var freshItem = _libraryManager.GetItemById(item.Id);
+                if (freshItem != null && freshItem.CommunityRating.HasValue && freshItem.CommunityRating.Value > 0)
                 {
-                    var freshItem = _libraryManager.GetItemById(item.Id);
-                    if (freshItem != null && freshItem.CommunityRating.HasValue && freshItem.CommunityRating.Value > 0)
-                    {
-                        _logger.Info($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name} on attempt {i + 1}.");
-                        communityRating = freshItem.CommunityRating.Value;
-                        break;
-                    }
-
-                    if (i < 2)
-                    {
-                        _logger.Warn($"[EmbyIcons] Rating not found for {item.Name} on attempt {i + 1}. Retrying in 750ms.");
-                        await Task.Delay(750, cancellationToken);
-                    }
+                    _logger.Debug($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name}.");
+                    communityRating = freshItem.CommunityRating.Value;
                 }
-
-                if (!communityRating.HasValue)
+                else
                 {
-                    _logger.Error($"[EmbyIcons] Could not find rating for {item.Name} after all attempts.");
+                    _logger.Debug($"[EmbyIcons] Community rating not found for {item.Name}. It may be added later.");
                 }
             }
 

@@ -67,10 +67,6 @@ namespace EmbyIcons
         public bool EnableImageSmoothing { get; set; } = false;
 
         public bool UseSeriesLiteMode { get; set; } = true;
-
-        public int SeriesAggregationCacheTTLMinutes { get; set; } = 720;
-
-        public bool DisableSeriesAggregationCache { get; set; } = false;
     }
 
     public enum IconAlignment

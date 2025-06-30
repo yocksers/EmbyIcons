@@ -6,16 +6,18 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>2.04.0</Version>
-		<AssemblyVersion>2.04.0.0</AssemblyVersion>
-		<FileVersion>2.04.0.0</FileVersion>
+		<Version>2.06.3</Version>
+		<AssemblyVersion>2.06.3.0</AssemblyVersion>
+		<FileVersion>2.06.3.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Remove="EmbyIconsConfiguration.html" />
-	  <None Remove="EmbyIconsConfiguration.js" />
 	  <None Remove="Images\preview.png" />
 	  <None Remove="plugin.js" />
+	  <None Remove="Settings\EmbyIconsReadme.html" />
+	  <None Remove="Settings\EmbyIconsReadme.js" />
+	  <None Remove="Settings\EmbyIconsSettings.html" />
+	  <None Remove="Settings\EmbyIconsSettings.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -34,8 +36,12 @@
 
 	<ItemGroup>
 	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	    <HintPath>..\..\..\..\..\..\Program Files\Jellyfin\Server\SkiaSharp.dll</HintPath>
 	  </Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Settings\" />
 	</ItemGroup>
 
 </Project>

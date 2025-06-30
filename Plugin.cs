@@ -32,6 +32,7 @@ namespace EmbyIcons
         private readonly ILogger _logger;
         private readonly ILogManager _logManager;
         private EmbyIconsEnhancer? _enhancer;
+        private Timer? _pruningTimer;
 
         private static List<(string Path, string Name)>? _libraryPathCache;
         private static readonly object _libraryPathCacheLock = new object();
@@ -62,6 +63,13 @@ namespace EmbyIcons
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
+
+            _pruningTimer = new Timer(
+                _ => Enhancer.PruneSeriesAggregationCache(),
+                null,
+                TimeSpan.FromHours(1),
+                TimeSpan.FromHours(6)
+            );
         }
 
         private void PopulateLibraryPathCache()
@@ -177,21 +185,31 @@ namespace EmbyIcons
                 }
             }
 
+            if (e.Item == null) return;
+
+            _logger.Debug($"[EmbyIcons] LibraryManagerOnItemChanged: Item of type {e.Item.GetType().Name} with name '{e.Item.Name}' changed. Update reason: {e.UpdateReason}");
+
             BaseItem? seriesToClear = null;
             switch (e.Item)
             {
                 case Episode episode:
                     seriesToClear = episode.Series;
+                    _logger.Debug($"[EmbyIcons] Item is an Episode. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
                     break;
                 case Season season:
                     seriesToClear = season.Series;
+                    _logger.Debug($"[EmbyIcons] Item is a Season. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
                     break;
                 case Series series:
                     seriesToClear = series;
+                    _logger.Debug($"[EmbyIcons] Item is a Series. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
                     break;
             }
 
-            _enhancer?.ClearSeriesOverlayCache(seriesToClear);
+            if (seriesToClear != null)
+            {
+                Enhancer.ClearSeriesOverlayCache(seriesToClear);
+            }
         }
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
@@ -248,6 +266,7 @@ namespace EmbyIcons
         public void Dispose()
         {
             UnsubscribeLibraryEvents();
+            _pruningTimer?.Dispose();
             _enhancer?.Dispose();
             _enhancer = null;
             Instance = null;
