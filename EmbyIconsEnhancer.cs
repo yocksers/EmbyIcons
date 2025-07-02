@@ -32,7 +32,7 @@ namespace EmbyIcons
         private SKImage? _starIcon;
         private static readonly SemaphoreSlim _globalConcurrencyLock = new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)), Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
         private static string _iconCacheVersion = string.Empty;
-        private readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
+        private static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
 
@@ -60,6 +60,16 @@ namespace EmbyIcons
             }
             if (removed > 0)
                 _logger.Info($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
+        }
+
+        public void ClearSeriesAggregationCache(Guid seriesId)
+        {
+            if (seriesId == Guid.Empty) return;
+
+            if (_seriesAggregationCache.TryRemove(seriesId, out _))
+            {
+                _logger.Info($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
+            }
         }
 
         public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false) => _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken, force);
@@ -100,6 +110,7 @@ namespace EmbyIcons
                   .Append("_showVF").Append(options.ShowVideoFormatIcons ? "1" : "0")
                   .Append("_showRes").Append(options.ShowResolutionIcons ? "1" : "0")
                   .Append("_showScore").Append(options.ShowCommunityScoreIcon ? "1" : "0")
+                  .Append("_showEp").Append(options.ShowOverlaysForEpisodes ? "1" : "0") // *** BUG FIX: Added missing setting to cache key ***
                   .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
@@ -110,22 +121,33 @@ namespace EmbyIcons
                   .Append("_vfHoriz").Append(options.VideoFormatOverlayHorizontal ? "1" : "0")
                   .Append("_resHoriz").Append(options.ResolutionOverlayHorizontal ? "1" : "0")
                   .Append("_scoreHoriz").Append(options.CommunityScoreOverlayHorizontal ? "1" : "0")
-                  .Append("_iconVer").Append(_iconCacheVersion)
-                  .Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
+                  .Append("_iconVer").Append(_iconCacheVersion);
 
-                if (item is Series series && (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons))
+                if (item is Series series)
                 {
+                    Series seriesForProcessing = series;
+
                     if (series.Id == Guid.Empty && series.InternalId > 0)
                     {
-                        _logger.Debug($"[EmbyIcons] Detected lightweight Series object for {series.Name}. Fetching full item by InternalId {series.InternalId}.");
-                        var fullSeries = _libraryManager.GetItemById(series.InternalId);
-                        if (fullSeries is Series s) series = s;
+                        var fullSeries = _libraryManager.GetItemById(series.InternalId) as Series;
+                        if (fullSeries != null)
+                        {
+                            seriesForProcessing = fullSeries;
+                        }
                     }
-                    var aggResult = GetAggregatedDataForParentSync(series, options, ignoreCache: true);
-                    sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
+
+                    if (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons)
+                    {
+                        var aggResult = GetAggregatedDataForParentSync(seriesForProcessing, options);
+                        sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);
+                    }
+
+                    sb.Append("_rating").Append(seriesForProcessing.CommunityRating.HasValue ? seriesForProcessing.CommunityRating.Value.ToString("F1") : "none");
+                    sb.Append("_dateMod").Append(seriesForProcessing.DateModified.Ticks);
                 }
                 else
                 {
+                    sb.Append("_itemMediaHash").Append(GetItemMediaStreamHash(item, item.GetMediaStreams()));
                     sb.Append("_rating").Append(item.CommunityRating.HasValue ? item.CommunityRating.Value.ToString("F1") : "none");
                     sb.Append("_dateMod").Append(item.DateModified.Ticks);
                 }
@@ -160,18 +182,14 @@ namespace EmbyIcons
             float? communityRating = null;
             var options = Plugin.Instance?.GetConfiguredOptions();
 
-            if (options?.ShowCommunityScoreIcon == true && (item is Movie || item is Series))
+            if (options?.ShowCommunityScoreIcon == true && item.CommunityRating.HasValue && item.CommunityRating.Value > 0)
             {
-                var freshItem = _libraryManager.GetItemById(item.Id);
-                if (freshItem != null && freshItem.CommunityRating.HasValue && freshItem.CommunityRating.Value > 0)
-                {
-                    _logger.Debug($"[EmbyIcons] Found rating {freshItem.CommunityRating.Value} for {item.Name}.");
-                    communityRating = freshItem.CommunityRating.Value;
-                }
-                else
-                {
-                    _logger.Debug($"[EmbyIcons] Community rating not found for {item.Name}. It may be added later.");
-                }
+                _logger.Debug($"[EmbyIcons] Found rating {item.CommunityRating.Value} for {item.Name}.");
+                communityRating = item.CommunityRating.Value;
+            }
+            else
+            {
+                _logger.Debug($"[EmbyIcons] Community rating not found for {item.Name}. It may be added later.");
             }
 
             await _globalConcurrencyLock.WaitAsync(cancellationToken);
@@ -211,14 +229,6 @@ namespace EmbyIcons
             _starIcon = null;
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();
-        }
-
-
-        public void ClearSeriesOverlayCache(BaseItem? item)
-        {
-            if (item == null) return;
-            bool removed = _seriesAggregationCache.TryRemove(item.Id, out _);
-            _logger.Debug($"[EmbyIcons] ClearSeriesOverlayCache: Series {item?.Name} ({item?.Id}) removed={removed}");
         }
 
         internal SKImage? GetStarIcon()

@@ -9,38 +9,38 @@ namespace EmbyIcons.Helpers
     {
         private static readonly Dictionary<string, string> CustomLangCodeMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "en", "eng" }, // English
-            { "de", "ger" }, // German
-            { "fr", "fre" }, // French
-            { "ja", "jpn" }, // Japanese
-            { "jp", "jpn" }, // Japanese (alternate)
-            { "ko", "kor" }, // Korean
-            { "zh", "chi" }, // Chinese
-            { "es", "spa" }, // Spanish
-            { "it", "ita" }, // Italian
-            { "sv", "swe" }, // Swedish
-            { "ru", "rus" }, // Russian
-            { "nl", "dut" }, // Dutch
-            { "pt", "por" }, // Portuguese
-            { "no", "nor" }, // Norwegian
-            { "da", "dan" }, // Danish
-            { "fi", "fin" }, // Finnish
-            { "pl", "pol" }, // Polish
+            { "en", "eng" }, 
+            { "de", "ger" }, 
+            { "fr", "fre" }, 
+            { "ja", "jpn" }, 
+            { "jp", "jpn" }, 
+            { "ko", "kor" }, 
+            { "zh", "chi" }, 
+            { "es", "spa" }, 
+            { "it", "ita" }, 
+            { "sv", "swe" }, 
+            { "ru", "rus" }, 
+            { "nl", "dut" }, 
+            { "pt", "por" }, 
+            { "no", "nor" }, 
+            { "da", "dan" }, 
+            { "fi", "fin" }, 
+            { "pl", "pol" }, 
 
             { "eng", "eng" },
-            { "deu", "ger" }, // German (alternate)
+            { "deu", "ger" }, 
             { "ger", "ger" },
-            { "fra", "fre" }, // French (alternate)
+            { "fra", "fre" }, 
             { "fre", "fre" },
             { "jpn", "jpn" },
             { "kor", "kor" },
-            { "zho", "chi" }, // Chinese (alternate)
+            { "zho", "chi" }, 
             { "chi", "chi" },
             { "spa", "spa" },
             { "ita", "ita" },
             { "swe", "swe" },
             { "rus", "rus" },
-            { "nld", "dut" }, // Dutch (alternate)
+            { "nld", "dut" }, 
             { "dut", "dut" },
             { "por", "por" },
             { "nor", "nor" },

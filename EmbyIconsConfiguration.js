@@ -84,13 +84,13 @@
             const ignoredLibraryTypes = ['music', 'photos', 'collections'];
             const filteredLibraries = virtualFolders.Items.filter(lib => {
                 if (!lib.CollectionType) {
-                    return true; 
+                    return true;
                 }
                 return !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase());
             });
 
             self.populateLibraries(filteredLibraries, config.SelectedLibraries);
-            view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
+            view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '[]';
 
             view.querySelector('#chkRefreshIconCacheNow').checked = config.RefreshIconCacheNow || false;
 
@@ -128,7 +128,7 @@
         });
     };
 
-    View.prototype.populateLibraries = function (libraries, selectedLibrariesCsv) {
+    View.prototype.populateLibraries = function (libraries, selectedLibrariesJson) {
         const view = this.view;
         const container = view.querySelector('#librarySelectionContainer');
 
@@ -139,10 +139,19 @@
         });
         container.innerHTML = html;
 
-        const selectedNames = (selectedLibrariesCsv || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        let selectedNames = [];
+        try {
+            if (selectedLibrariesJson && selectedLibrariesJson.trim().startsWith('[')) {
+                selectedNames = JSON.parse(selectedLibrariesJson);
+            }
+        } catch (e) {
+            console.error("Could not parse SelectedLibraries JSON: ", e);
+        }
+
+        const selectedNamesSet = new Set(selectedNames.map(s => s.toLowerCase()));
         container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
             const libName = checkbox.getAttribute('data-library-name').toLowerCase();
-            if (selectedNames.includes(libName)) {
+            if (selectedNamesSet.has(libName)) {
                 checkbox.checked = true;
             }
         });
@@ -154,7 +163,7 @@
                     selectedNames.push(chk.getAttribute('data-library-name'));
                 });
                 const hiddenInput = view.querySelector('#txtSelectedLibraries');
-                hiddenInput.value = selectedNames.join(',');
+                hiddenInput.value = JSON.stringify(selectedNames);
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
             }
         });
@@ -206,6 +215,7 @@
 
             ApiClient.updatePluginConfiguration(pluginId, config).then((result) => {
                 Dashboard.processPluginConfigurationUpdateResult(result);
+                loading.hide();
                 require(['toast'], function (toast) {
                     toast('EmbyIcons settings saved.');
                 });
@@ -214,6 +224,14 @@
                 if (chkRefresh) {
                     chkRefresh.checked = false;
                 }
+            }).catch(() => {
+                loading.hide();
+                require(['toast'], function (toast) {
+                    toast({
+                        type: 'error',
+                        text: 'Error saving EmbyIcons settings.'
+                    });
+                });
             });
         });
     };
@@ -229,6 +247,8 @@
 
         view.querySelector('.previewImage').src = ApiClient.getUrl('EmbyIcons/Preview', params);
     };
+
+
 
     return View;
 });

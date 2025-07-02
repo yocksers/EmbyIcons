@@ -25,6 +25,16 @@ namespace EmbyIcons
     public class PreviewService : IService
     {
         private readonly ILogger _logger;
+        private enum OverlayType { SimpleIcons, CommunityRating }
+        private record OverlayInfo(
+            IconAlignment Alignment,
+            int Priority,
+            bool HorizontalLayout,
+            OverlayType Type,
+            List<SKImage>? Icons = null,
+            float Score = 0
+        );
+
 
         public PreviewService(ILogManager logManager)
         {
@@ -73,66 +83,59 @@ namespace EmbyIcons
         {
             var iconSize = Math.Clamp((Math.Min(width, height) * options.IconSize) / 100, 8, 512);
             var padding = Math.Clamp(iconSize / 4, 2, 64);
-            var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
+            using var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
 
-            var overlays = new List<(IconAlignment Alignment, int Priority, List<SKImage> Icons, bool Horizontal, bool UseActualSize)>();
-            var disposableImages = new List<SKImage>();
+            var overlays = new List<OverlayInfo>();
 
             if (options.ShowAudioIcons && iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.Audio) is { } audioIcon)
             {
-                var audioIcons = new List<SKImage> { audioIcon };
-                overlays.Add((options.AudioIconAlignment, 1, audioIcons, options.AudioOverlayHorizontal, false));
+                overlays.Add(new OverlayInfo(options.AudioIconAlignment, 1, options.AudioOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { audioIcon }));
             }
             if (options.ShowSubtitleIcons && iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.Subtitle) is { } subIcon)
             {
-                var subIcons = new List<SKImage> { subIcon };
-                overlays.Add((options.SubtitleIconAlignment, 2, subIcons, options.SubtitleOverlayHorizontal, false));
+                overlays.Add(new OverlayInfo(options.SubtitleIconAlignment, 2, options.SubtitleOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { subIcon }));
             }
             if (options.ShowResolutionIcons && iconCache.GetCachedIcon("4k", IconCacheManager.IconType.Resolution) is { } resIcon)
             {
-                overlays.Add((options.ResolutionIconAlignment, 3, new List<SKImage> { resIcon }, options.ResolutionOverlayHorizontal, false));
+                overlays.Add(new OverlayInfo(options.ResolutionIconAlignment, 3, options.ResolutionOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { resIcon }));
             }
             if (options.ShowVideoFormatIcons && (iconCache.GetCachedIcon("dv", IconCacheManager.IconType.VideoFormat) ?? iconCache.GetCachedIcon("hdr", IconCacheManager.IconType.VideoFormat)) is { } formatIcon)
             {
-                overlays.Add((options.VideoFormatIconAlignment, 4, new List<SKImage> { formatIcon }, options.VideoFormatOverlayHorizontal, false));
+                overlays.Add(new OverlayInfo(options.VideoFormatIconAlignment, 4, options.VideoFormatOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { formatIcon }));
             }
             if (options.ShowAudioChannelIcons && iconCache.GetCachedIcon("5.1", IconCacheManager.IconType.Channel) is { } channelIcon)
             {
-                overlays.Add((options.ChannelIconAlignment, 5, new List<SKImage> { channelIcon }, options.ChannelOverlayHorizontal, false));
+                overlays.Add(new OverlayInfo(options.ChannelIconAlignment, 5, options.ChannelOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { channelIcon }));
             }
             if (options.ShowCommunityScoreIcon)
             {
-                var finalRatingIcon = CreateCommunityRatingOverlay(iconCache, 6.9f, iconSize, options.EnableImageSmoothing);
-                if (finalRatingIcon != null)
-                {
-                    overlays.Add((options.CommunityScoreIconAlignment, 6, new List<SKImage> { finalRatingIcon }, options.CommunityScoreOverlayHorizontal, true));
-                    disposableImages.Add(finalRatingIcon);
-                }
+                overlays.Add(new OverlayInfo(options.CommunityScoreIconAlignment, 6, options.CommunityScoreOverlayHorizontal, OverlayType.CommunityRating, Score: 6.9f));
             }
 
             foreach (var alignmentGroup in overlays.GroupBy(x => x.Alignment))
             {
-                var horizontalGroups = alignmentGroup.Where(g => g.Horizontal).OrderBy(g => g.Priority).ToList();
-                var verticalGroups = alignmentGroup.Where(g => !g.Horizontal).OrderBy(g => g.Priority).ToList();
+                var horizontalGroups = alignmentGroup.Where(g => g.HorizontalLayout).OrderBy(g => g.Priority).ToList();
+                var verticalGroups = alignmentGroup.Where(g => !g.HorizontalLayout).OrderBy(g => g.Priority).ToList();
 
                 int currentHorizontalOffset = 0;
                 int currentVerticalOffset = 0;
                 int maxHeightOfHorizontalRow = 0;
 
-                foreach (var (alignment, _, icons, horizontal, useActualSize) in horizontalGroups)
+                foreach (var overlay in horizontalGroups)
                 {
-                    if (!icons.Any()) continue;
+                    SKSize consumedSize;
+                    if (overlay.Type == OverlayType.SimpleIcons && overlay.Icons != null)
+                    {
+                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, padding, width, height, overlay.Alignment, paint, currentVerticalOffset, true, currentHorizontalOffset);
+                        consumedSize = new SKSize(overlay.Icons.Count * iconSize + (overlay.Icons.Count - 1) * padding, iconSize);
+                    }
+                    else
+                    {
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, padding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                    }
 
-                    IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, currentVerticalOffset, true, currentHorizontalOffset, useActualSize);
-
-                    int GetIconWidth(SKImage icon) => useActualSize ? icon.Width : iconSize;
-                    int GetIconHeight(SKImage icon) => useActualSize ? icon.Height : iconSize;
-
-                    int groupWidth = icons.Sum(GetIconWidth) + (icons.Count - 1) * padding;
-                    currentHorizontalOffset += groupWidth + padding;
-
-                    int groupHeight = icons.Select(GetIconHeight).DefaultIfEmpty(0).Max();
-                    maxHeightOfHorizontalRow = Math.Max(maxHeightOfHorizontalRow, groupHeight);
+                    currentHorizontalOffset += (int)consumedSize.Width + padding;
+                    maxHeightOfHorizontalRow = Math.Max(maxHeightOfHorizontalRow, (int)consumedSize.Height);
                 }
 
                 if (horizontalGroups.Any())
@@ -140,109 +143,64 @@ namespace EmbyIcons
                     currentVerticalOffset += maxHeightOfHorizontalRow + padding;
                 }
 
-                currentHorizontalOffset = 0; 
+                currentHorizontalOffset = 0;
 
-                foreach (var (alignment, _, icons, horizontal, useActualSize) in verticalGroups)
+                foreach (var overlay in verticalGroups)
                 {
-                    if (!icons.Any()) continue;
+                    SKSize consumedSize;
+                    if (overlay.Type == OverlayType.SimpleIcons && overlay.Icons != null)
+                    {
+                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, padding, width, height, overlay.Alignment, paint, currentVerticalOffset, false, currentHorizontalOffset);
+                        consumedSize = new SKSize(iconSize, overlay.Icons.Count * iconSize + (overlay.Icons.Count - 1) * padding);
+                    }
+                    else
+                    {
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, padding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                    }
 
-                    IconDrawer.DrawIcons(canvas, icons, iconSize, padding, width, height, alignment, paint, currentVerticalOffset, false, currentHorizontalOffset, useActualSize);
-
-                    int GetIconHeight(SKImage icon) => useActualSize ? icon.Height : iconSize;
-
-                    int groupHeight = icons.Sum(GetIconHeight) + (icons.Count - 1) * padding;
-                    currentVerticalOffset += groupHeight + padding;
+                    currentVerticalOffset += (int)consumedSize.Height + padding;
                 }
-            }
-
-            foreach (var imageToDispose in disposableImages)
-            {
-                imageToDispose.Dispose();
             }
         }
 
-        private SKImage? CreateCommunityRatingOverlay(IconCacheManager iconCache, float score, int iconSize, bool enableSmoothing)
+        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, float score, int iconSize, int padding, int canvasWidth, int canvasHeight, PluginOptions options, SKPaint basePaint, IconCacheManager iconCache, IconAlignment alignment, int verticalOffset, int horizontalOffset)
         {
-            var baseIcon = iconCache.GetCachedIcon("imdb", IconCacheManager.IconType.Audio);
+            var imdbIcon = iconCache.GetCachedIcon("imdb", IconCacheManager.IconType.Audio);
             var scoreText = score.ToString("F1");
             var typeface = FontHelper.GetDefaultBold(_logger);
+            if (typeface == null) return SKSize.Empty;
 
-            if (typeface == null)
-            {
-                _logger.Error("[EmbyIcons] Preview: Could not load any typeface for drawing score. Aborting rating overlay.");
-                return null;
-            }
-
-            using var textPaint = new SKPaint
-            {
-                IsAntialias = enableSmoothing,
-                Color = SKColors.White,
-                TextSize = iconSize * 0.65f,
-                Typeface = typeface
-            };
-
-            using var textStrokePaint = new SKPaint
-            {
-                IsAntialias = enableSmoothing,
-                Color = SKColors.Black,
-                TextSize = textPaint.TextSize,
-                Typeface = typeface,
-                Style = SKPaintStyle.StrokeAndFill,
-                StrokeWidth = Math.Max(1f, textPaint.TextSize / 20f)
-            };
+            using var textPaint = new SKPaint { IsAntialias = options.EnableImageSmoothing, Color = SKColors.White, TextSize = iconSize * 0.65f, Typeface = typeface };
+            using var textStrokePaint = new SKPaint { IsAntialias = options.EnableImageSmoothing, Color = SKColors.Black, TextSize = textPaint.TextSize, Typeface = typeface, Style = SKPaintStyle.StrokeAndFill, StrokeWidth = Math.Max(1f, textPaint.TextSize / 20f) };
 
             SKRect textBounds = new();
             textPaint.MeasureText(scoreText, ref textBounds);
 
-            if (baseIcon != null)
+            int iconPadding = Math.Max(2, iconSize / 8);
+            int totalWidth = (imdbIcon != null) ? iconSize + iconPadding + (int)Math.Ceiling(textBounds.Width) : (int)Math.Ceiling(textBounds.Width);
+            int totalHeight = iconSize;
+
+            bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
+            bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
+
+            float startX = isRight ? canvasWidth - totalWidth - padding - horizontalOffset : padding + horizontalOffset;
+            float startY = isBottom ? canvasHeight - totalHeight - padding - verticalOffset : padding + verticalOffset;
+
+            float currentX = startX;
+
+            if (imdbIcon != null)
             {
-                textPaint.TextAlign = SKTextAlign.Left;
-                textStrokePaint.TextAlign = SKTextAlign.Left;
-
-                int padding = Math.Max(2, iconSize / 8);
-                int finalIconHeight = iconSize;
-                int finalIconWidth = (int)((float)finalIconHeight / baseIcon.Height * baseIcon.Width);
-
-                int totalWidth = finalIconWidth + padding + (int)Math.Ceiling(textBounds.Width);
-                int totalHeight = finalIconHeight;
-
-                using var surface = SKSurface.Create(new SKImageInfo(totalWidth, totalHeight, SKColorType.Bgra8888, SKAlphaType.Premul));
-                if (surface == null) return null;
-
-                var canvas = surface.Canvas;
-                using var paint = new SKPaint { FilterQuality = enableSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
-
-                canvas.DrawImage(baseIcon, new SKRect(0, 0, finalIconWidth, finalIconHeight), paint);
-
-                float y = (totalHeight - textBounds.Height) / 2 - textBounds.Top;
-                float x = finalIconWidth + padding;
-                canvas.DrawText(scoreText, x, y, textStrokePaint);
-                canvas.DrawText(scoreText, x, y, textPaint);
-
-                return surface.Snapshot();
+                var iconRect = new SKRect(currentX, startY, currentX + iconSize, startY + iconSize);
+                canvas.DrawImage(imdbIcon, iconRect, basePaint);
+                currentX += iconSize + iconPadding;
             }
-            else
-            {
-                textPaint.TextAlign = SKTextAlign.Center;
-                textStrokePaint.TextAlign = SKTextAlign.Center;
 
-                int padding = (int)(textPaint.TextSize * 0.2f);
-                int totalWidth = (int)Math.Ceiling(textBounds.Width) + padding;
-                int totalHeight = (int)Math.Ceiling(textBounds.Height) + padding;
-                if (totalWidth <= padding || totalHeight <= padding) return null;
+            float textY = startY + (totalHeight - textBounds.Height) / 2 - textBounds.Top;
 
-                using var surface = SKSurface.Create(new SKImageInfo(totalWidth, totalHeight, SKColorType.Bgra8888, SKAlphaType.Premul));
-                if (surface == null) return null;
+            canvas.DrawText(scoreText, currentX, textY, textStrokePaint);
+            canvas.DrawText(scoreText, currentX, textY, textPaint);
 
-                var canvas = surface.Canvas;
-                float x = totalWidth / 2f;
-                float y = totalHeight / 2f - textBounds.MidY;
-
-                canvas.DrawText(scoreText, x, y, textStrokePaint);
-                canvas.DrawText(scoreText, x, y, textPaint);
-
-                return surface.Snapshot();
-            }
+            return new SKSize(totalWidth, totalHeight);
         }
     }
 }

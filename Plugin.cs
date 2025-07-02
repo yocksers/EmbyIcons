@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -74,7 +75,7 @@ namespace EmbyIcons
 
         private void PopulateLibraryPathCache()
         {
-            _logger.Debug("[EmbyIcons] Populating library path cache (This should only happen once per change).");
+            _logger.Debug("[EmbyIcons] Populating library path cache.");
             var newCache = new List<(string Path, string Name)>();
             try
             {
@@ -99,11 +100,26 @@ namespace EmbyIcons
 
         public bool IsLibraryAllowed(BaseItem item)
         {
-            var selectedLibraries = (Configuration.SelectedLibraries ?? "")
-                .Split(',')
-                .Select(s => s.Trim())
-                .Where(s => !string.IsNullOrEmpty(s))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> selectedLibraries;
+            try
+            {
+                if (string.IsNullOrEmpty(Configuration.SelectedLibraries) || !Configuration.SelectedLibraries.Trim().StartsWith("["))
+                {
+                    selectedLibraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+                else
+                {
+                    // *** FIX: Explicitly specify System.Text.Json.JsonSerializerOptions to resolve ambiguity ***
+                    selectedLibraries = JsonSerializer.Deserialize<HashSet<string>>(Configuration.SelectedLibraries,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                        ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("[EmbyIcons] Could not deserialize SelectedLibraries, allowing all libraries to be processed.", ex);
+                selectedLibraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
 
             if (selectedLibraries.Count == 0)
             {
@@ -136,7 +152,7 @@ namespace EmbyIcons
             {
                 if (item.Path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
                 {
-                    return selectedLibraries.Contains(libInfo.Name);
+                    return selectedLibraries.Contains(libInfo.Name, StringComparer.OrdinalIgnoreCase);
                 }
             }
 
@@ -162,53 +178,51 @@ namespace EmbyIcons
 
         private void SubscribeLibraryEvents()
         {
-            _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
-            _libraryManager.ItemRemoved += LibraryManagerOnItemChanged;
             _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
         }
 
         private void UnsubscribeLibraryEvents()
         {
-            _libraryManager.ItemAdded -= LibraryManagerOnItemChanged;
-            _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged;
             _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged;
         }
 
         private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
         {
-            if (e.Item is Folder)
+            try
             {
-                _logger.Info("[EmbyIcons] A library folder has changed. Clearing the library path cache.");
-                lock (_libraryPathCacheLock)
+                if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
                 {
-                    _libraryPathCache = null;
+                    _logger.Info("[EmbyIcons] A library folder has changed. Clearing the library path cache.");
+                    lock (_libraryPathCacheLock)
+                    {
+                        _libraryPathCache = null;
+                    }
+                    return;
+                }
+
+                Series? seriesToClear = null;
+                switch (e.Item)
+                {
+                    case Episode episode:
+                        seriesToClear = episode.Series;
+                        break;
+                    case Season season:
+                        seriesToClear = season.Series;
+                        break;
+                    case Series series:
+                        seriesToClear = series;
+                        break;
+                }
+
+                if (seriesToClear != null && seriesToClear.Id != Guid.Empty)
+                {
+                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for parent series '{seriesToClear.Name}' ({seriesToClear.Id}).");
+                    Enhancer.ClearSeriesAggregationCache(seriesToClear.Id);
                 }
             }
-
-            if (e.Item == null) return;
-
-            _logger.Debug($"[EmbyIcons] LibraryManagerOnItemChanged: Item of type {e.Item.GetType().Name} with name '{e.Item.Name}' changed. Update reason: {e.UpdateReason}");
-
-            BaseItem? seriesToClear = null;
-            switch (e.Item)
+            catch (Exception ex)
             {
-                case Episode episode:
-                    seriesToClear = episode.Series;
-                    _logger.Debug($"[EmbyIcons] Item is an Episode. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
-                    break;
-                case Season season:
-                    seriesToClear = season.Series;
-                    _logger.Debug($"[EmbyIcons] Item is a Season. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
-                    break;
-                case Series series:
-                    seriesToClear = series;
-                    _logger.Debug($"[EmbyIcons] Item is a Series. Attempting to clear cache for Series: '{seriesToClear?.Name ?? "null"}'");
-                    break;
-            }
-
-            if (seriesToClear != null)
-            {
-                Enhancer.ClearSeriesOverlayCache(seriesToClear);
+                _logger.ErrorException("[EmbyIcons] Error in LibraryManagerOnItemChanged event handler.", ex);
             }
         }
 
