@@ -90,7 +90,7 @@
             });
 
             self.populateLibraries(filteredLibraries, config.SelectedLibraries);
-            view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '[]';
+            view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
 
             view.querySelector('#chkRefreshIconCacheNow').checked = config.RefreshIconCacheNow || false;
 
@@ -128,7 +128,7 @@
         });
     };
 
-    View.prototype.populateLibraries = function (libraries, selectedLibrariesJson) {
+    View.prototype.populateLibraries = function (libraries, selectedLibrariesCsv) {
         const view = this.view;
         const container = view.querySelector('#librarySelectionContainer');
 
@@ -139,16 +139,9 @@
         });
         container.innerHTML = html;
 
-        let selectedNames = [];
-        try {
-            if (selectedLibrariesJson && selectedLibrariesJson.trim().startsWith('[')) {
-                selectedNames = JSON.parse(selectedLibrariesJson);
-            }
-        } catch (e) {
-            console.error("Could not parse SelectedLibraries JSON: ", e);
-        }
+        const selectedNames = (selectedLibrariesCsv || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        const selectedNamesSet = new Set(selectedNames);
 
-        const selectedNamesSet = new Set(selectedNames.map(s => s.toLowerCase()));
         container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
             const libName = checkbox.getAttribute('data-library-name').toLowerCase();
             if (selectedNamesSet.has(libName)) {
@@ -163,7 +156,7 @@
                     selectedNames.push(chk.getAttribute('data-library-name'));
                 });
                 const hiddenInput = view.querySelector('#txtSelectedLibraries');
-                hiddenInput.value = JSON.stringify(selectedNames);
+                hiddenInput.value = selectedNames.join(',');
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
             }
         });

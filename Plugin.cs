@@ -18,7 +18,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -100,26 +99,11 @@ namespace EmbyIcons
 
         public bool IsLibraryAllowed(BaseItem item)
         {
-            HashSet<string> selectedLibraries;
-            try
-            {
-                if (string.IsNullOrEmpty(Configuration.SelectedLibraries) || !Configuration.SelectedLibraries.Trim().StartsWith("["))
-                {
-                    selectedLibraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                }
-                else
-                {
-                    // *** FIX: Explicitly specify System.Text.Json.JsonSerializerOptions to resolve ambiguity ***
-                    selectedLibraries = JsonSerializer.Deserialize<HashSet<string>>(Configuration.SelectedLibraries,
-                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                        ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.ErrorException("[EmbyIcons] Could not deserialize SelectedLibraries, allowing all libraries to be processed.", ex);
-                selectedLibraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            }
+            var selectedLibraries = (Configuration.SelectedLibraries ?? "")
+                .Split(',')
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             if (selectedLibraries.Count == 0)
             {
@@ -152,7 +136,7 @@ namespace EmbyIcons
             {
                 if (item.Path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
                 {
-                    return selectedLibraries.Contains(libInfo.Name, StringComparer.OrdinalIgnoreCase);
+                    return selectedLibraries.Contains(libInfo.Name);
                 }
             }
 
