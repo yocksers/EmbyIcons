@@ -23,18 +23,24 @@ namespace EmbyIcons.Helpers
         private readonly ConcurrentDictionary<string, string> _channelIconPathCache = new();
         private readonly ConcurrentDictionary<string, string> _videoFormatIconPathCache = new();
         private readonly ConcurrentDictionary<string, string> _resolutionIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _audioCodecIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _videoCodecIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _tagIconPathCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _audioIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _subtitleIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _channelIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _videoFormatIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _resolutionIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _audioCodecIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _videoCodecIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _tagIconImageCache = new();
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
         private string _currentIconVersion = string.Empty;
         public event EventHandler<string>? CacheRefreshedWithVersion;
 
-        public enum IconType { Audio, Subtitle, Channel, VideoFormat, Resolution }
+        public enum IconType { Audio, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag }
 
         public IconCacheManager(TimeSpan cacheTtl, ILogger logger, int maxParallelism = 4)
         {
@@ -77,15 +83,23 @@ namespace EmbyIcons.Helpers
             _channelIconPathCache.Clear();
             _videoFormatIconPathCache.Clear();
             _resolutionIconPathCache.Clear();
+            _audioCodecIconPathCache.Clear();
+            _videoCodecIconPathCache.Clear();
+            _tagIconPathCache.Clear();
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
             ClearImageCache(_channelIconImageCache);
             ClearImageCache(_videoFormatIconImageCache);
             ClearImageCache(_resolutionIconImageCache);
+            ClearImageCache(_audioCodecIconImageCache);
+            ClearImageCache(_videoCodecIconImageCache);
+            ClearImageCache(_tagIconImageCache);
 
             var channelNames = new HashSet<string> { "mono", "stereo", "5.1", "7.1" };
             var formatNames = new HashSet<string> { "hdr", "dv", "hdr10plus" };
             var resolutionNames = new HashSet<string> { "480p", "576p", "720p", "1080p", "4k" };
+            var audioCodecNames = new HashSet<string> { "aac", "pcm", "flac", "mp3", "ac3", "eac3", "dts", "truehd" };
+            var videoCodecNames = new HashSet<string> { "av1", "avc", "h264", "h265", "mp4", "vc1", "vp9", "h266" };
 
             foreach (var file in allFiles)
             {
@@ -93,9 +107,24 @@ namespace EmbyIcons.Helpers
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
 
-                var name = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-                var dict = name.StartsWith("srt.") ? _subtitleIconPathCache : channelNames.Contains(name) ? _channelIconPathCache : formatNames.Contains(name) ? _videoFormatIconPathCache : resolutionNames.Contains(name) ? _resolutionIconPathCache : _audioIconPathCache;
-                dict.TryAdd(name, file);
+                var name = Path.GetFileNameWithoutExtension(file); // Keep case for tags
+                var lowerName = name.ToLowerInvariant();
+
+                ConcurrentDictionary<string, string> dict;
+                if (lowerName.StartsWith("srt.")) dict = _subtitleIconPathCache;
+                else if (channelNames.Contains(lowerName)) dict = _channelIconPathCache;
+                else if (formatNames.Contains(lowerName)) dict = _videoFormatIconPathCache;
+                else if (resolutionNames.Contains(lowerName)) dict = _resolutionIconPathCache;
+                else if (audioCodecNames.Contains(lowerName)) dict = _audioCodecIconPathCache;
+                else if (videoCodecNames.Contains(lowerName)) dict = _videoCodecIconPathCache;
+                else
+                {
+                    // For anything else, add it to both audio (for languages) and tags
+                    _audioIconPathCache.TryAdd(lowerName, file);
+                    _tagIconPathCache.TryAdd(name, file); // Use original case for tag key
+                    continue;
+                }
+                dict.TryAdd(lowerName, file);
             }
 
             _lastCacheRefreshTime = DateTime.UtcNow;
@@ -127,10 +156,11 @@ namespace EmbyIcons.Helpers
         public SKImage? GetCachedIcon(string iconNameKey, IconType iconType)
         {
             if (_iconsFolder == null) return null;
-            iconNameKey = iconNameKey.ToLowerInvariant();
+            // For tags, we use the original key. For others, lowercase.
+            var processedKey = iconType == IconType.Tag ? iconNameKey : iconNameKey.ToLowerInvariant();
 
             var (pathCache, imageCache) = GetCachesForType(iconType);
-            var iconPath = ResolveIconPathWithFallback(iconNameKey, pathCache);
+            var iconPath = ResolveIconPathWithFallback(processedKey, pathCache);
 
             if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath)) return null;
 
@@ -165,7 +195,11 @@ namespace EmbyIcons.Helpers
         private string ResolveIconPathWithFallback(string iconNameKey, ConcurrentDictionary<string, string> cache)
         {
             if (cache.TryGetValue(iconNameKey, out var path)) return path;
-            if (iconNameKey.Length == 3 && cache == _audioIconPathCache && cache.TryGetValue(iconNameKey.Substring(0, 2), out path)) return cache.GetOrAdd(iconNameKey, path);
+
+            // Fallback for audio language codes (e.g., 'en' to 'eng')
+            if (iconNameKey.Length == 3 && cache == _audioIconPathCache && cache.TryGetValue(iconNameKey.Substring(0, 2), out path))
+                return cache.GetOrAdd(iconNameKey, path);
+
             cache.TryAdd(iconNameKey, string.Empty);
             return string.Empty;
         }
@@ -177,6 +211,9 @@ namespace EmbyIcons.Helpers
             IconType.Channel => (_channelIconPathCache, _channelIconImageCache),
             IconType.VideoFormat => (_videoFormatIconPathCache, _videoFormatIconImageCache),
             IconType.Resolution => (_resolutionIconPathCache, _resolutionIconImageCache),
+            IconType.AudioCodec => (_audioCodecIconPathCache, _audioCodecIconImageCache),
+            IconType.VideoCodec => (_videoCodecIconPathCache, _videoCodecIconImageCache),
+            IconType.Tag => (_tagIconPathCache, _tagIconImageCache),
             _ => throw new ArgumentOutOfRangeException(nameof(iconType))
         };
 
@@ -195,6 +232,9 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_channelIconImageCache);
             ClearImageCache(_videoFormatIconImageCache);
             ClearImageCache(_resolutionIconImageCache);
+            ClearImageCache(_audioCodecIconImageCache);
+            ClearImageCache(_videoCodecIconImageCache);
+            ClearImageCache(_tagIconImageCache);
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)

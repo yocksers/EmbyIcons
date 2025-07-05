@@ -28,6 +28,11 @@
                     </div>
 
                     <div class="inputContainer">
+                        <input is="emby-input" type="text" id="txtTagsToShow" label="Custom Tag Icons (comma-separated):" autocomplete="off" />
+                        <div class="fieldDescription">List of tags to show icons for. Icon names must match the tag exactly (e.g., '3D' requires '3D.png'). Case-insensitive.</div>
+                    </div>
+
+                    <div class="inputContainer">
                         <h3 style="margin-bottom: 0.5em;">Apply to these libraries</h3>
                         <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.5em 1.5em;">
                         </div>
@@ -49,7 +54,10 @@
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioIcons" /><span>Show Audio Language Icons</span></label></div>
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowSubtitleIcons" /><span>Show Subtitle Language Icons</span></label></div>
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioChannelIcons" /><span>Show Audio Channel Icons (e.g., 7.1)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioCodecIcons" /><span>Show Audio Codec Icons (e.g., DTS)</span></label></div>
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoFormatIcons" /><span>Show Video Format Icons (e.g., HDR)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoCodecIcons" /><span>Show Video Codec Icons (e.g., H265)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowTagIcons" /><span>Show Custom Tag Icons</span></label></div>
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowResolutionIcons" /><span>Show Resolution Icons (e.g., 4K)</span></label></div>
                         <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowCommunityScoreIcon" /><span>Show Community Rating Icon</span></label></div>
                     </div>
@@ -88,8 +96,20 @@
                                 <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkChannelOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
+                                <select is="emby-select" id="selAudioCodecIconAlignment" label="Audio Codec Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                            </div>
+                            <div>
                                 <select is="emby-select" id="selVideoFormatIconAlignment" label="Video Format Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
                                 <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoFormatOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                            </div>
+                            <div>
+                                <select is="emby-select" id="selVideoCodecIconAlignment" label="Video Codec Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                            </div>
+                            <div>
+                                <select is="emby-select" id="selTagIconAlignment" label="Tag Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkTagOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
                                 <select is="emby-select" id="selResolutionIconAlignment" label="Resolution Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
@@ -154,6 +174,13 @@
                         <li>Example: <code>srt.eng.png</code>, <code>srt.fre.png</code></li>
                     </ul>
 
+                    <h4>Custom Tag Icons</h4>
+                    <p>You can display icons for specific media tags. First, enter a comma-separated list of tags in the settings (e.g., `3D, VR, SpecialEdition`). Then, create an icon file for each tag, named exactly the same as the tag (case-sensitive filename may be required depending on your OS).</p>
+                    <ul>
+                        <li>Example: For the tag '3D', create an icon named <code>3D.png</code>. For `VR`, create `VR.png`.</li>
+                        <li>For the live preview, an icon named `tag.png` will be used if it exists in the icons folder.</li>
+                    </ul>
+
                     <h4>Audio Channel Icons</h4>
                     <p>These icons represent the number of audio channels.</p>
                     <ul>
@@ -163,6 +190,19 @@
                         <li>7.1 Surround: <code>7.1.png</code></li>
                     </ul>
 
+                    <h4>Audio Codec Icons</h4>
+                    <p>These icons represent the audio codec format.</p>
+                    <ul>
+                        <li>AAC: <code>aac.png</code></li>
+                        <li>PCM: <code>pcm.png</code></li>
+                        <li>FLAC: <code>flac.png</code></li>
+                        <li>MP3: <code>mp3.png</code></li>
+                        <li>AC3: <code>ac3.png</code></li>
+                        <li>EAC3: <code>eac3.png</code></li>
+                        <li>DTS: <code>dts.png</code></li>
+                        <li>TrueHD: <code>truehd.png</code></li>
+                    </ul>
+
                     <h4>Video Format Icons</h4>
                     <p>For High Dynamic Range (HDR) formats.</p>
                     <ul>
@@ -170,20 +210,32 @@
                         <li>Dolby Vision: <code>dv.png</code></li>
                         <li>HDR10+: <code>hdr10plus.png</code></li>
                     </ul>
-                    <p>The plugin detects these formats from media stream information. It also checks for "HDR10+" in the filename for better compatibility.</p>
+                    <p>Please note that HDR10+ is only detected if "HDR10+" is in the videos filename. This is a limitation of Emby.</p>
+
+                    <h4>Video Codec Icons</h4>
+                    <p>These icons represent the video codec format.</p>
+                    <ul>
+                        <li>AV1: <code>av1.png</code></li>
+                        <li>AVC / H.264: <code>h264.png</code></li>
+                        <li>HEVC / H.265: <code>h265.png</code></li>
+                        <li>VVC / H.266: <code>h266.png</code></li>
+                        <li>MPEG-4: <code>mp4.png</code></li>
+                        <li>VC-1: <code>vc1.png</code></li>
+                        <li>VP9: <code>vp9.png</code></li>
+                    </ul>
 
                     <h4>Resolution Icons</h4>
                     <p>Icons for video resolution.</p>
                     <ul>
-                        <li>4K: <code>4k.png</code> (for heights >= 1500px)</li>
-                        <li>1080p: <code>1080p.png</code> (for heights >= 1080px)</li>
-                        <li>720p: <code>720p.png</code> (for heights >= 720px)</li>
-                        <li>576p: <code>576p.png</code> (for heights >= 576px)</li>
-                        <li>480p: <code>480p.png</code> (for heights >= 480px)</li>
+                        <li>4K: <code>4k.png</code></li>
+                        <li>1080p: <code>1080p.png</code></li>
+                        <li>720p: <code>720p.png</code></li>
+                        <li>576p: <code>576p.png</code> </li>
+                        <li>480p: <code>480p.png</code> </li>
                     </ul>
 
                     <h4>Community Rating Icon</h4>
-                    <p>This icon is displayed next to the IMDb rating. The plugin if not provided with an icon will just show the rating, if you want an icon for the rating use an image named <code>imdb.png</code> in your icons folder.</p>
+                    <p>This icon is displayed next to the IMDb rating. If no icon is provided it will just show the rating</p>
                     <ul>
                         <li>Example: <code>imdb.png</code></li>
                     </ul>
@@ -203,6 +255,8 @@
                             <div>
                                 <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you to all supporters and people that helped testing this, specially Neminem from the Emby forum.</p>
                                 <p style="margin: 0;">If you like this project and would like to support it then you can <a href="https://buymeacoffee.com/yockser" target="_blank" rel="noopener noreferrer">donate me a coffee</a>, remember to write your name and i will add it here!</p>
+                                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you for the donations to:</p>
+                                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Alexander Hürter.</p>
                             </div>
                         </div>
                     </div>

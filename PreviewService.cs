@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
@@ -82,7 +82,8 @@ namespace EmbyIcons
         private void DrawPreviewOverlays(SKCanvas canvas, PluginOptions options, int width, int height, IconCacheManager iconCache)
         {
             var iconSize = Math.Clamp((Math.Min(width, height) * options.IconSize) / 100, 8, 512);
-            var padding = Math.Clamp(iconSize / 4, 2, 64);
+            var edgePadding = Math.Clamp(iconSize / 4, 2, 64);
+            var interIconPadding = Math.Clamp(iconSize / 8, 1, 64);
             using var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
 
             var overlays = new List<OverlayInfo>();
@@ -103,14 +104,28 @@ namespace EmbyIcons
             {
                 overlays.Add(new OverlayInfo(options.VideoFormatIconAlignment, 4, options.VideoFormatOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { formatIcon }));
             }
+            if (options.ShowVideoCodecIcons && (iconCache.GetCachedIcon("h265", IconCacheManager.IconType.VideoCodec) ?? iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.VideoCodec)) is { } videoCodecIcon)
+            {
+                overlays.Add(new OverlayInfo(options.VideoCodecIconAlignment, 5, options.VideoCodecOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { videoCodecIcon }));
+            }
+            if (options.ShowTagIcons && iconCache.GetCachedIcon("tag", IconCacheManager.IconType.Tag) is { } tagIcon)
+            {
+                overlays.Add(new OverlayInfo(options.TagIconAlignment, 6, options.TagOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { tagIcon }));
+            }
             if (options.ShowAudioChannelIcons && iconCache.GetCachedIcon("5.1", IconCacheManager.IconType.Channel) is { } channelIcon)
             {
-                overlays.Add(new OverlayInfo(options.ChannelIconAlignment, 5, options.ChannelOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { channelIcon }));
+                overlays.Add(new OverlayInfo(options.ChannelIconAlignment, 7, options.ChannelOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { channelIcon }));
+            }
+            if (options.ShowAudioCodecIcons && (iconCache.GetCachedIcon("dts", IconCacheManager.IconType.AudioCodec) ?? iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.AudioCodec)) is { } codecIcon)
+            {
+                overlays.Add(new OverlayInfo(options.AudioCodecIconAlignment, 8, options.AudioCodecOverlayHorizontal, OverlayType.SimpleIcons, Icons: new List<SKImage> { codecIcon }));
             }
             if (options.ShowCommunityScoreIcon)
             {
-                overlays.Add(new OverlayInfo(options.CommunityScoreIconAlignment, 6, options.CommunityScoreOverlayHorizontal, OverlayType.CommunityRating, Score: 6.9f));
+                overlays.Add(new OverlayInfo(options.CommunityScoreIconAlignment, 9, options.CommunityScoreOverlayHorizontal, OverlayType.CommunityRating, Score: 6.9f));
             }
+
+            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(iconSize * ((float)i.Width / i.Height)) : iconSize;
 
             foreach (var alignmentGroup in overlays.GroupBy(x => x.Alignment))
             {
@@ -126,21 +141,22 @@ namespace EmbyIcons
                     SKSize consumedSize;
                     if (overlay.Type == OverlayType.SimpleIcons && overlay.Icons != null)
                     {
-                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, padding, width, height, overlay.Alignment, paint, currentVerticalOffset, true, currentHorizontalOffset);
-                        consumedSize = new SKSize(overlay.Icons.Count * iconSize + (overlay.Icons.Count - 1) * padding, iconSize);
+                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, interIconPadding, edgePadding, width, height, overlay.Alignment, paint, true, currentHorizontalOffset, currentVerticalOffset);
+                        int consumedWidth = overlay.Icons.Sum(GetIconWidth) + (overlay.Icons.Count > 1 ? (overlay.Icons.Count - 1) * interIconPadding : 0);
+                        consumedSize = new SKSize(consumedWidth, iconSize);
                     }
                     else
                     {
-                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, padding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                     }
 
-                    currentHorizontalOffset += (int)consumedSize.Width + padding;
+                    currentHorizontalOffset += (int)consumedSize.Width + interIconPadding;
                     maxHeightOfHorizontalRow = Math.Max(maxHeightOfHorizontalRow, (int)consumedSize.Height);
                 }
 
                 if (horizontalGroups.Any())
                 {
-                    currentVerticalOffset += maxHeightOfHorizontalRow + padding;
+                    currentVerticalOffset += maxHeightOfHorizontalRow + interIconPadding;
                 }
 
                 currentHorizontalOffset = 0;
@@ -150,15 +166,17 @@ namespace EmbyIcons
                     SKSize consumedSize;
                     if (overlay.Type == OverlayType.SimpleIcons && overlay.Icons != null)
                     {
-                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, padding, width, height, overlay.Alignment, paint, currentVerticalOffset, false, currentHorizontalOffset);
-                        consumedSize = new SKSize(iconSize, overlay.Icons.Count * iconSize + (overlay.Icons.Count - 1) * padding);
+                        IconDrawer.DrawIcons(canvas, overlay.Icons, iconSize, interIconPadding, edgePadding, width, height, overlay.Alignment, paint, false, currentHorizontalOffset, currentVerticalOffset);
+                        int maxIconWidth = overlay.Icons.Select(GetIconWidth).DefaultIfEmpty(0).Max();
+                        int totalIconHeight = (overlay.Icons.Count * iconSize) + (overlay.Icons.Count > 1 ? (overlay.Icons.Count - 1) * interIconPadding : 0);
+                        consumedSize = new SKSize(maxIconWidth, totalIconHeight);
                     }
                     else
                     {
-                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, padding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                     }
 
-                    currentVerticalOffset += (int)consumedSize.Height + padding;
+                    currentVerticalOffset += (int)consumedSize.Height + interIconPadding;
                 }
             }
         }
@@ -176,8 +194,15 @@ namespace EmbyIcons
             SKRect textBounds = new();
             textPaint.MeasureText(scoreText, ref textBounds);
 
-            int iconPadding = Math.Max(2, iconSize / 8);
-            int totalWidth = (imdbIcon != null) ? iconSize + iconPadding + (int)Math.Ceiling(textBounds.Width) : (int)Math.Ceiling(textBounds.Width);
+            int iconPadding = Math.Max(1, iconSize / 16);
+
+            int iconDisplayWidth = 0;
+            if (imdbIcon != null)
+            {
+                iconDisplayWidth = imdbIcon.Height > 0 ? (int)Math.Round(iconSize * ((float)imdbIcon.Width / imdbIcon.Height)) : iconSize;
+            }
+
+            int totalWidth = (imdbIcon != null) ? iconDisplayWidth + iconPadding + (int)Math.Ceiling(textBounds.Width) : (int)Math.Ceiling(textBounds.Width);
             int totalHeight = iconSize;
 
             bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
@@ -190,9 +215,9 @@ namespace EmbyIcons
 
             if (imdbIcon != null)
             {
-                var iconRect = new SKRect(currentX, startY, currentX + iconSize, startY + iconSize);
+                var iconRect = new SKRect(currentX, startY, currentX + iconDisplayWidth, startY + iconSize);
                 canvas.DrawImage(imdbIcon, iconRect, basePaint);
-                currentX += iconSize + iconPadding;
+                currentX += iconDisplayWidth + iconPadding;
             }
 
             float textY = startY + (totalHeight - textBounds.Height) / 2 - textBounds.Top;

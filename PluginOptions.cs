@@ -30,7 +30,15 @@ namespace EmbyIcons
 
         public bool ShowAudioChannelIcons { get; set; } = false;
 
+        public bool ShowAudioCodecIcons { get; set; } = false;
+
         public bool ShowVideoFormatIcons { get; set; } = false;
+
+        public bool ShowVideoCodecIcons { get; set; } = false;
+
+        public bool ShowTagIcons { get; set; } = false;
+
+        public string TagsToShow { get; set; } = string.Empty;
 
         public bool ShowResolutionIcons { get; set; } = false;
 
@@ -48,9 +56,21 @@ namespace EmbyIcons
 
         public bool ChannelOverlayHorizontal { get; set; } = true;
 
+        public IconAlignment AudioCodecIconAlignment { get; set; } = IconAlignment.TopLeft;
+
+        public bool AudioCodecOverlayHorizontal { get; set; } = true;
+
         public IconAlignment VideoFormatIconAlignment { get; set; } = IconAlignment.TopRight;
 
         public bool VideoFormatOverlayHorizontal { get; set; } = true;
+
+        public IconAlignment VideoCodecIconAlignment { get; set; } = IconAlignment.TopRight;
+
+        public bool VideoCodecOverlayHorizontal { get; set; } = true;
+
+        public IconAlignment TagIconAlignment { get; set; } = IconAlignment.BottomLeft;
+
+        public bool TagOverlayHorizontal { get; set; } = false;
 
         public IconAlignment ResolutionIconAlignment { get; set; } = IconAlignment.BottomRight;
 

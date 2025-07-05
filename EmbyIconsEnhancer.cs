@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -82,7 +82,7 @@ namespace EmbyIcons
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
 
-            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false);
+            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false) || (options?.ShowAudioCodecIcons ?? false) || (options?.ShowVideoCodecIcons ?? false) || (options?.ShowTagIcons ?? false);
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
@@ -101,16 +101,23 @@ namespace EmbyIcons
                   .Append("_aAlign").Append(options.AudioIconAlignment)
                   .Append("_sAlign").Append(options.SubtitleIconAlignment)
                   .Append("_cAlign").Append(options.ChannelIconAlignment)
+                  .Append("_acodecAlign").Append(options.AudioCodecIconAlignment)
                   .Append("_vfAlign").Append(options.VideoFormatIconAlignment)
+                  .Append("_vcodecAlign").Append(options.VideoCodecIconAlignment)
+                  .Append("_tagAlign").Append(options.TagIconAlignment)
                   .Append("_resAlign").Append(options.ResolutionIconAlignment)
                   .Append("_scoreAlign").Append(options.CommunityScoreIconAlignment)
                   .Append("_showA").Append(options.ShowAudioIcons ? "1" : "0")
                   .Append("_showS").Append(options.ShowSubtitleIcons ? "1" : "0")
                   .Append("_showC").Append(options.ShowAudioChannelIcons ? "1" : "0")
+                  .Append("_showACodec").Append(options.ShowAudioCodecIcons ? "1" : "0")
                   .Append("_showVF").Append(options.ShowVideoFormatIcons ? "1" : "0")
+                  .Append("_showVCodec").Append(options.ShowVideoCodecIcons ? "1" : "0")
+                  .Append("_showTag").Append(options.ShowTagIcons ? "1" : "0")
+                  .Append("_tags").Append((options.TagsToShow ?? "").Replace(',', '-').Replace(" ", ""))
                   .Append("_showRes").Append(options.ShowResolutionIcons ? "1" : "0")
                   .Append("_showScore").Append(options.ShowCommunityScoreIcon ? "1" : "0")
-                  .Append("_showEp").Append(options.ShowOverlaysForEpisodes ? "1" : "0") // *** BUG FIX: Added missing setting to cache key ***
+                  .Append("_showEp").Append(options.ShowOverlaysForEpisodes ? "1" : "0")
                   .Append("_seriesOpt").Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? "1" : "0")
                   .Append("_seriesLite").Append(options.UseSeriesLiteMode ? "1" : "0")
                   .Append("_jpegq").Append(options.JpegQuality)
@@ -118,10 +125,19 @@ namespace EmbyIcons
                   .Append("_aHoriz").Append(options.AudioOverlayHorizontal ? "1" : "0")
                   .Append("_sHoriz").Append(options.SubtitleOverlayHorizontal ? "1" : "0")
                   .Append("_cHoriz").Append(options.ChannelOverlayHorizontal ? "1" : "0")
+                  .Append("_acodecHoriz").Append(options.AudioCodecOverlayHorizontal ? "1" : "0")
                   .Append("_vfHoriz").Append(options.VideoFormatOverlayHorizontal ? "1" : "0")
+                  .Append("_vcodecHoriz").Append(options.VideoCodecOverlayHorizontal ? "1" : "0")
+                  .Append("_tagHoriz").Append(options.TagOverlayHorizontal ? "1" : "0")
                   .Append("_resHoriz").Append(options.ResolutionOverlayHorizontal ? "1" : "0")
                   .Append("_scoreHoriz").Append(options.CommunityScoreOverlayHorizontal ? "1" : "0")
                   .Append("_iconVer").Append(_iconCacheVersion);
+
+                if (options.ShowTagIcons && item.Tags?.Length > 0)
+                {
+                    var relevantTags = string.Join("-", item.Tags.OrderBy(t => t)).Replace(" ", "");
+                    sb.Append("_itemTags").Append(relevantTags);
+                }
 
                 if (item is Series series)
                 {
@@ -136,7 +152,7 @@ namespace EmbyIcons
                         }
                     }
 
-                    if (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons)
+                    if (options.ShowSeriesIconsIfAllEpisodesHaveLanguage || options.ShowAudioChannelIcons || options.ShowVideoFormatIcons || options.ShowResolutionIcons || options.ShowAudioCodecIcons || options.ShowVideoCodecIcons)
                     {
                         var aggResult = GetAggregatedDataForParentSync(seriesForProcessing, options);
                         sb.Append("_childrenMediaHash").Append(aggResult.CombinedEpisodesHashShort);

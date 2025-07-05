@@ -21,6 +21,8 @@ namespace EmbyIcons
             public HashSet<string> AudioLangs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> SubtitleLangs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> ChannelTypes { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> AudioCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> VideoCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> VideoFormats { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> Resolutions { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public string CombinedEpisodesHashShort { get; init; } = "";
@@ -81,6 +83,14 @@ namespace EmbyIcons
                                                   .Select(s => LanguageHelper.NormalizeLangCode(s.Language))
                                                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            var commonAudioCodecs = firstStreams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Codec))
+                                                .Select(s => GetAudioCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!)
+                                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var commonVideoCodecs = firstStreams.Where(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.Codec))
+                                                .Select(s => GetVideoCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!)
+                                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var commonChannelType = GetChannelIconName(firstStreams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
             var commonResolution = GetResolutionIconName(firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Width, firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Height);
 
@@ -107,6 +117,16 @@ namespace EmbyIcons
                         var currentSubs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language));
                         commonSubtitleLangs.IntersectWith(currentSubs);
                     }
+                    if (commonAudioCodecs.Count > 0)
+                    {
+                        var currentCodecs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Codec)).Select(s => GetAudioCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!);
+                        commonAudioCodecs.IntersectWith(currentCodecs);
+                    }
+                    if (commonVideoCodecs.Count > 0)
+                    {
+                        var currentCodecs = streams.Where(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.Codec)).Select(s => GetVideoCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!);
+                        commonVideoCodecs.IntersectWith(currentCodecs);
+                    }
                     if (commonChannelType != null)
                     {
                         var currentChannel = GetChannelIconName(streams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
@@ -128,6 +148,8 @@ namespace EmbyIcons
 
             var finalAudioLangs = (options.ShowAudioIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonAudioLangs : new HashSet<string>();
             var finalSubtitleLangs = (options.ShowSubtitleIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonSubtitleLangs : new HashSet<string>();
+            var finalAudioCodecs = (options.ShowAudioCodecIcons) ? commonAudioCodecs : new HashSet<string>();
+            var finalVideoCodecs = (options.ShowVideoCodecIcons) ? commonVideoCodecs : new HashSet<string>();
             var finalChannelTypes = (options.ShowAudioChannelIcons && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
             var finalResolutions = (options.ShowResolutionIcons && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
             var finalVideoFormats = new HashSet<string>();
@@ -149,6 +171,8 @@ namespace EmbyIcons
                 AudioLangs = finalAudioLangs,
                 SubtitleLangs = finalSubtitleLangs,
                 ChannelTypes = finalChannelTypes,
+                AudioCodecs = finalAudioCodecs,
+                VideoCodecs = finalVideoCodecs,
                 Resolutions = finalResolutions,
                 VideoFormats = finalVideoFormats,
                 CombinedEpisodesHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
@@ -158,11 +182,11 @@ namespace EmbyIcons
             return result;
         }
 
-        internal async Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs, HashSet<string> ChannelTypes, HashSet<string> VideoFormats, HashSet<string> Resolutions)>
+        internal async Task<(HashSet<string> AudioLangs, HashSet<string> SubtitleLangs, HashSet<string> ChannelTypes, HashSet<string> VideoFormats, HashSet<string> Resolutions, HashSet<string> AudioCodecs, HashSet<string> VideoCodecs)>
             GetAggregatedDataForParentAsync(BaseItem parent, PluginOptions options, CancellationToken cancellationToken)
         {
             var result = await Task.Run(() => GetAggregatedDataForParentSync(parent, options), cancellationToken);
-            return (result.AudioLangs, result.SubtitleLangs, result.ChannelTypes, result.VideoFormats, result.Resolutions);
+            return (result.AudioLangs, result.SubtitleLangs, result.ChannelTypes, result.VideoFormats, result.Resolutions, result.AudioCodecs, result.VideoCodecs);
         }
     }
 }
