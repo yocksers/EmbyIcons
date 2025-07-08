@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -156,15 +156,29 @@ namespace EmbyIcons.Helpers
         public SKImage? GetCachedIcon(string iconNameKey, IconType iconType)
         {
             if (_iconsFolder == null) return null;
-            // For tags, we use the original key. For others, lowercase.
             var processedKey = iconType == IconType.Tag ? iconNameKey : iconNameKey.ToLowerInvariant();
 
             var (pathCache, imageCache) = GetCachesForType(iconType);
-            var iconPath = ResolveIconPathWithFallback(processedKey, pathCache);
 
-            if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath)) return null;
+            // Optimization: If the image is already cached, return it immediately.
+            // The RefreshCacheAsync method is responsible for invalidating the cache.
+            if (pathCache.TryGetValue(processedKey, out var iconPath) && !string.IsNullOrEmpty(iconPath))
+            {
+                if (imageCache.TryGetValue(iconPath, out var cached))
+                {
+                    return cached.Image;
+                }
+            }
 
-            if (imageCache.TryGetValue(iconPath, out var cached) && cached.FileWriteTimeUtc == File.GetLastWriteTimeUtc(iconPath)) return cached.Image;
+            // Fallback for paths and loading if not in image cache
+            iconPath = ResolveIconPathWithFallback(processedKey, pathCache);
+            if (string.IsNullOrEmpty(iconPath)) return null;
+
+            // Re-check image cache in case it was populated by another thread
+            if (imageCache.TryGetValue(iconPath, out var cachedAfterResolve))
+            {
+                return cachedAfterResolve.Image;
+            }
 
             return TryLoadAndCacheIcon(iconPath, imageCache);
         }
@@ -173,9 +187,10 @@ namespace EmbyIcons.Helpers
         {
             try
             {
-                if (new FileInfo(iconPath).Length < 50)
+                if (!File.Exists(iconPath) || new FileInfo(iconPath).Length < 50)
                 {
-                    _logger.Warn($"[EmbyIcons] Skipping small/corrupt icon: '{iconPath}'.");
+                    if (!File.Exists(iconPath)) _logger.Warn($"[EmbyIcons] Icon file not found: '{iconPath}'.");
+                    else _logger.Warn($"[EmbyIcons] Skipping small/corrupt icon: '{iconPath}'.");
                     return null;
                 }
                 using var stream = File.OpenRead(iconPath);

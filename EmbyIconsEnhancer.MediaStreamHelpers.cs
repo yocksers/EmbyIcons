@@ -188,7 +188,12 @@ namespace EmbyIcons
                             }
                             else if (stream.Type == MediaStreamType.Video)
                             {
-                                videoStream = stream;
+                                // Only use the first video stream for resolution checks.
+                                // Subsequent streams might be extras or previews.
+                                if (videoStream == null)
+                                {
+                                    videoStream = stream;
+                                }
                                 if (options.ShowVideoCodecIcons && !string.IsNullOrEmpty(stream.Codec))
                                 {
                                     var codecIconName = GetVideoCodecIconName(stream.Codec);
@@ -205,13 +210,13 @@ namespace EmbyIcons
                     if (options.ShowVideoFormatIcons)
                     {
                         if (HasDolbyVision(item, mainItemStreams)) videoFormatIconName = "dv";
-                        else if (HasHdr10Plus(item)) videoFormatIconName = "hdr10plus";
+                        else if (HasHdr10Plus(item, mainItemStreams)) videoFormatIconName = "hdr10plus";
                         else if (HasHdr(item, mainItemStreams)) videoFormatIconName = "hdr";
                     }
 
                     if (options.ShowResolutionIcons && videoStream != null)
                     {
-                        resolutionIconName = GetResolutionIconName(videoStream.Width, videoStream.Height);
+                        resolutionIconName = GetResolutionIconNameFromStream(videoStream);
                     }
                 }
 
@@ -269,6 +274,7 @@ namespace EmbyIcons
 
                 using var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
 
+                var imdbIcon = hasCommunityScore ? _iconCacheManager.GetCachedIcon("imdb", IconCacheManager.IconType.Audio) : null;
                 var overlays = new List<OverlayInfo>();
 
                 if (audioLangsDetected.Any())
@@ -335,7 +341,7 @@ namespace EmbyIcons
                         }
                         else
                         {
-                            consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                            consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, imdbIcon, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                         }
 
                         currentHorizontalOffset += (int)consumedSize.Width + interIconPadding;
@@ -361,7 +367,7 @@ namespace EmbyIcons
                         }
                         else
                         {
-                            consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                            consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, imdbIcon, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                         }
 
                         currentVerticalOffset += (int)consumedSize.Height + interIconPadding;
@@ -395,15 +401,25 @@ namespace EmbyIcons
 
         private string? GetChannelIconName(int channels) => channels switch { 1 => "mono", 2 => "stereo", 6 => "5.1", 8 => "7.1", _ => null };
 
-        private string? GetResolutionIconName(int? width, int? height)
+        private string? GetResolutionFromDisplayTitle(string? displayTitle)
         {
-            if (width == null || height == null) return null;
-            if (width >= 3200 || height >= 1500) return "4k";
-            if (width >= 1800 || height >= 780) return "1080p";
-            if (width >= 1200 || height >= 650) return "720p";
-            if (height >= 540) return "576p";
-            if (height >= 400) return "480p";
+            if (string.IsNullOrEmpty(displayTitle)) return null;
+
+            string lowerTitle = displayTitle.ToLowerInvariant();
+            if (lowerTitle.Contains("4k") || lowerTitle.Contains("2160p")) return "4k";
+            if (lowerTitle.Contains("1080p")) return "1080p";
+            if (lowerTitle.Contains("720p")) return "720p";
+            if (lowerTitle.Contains("576p")) return "576p";
+            if (lowerTitle.Contains("480p")) return "480p";
+
             return null;
+        }
+
+        internal string? GetResolutionIconNameFromStream(MediaStream? videoStream)
+        {
+            if (videoStream == null) return null;
+
+            return GetResolutionFromDisplayTitle(videoStream.DisplayTitle);
         }
 
         private bool HasDolbyVision(BaseItem item, IReadOnlyList<MediaStream>? streams)
@@ -412,7 +428,7 @@ namespace EmbyIcons
             return streams.Any(s => s.Type == MediaStreamType.Video && ((!string.IsNullOrEmpty(s.VideoRange) && s.VideoRange.Contains("dolby", StringComparison.OrdinalIgnoreCase)) || (!string.IsNullOrEmpty(s.DisplayTitle) && s.DisplayTitle.Contains("dolby", StringComparison.OrdinalIgnoreCase))));
         }
 
-        private bool HasHdr10Plus(BaseItem item)
+        private bool HasHdr10Plus(BaseItem item, IReadOnlyList<MediaStream>? streams)
         {
             if (!string.IsNullOrEmpty(item.Path))
             {
@@ -422,7 +438,6 @@ namespace EmbyIcons
                     return true;
                 }
             }
-            var streams = item.GetMediaStreams();
             if (streams == null) return false;
             return streams.Any(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.VideoRange) && s.VideoRange.Contains("hdr10plus", StringComparison.OrdinalIgnoreCase));
         }
@@ -433,9 +448,8 @@ namespace EmbyIcons
             return streams.Any(s => s.Type == MediaStreamType.Video && ((!string.IsNullOrEmpty(s.VideoRange) && s.VideoRange.Contains("hdr", StringComparison.OrdinalIgnoreCase)) || (!string.IsNullOrEmpty(s.DisplayTitle) && s.DisplayTitle.Contains("hdr", StringComparison.OrdinalIgnoreCase))));
         }
 
-        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, float score, int iconSize, int padding, int canvasWidth, int canvasHeight, PluginOptions options, SKPaint basePaint, IconAlignment alignment, int verticalOffset, int horizontalOffset)
+        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, float score, int iconSize, int padding, int canvasWidth, int canvasHeight, PluginOptions options, SKPaint basePaint, SKImage? imdbIcon, IconAlignment alignment, int verticalOffset, int horizontalOffset)
         {
-            var imdbIcon = _iconCacheManager.GetCachedIcon("imdb", IconCacheManager.IconType.Audio);
             var scoreText = score.ToString("F1");
             var typeface = FontHelper.GetDefaultBold(_logger);
             if (typeface == null) return SKSize.Empty;
@@ -502,12 +516,12 @@ namespace EmbyIcons
             int maxChannels = streams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max();
             sb.Append(GetChannelIconName(maxChannels) ?? "none").Append(';');
             if (HasDolbyVision(item, streams)) sb.Append("dv");
-            else if (HasHdr10Plus(item)) sb.Append("hdr10plus");
+            else if (HasHdr10Plus(item, streams)) sb.Append("hdr10plus");
             else if (HasHdr(item, streams)) sb.Append("hdr");
             else sb.Append("none");
             sb.Append(';');
 
-            sb.Append(videoStream != null ? (GetResolutionIconName(videoStream.Width, videoStream.Height) ?? "none") : "none");
+            sb.Append(videoStream != null ? (GetResolutionIconNameFromStream(videoStream) ?? "none") : "none");
 
             using var md5 = MD5.Create();
             return BitConverter.ToString(md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()))).Replace("-", "").Substring(0, 8);

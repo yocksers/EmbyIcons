@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -92,10 +92,10 @@ namespace EmbyIcons
                                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var commonChannelType = GetChannelIconName(firstStreams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
-            var commonResolution = GetResolutionIconName(firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Width, firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Height);
+            var commonResolution = GetResolutionIconNameFromStream(firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video));
 
             bool allHaveDV = HasDolbyVision(firstEpisode, firstStreams);
-            bool allHaveHdr10Plus = HasHdr10Plus(firstEpisode);
+            bool allHaveHdr10Plus = HasHdr10Plus(firstEpisode, firstStreams);
             bool allHaveHdr = HasHdr(firstEpisode, firstStreams);
 
             var episodeHashes = new List<string>(episodes.Count);
@@ -134,12 +134,12 @@ namespace EmbyIcons
                     }
                     if (commonResolution != null)
                     {
-                        var currentRes = GetResolutionIconName(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Width, streams.FirstOrDefault(s => s.Type == MediaStreamType.Video)?.Height);
+                        var currentRes = GetResolutionIconNameFromStream(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video));
                         if (commonResolution != currentRes) commonResolution = null;
                     }
 
                     allHaveDV &= HasDolbyVision(ep, streams);
-                    allHaveHdr10Plus &= HasHdr10Plus(ep);
+                    allHaveHdr10Plus &= HasHdr10Plus(ep, streams);
                     allHaveHdr &= HasHdr(ep, streams);
                 }
 

@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
@@ -60,14 +60,21 @@ namespace EmbyIcons
             using var originalBitmap = SKBitmap.Decode(Assembly.GetExecutingAssembly().GetManifestResourceStream("EmbyIcons.Images.preview.png"));
             if (originalBitmap == null) throw new InvalidOperationException("Failed to decode the preview background image.");
 
-            using var iconCache = new IconCacheManager(TimeSpan.FromMinutes(1), _logger);
-            await iconCache.InitializeAsync(options.IconsFolder, default);
+            var iconCache = Plugin.Instance?.Enhancer._iconCacheManager;
 
             using var surface = SKSurface.Create(new SKImageInfo(originalBitmap.Width, originalBitmap.Height));
             var canvas = surface.Canvas;
             canvas.DrawBitmap(originalBitmap, 0, 0);
 
-            DrawPreviewOverlays(canvas, options, originalBitmap.Width, originalBitmap.Height, iconCache);
+            if (iconCache != null)
+            {
+                await iconCache.InitializeAsync(options.IconsFolder, default);
+                DrawPreviewOverlays(canvas, options, originalBitmap.Width, originalBitmap.Height, iconCache);
+            }
+            else
+            {
+                _logger.Warn("[EmbyIcons] Plugin instance not ready, cannot generate preview with overlays.");
+            }
 
             using var image = surface.Snapshot();
             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -86,6 +93,7 @@ namespace EmbyIcons
             var interIconPadding = Math.Clamp(iconSize / 8, 1, 64);
             using var paint = new SKPaint { FilterQuality = options.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
 
+            var imdbIcon = options.ShowCommunityScoreIcon ? iconCache.GetCachedIcon("imdb", IconCacheManager.IconType.Audio) : null;
             var overlays = new List<OverlayInfo>();
 
             if (options.ShowAudioIcons && iconCache.GetFirstAvailableIcon(IconCacheManager.IconType.Audio) is { } audioIcon)
@@ -147,7 +155,7 @@ namespace EmbyIcons
                     }
                     else
                     {
-                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, imdbIcon, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                     }
 
                     currentHorizontalOffset += (int)consumedSize.Width + interIconPadding;
@@ -173,7 +181,7 @@ namespace EmbyIcons
                     }
                     else
                     {
-                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, iconCache, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
+                        consumedSize = DrawCommunityRatingOverlay(canvas, overlay.Score, iconSize, edgePadding, width, height, options, paint, imdbIcon, overlay.Alignment, currentVerticalOffset, currentHorizontalOffset);
                     }
 
                     currentVerticalOffset += (int)consumedSize.Height + interIconPadding;
@@ -181,9 +189,8 @@ namespace EmbyIcons
             }
         }
 
-        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, float score, int iconSize, int padding, int canvasWidth, int canvasHeight, PluginOptions options, SKPaint basePaint, IconCacheManager iconCache, IconAlignment alignment, int verticalOffset, int horizontalOffset)
+        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, float score, int iconSize, int padding, int canvasWidth, int canvasHeight, PluginOptions options, SKPaint basePaint, SKImage? imdbIcon, IconAlignment alignment, int verticalOffset, int horizontalOffset)
         {
-            var imdbIcon = iconCache.GetCachedIcon("imdb", IconCacheManager.IconType.Audio);
             var scoreText = score.ToString("F1");
             var typeface = FontHelper.GetDefaultBold(_logger);
             if (typeface == null) return SKSize.Empty;
