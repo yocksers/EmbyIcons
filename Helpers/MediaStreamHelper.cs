@@ -52,10 +52,10 @@ namespace EmbyIcons.Helpers
 
             string lowerTitle = videoStream.DisplayTitle.ToLowerInvariant();
             if (lowerTitle.Contains("4k") || lowerTitle.Contains("2160p")) return "4k";
-            if (lowerTitle.Contains("1080p")) return "1080p";
-            if (lowerTitle.Contains("720p")) return "720p";
-            if (lowerTitle.Contains("576p")) return "576p";
-            if (lowerTitle.Contains("480p")) return "480p";
+            if (lowerTitle.Contains("1080")) return "1080p";
+            if (lowerTitle.Contains("720")) return "720p";
+            if (lowerTitle.Contains("576")) return "576p";
+            if (lowerTitle.Contains("480")) return "480p";
 
             return null;
         }
