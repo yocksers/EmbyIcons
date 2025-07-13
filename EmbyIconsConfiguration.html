@@ -1,15 +1,13 @@
-﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
 
-            <!-- Local Navigation Bar -->
             <div data-role="controlgroup" data-type="horizontal" class="localnav">
                 <a is="emby-linkbutton" class="nav-settings ui-btn-active" href="#" data-role="button">Settings</a>
                 <a is="emby-linkbutton" class="nav-readme" href="#" data-role="button">Readme</a>
             </div>
 
-            <!-- Settings Content (Visible by default) -->
             <div id="settingsPage" style="margin-top: 2em;">
                 <form class="embyIconsForm">
                     <div class="flex align-items-center" style="margin: 2em 0 .5em;">
@@ -28,23 +26,11 @@
                     </div>
 
                     <div class="inputContainer">
-                        <input is="emby-input" type="text" id="txtTagsToShow" label="Custom Tag Icons (comma-separated):" autocomplete="off" />
-                        <div class="fieldDescription">List of tags to show icons for. Icon names must match the tag exactly (e.g., '3D' requires '3D.png'). Case-insensitive.</div>
-                    </div>
-
-                    <div class="inputContainer">
                         <h3 style="margin-bottom: 0.5em;">Apply to these libraries</h3>
                         <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.5em 1.5em;">
                         </div>
                         <div class="fieldDescription" style="margin-top: 0.5em;">Leave all unchecked to apply to all libraries.</div>
                         <input type="hidden" id="txtSelectedLibraries" />
-                    </div>
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label>
-                            <input is="emby-checkbox" type="checkbox" id="chkRefreshIconCacheNow" />
-                            <span>Refresh icon cache on next save</span>
-                        </label>
-                        <div class="fieldDescription checkboxFieldDescription">Check this if you have added, removed, or changed icons in your folder and want to force a refresh.</div>
                     </div>
 
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
@@ -119,6 +105,21 @@
                                 <select is="emby-select" id="selCommunityScoreIconAlignment" label="Rating Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
                                 <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkCommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
+                            <div>
+                                <select is="emby-select" id="selCommunityScoreBackgroundShape" label="Rating Background Shape">
+                                    <option value="None">None</option>
+                                    <option value="Circle">Circle</option>
+                                    <option value="Square">Square</option>
+                                </select>
+                                <div style="margin-top: 1.5em;">
+                                    <label class="inputLabel" for="txtCommunityScoreBackgroundColor">Background Color</label>
+                                    <input type="color" id="txtCommunityScoreBackgroundColor" style="width: 100%; height: 2.5em; padding: 0.2em; background: transparent; border: 1px solid rgb(85, 85, 85); border-radius: 4px; box-sizing: border-box;">
+                                </div>
+                                <div style="margin-top: 1.5em;">
+                                    <label class="inputLabel" for="rngCommunityScoreBackgroundOpacity">Background Opacity: <span id="valCommunityScoreBackgroundOpacity"></span></label>
+                                    <input type="range" min="0" max="100" step="1" id="rngCommunityScoreBackgroundOpacity" class="slider" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
@@ -151,7 +152,6 @@
                 </form>
             </div>
 
-            <!-- Readme Content (Hidden by default) -->
             <div id="readmePage" class="hide" style="margin-top: 2em;">
                 <div style="max-width: 800px; margin: auto;">
                     <h1 style="margin-bottom: 1em;">EmbyIcons Plugin Guide</h1>
@@ -175,7 +175,7 @@
                     </ul>
 
                     <h4>Custom Tag Icons</h4>
-                    <p>You can display icons for specific media tags. First, enter a comma-separated list of tags in the settings (e.g., `3D, VR, SpecialEdition`). Then, create an icon file for each tag, named exactly the same as the tag (case-sensitive filename may be required depending on your OS).</p>
+                    <p>You can display icons for specific media tags. The plugin will automatically look for an icon that matches the name of the tag on the media item. The matching is case-insensitive, so a tag of '3D' will match an icon named `3d.png`.</p>
                     <ul>
                         <li>Example: For the tag '3D', create an icon named <code>3D.png</code>. For `VR`, create `VR.png`.</li>
                         <li>For the live preview, an icon named `tag.png` will be used if it exists in the icons folder.</li>
@@ -210,7 +210,7 @@
                         <li>Dolby Vision: <code>dv.png</code></li>
                         <li>HDR10+: <code>hdr10plus.png</code></li>
                     </ul>
-                    <p>Please note that HDR10+ is only detected if "HDR10+" is in the videos filename. This is a limitation of Emby.</p>
+                    <p>For best results, including "HDR10+" in the video's filename provides a reliable detection method. The plugin will also attempt to detect this format from the video stream's metadata where available.</p>
 
                     <h4>Video Codec Icons</h4>
                     <p>These icons represent the video codec format.</p>
@@ -241,11 +241,7 @@
                     </ul>
 
                     <h3 style="margin-top: 2em;">Troubleshooting</h3>
-                    <p>If you add, remove, or change any icon files, you must do one of the following for the changes to take effect:</p>
-                    <ol>
-                        <li>On the "Settings" tab, check the "Refresh icon cache on next save" box and click Save.</li>
-                        <li>Restart your Emby Server.</li>
-                    </ol>
+                    <p>If you add, remove, or change any icon files, you must restart your Emby Server for the changes to be applied to your posters.</p>
 
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
                         <div style="display: flex; align-items: center; gap: 1em;">

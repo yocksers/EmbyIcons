@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
@@ -40,6 +40,8 @@ namespace EmbyIcons
         public static Plugin? Instance { get; private set; }
 
         public ILogger Logger => _logger;
+
+        public string ConfigurationVersion { get; private set; } = Guid.NewGuid().ToString("N");
 
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
 
@@ -184,6 +186,8 @@ namespace EmbyIcons
                     return;
                 }
 
+                Enhancer.ClearEpisodeIconCache(e.Item.Id);
+
                 Series? seriesToClear = null;
                 switch (e.Item)
                 {
@@ -216,12 +220,8 @@ namespace EmbyIcons
             _logger.Info("[EmbyIcons] Saving new configuration.");
             base.UpdateConfiguration(configuration);
 
-            if (options.RefreshIconCacheNow)
-            {
-                _logger.Info("[EmbyIcons] User requested an icon cache refresh via plugin settings.");
-                Enhancer.RefreshIconCacheAsync(CancellationToken.None, force: true).ConfigureAwait(false);
-                options.RefreshIconCacheNow = false;
-            }
+            ConfigurationVersion = Guid.NewGuid().ToString("N");
+            _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{ConfigurationVersion}'. Images will refresh as they are viewed.");
 
             try
             {

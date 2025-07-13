@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -107,7 +107,7 @@ namespace EmbyIcons.Helpers
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
 
-                var name = Path.GetFileNameWithoutExtension(file); // Keep case for tags
+                var name = Path.GetFileNameWithoutExtension(file);
                 var lowerName = name.ToLowerInvariant();
 
                 ConcurrentDictionary<string, string> dict;
@@ -119,16 +119,15 @@ namespace EmbyIcons.Helpers
                 else if (videoCodecNames.Contains(lowerName)) dict = _videoCodecIconPathCache;
                 else
                 {
-                    // For anything else, add it to both audio (for languages) and tags
                     _audioIconPathCache.TryAdd(lowerName, file);
-                    _tagIconPathCache.TryAdd(name, file); // Use original case for tag key
+                    _tagIconPathCache.TryAdd(lowerName, file);
                     continue;
                 }
                 dict.TryAdd(lowerName, file);
             }
 
             _lastCacheRefreshTime = DateTime.UtcNow;
-            var newVersion = ComputeIconFilesVersion(allFiles);
+            var newVersion = ComputeIconFilesVersion(currentWriteTimes);
             if (newVersion != _currentIconVersion)
             {
                 _currentIconVersion = newVersion;
@@ -138,7 +137,7 @@ namespace EmbyIcons.Helpers
             return Task.CompletedTask;
         }
 
-        public SKImage? GetFirstAvailableIcon(IconType iconType)
+        public async Task<SKImage?> GetFirstAvailableIconAsync(IconType iconType, CancellationToken cancellationToken)
         {
             var (pathCache, _) = GetCachesForType(iconType);
 
@@ -147,43 +146,62 @@ namespace EmbyIcons.Helpers
 
             if (firstKey != null)
             {
-                return GetCachedIcon(firstKey, iconType);
+                return await GetCachedIconAsync(firstKey, iconType, cancellationToken);
             }
 
             return null;
         }
 
-        public SKImage? GetCachedIcon(string iconNameKey, IconType iconType)
+        public async Task<SKImage?> GetCachedIconAsync(string iconNameKey, IconType iconType, CancellationToken cancellationToken)
         {
             if (_iconsFolder == null) return null;
-            var processedKey = iconType == IconType.Tag ? iconNameKey : iconNameKey.ToLowerInvariant();
+            var processedKey = iconNameKey.ToLowerInvariant();
 
             var (pathCache, imageCache) = GetCachesForType(iconType);
 
-            // Optimization: If the image is already cached, return it immediately.
-            // The RefreshCacheAsync method is responsible for invalidating the cache.
             if (pathCache.TryGetValue(processedKey, out var iconPath) && !string.IsNullOrEmpty(iconPath))
             {
                 if (imageCache.TryGetValue(iconPath, out var cached))
                 {
-                    return cached.Image;
+                    try
+                    {
+                        var lastWriteTime = File.GetLastWriteTimeUtc(iconPath);
+                        if (lastWriteTime == cached.FileWriteTimeUtc)
+                        {
+                            return cached.Image; 
+                        }
+                        else
+                        {
+                            _logger.Info($"[EmbyIcons] Icon file '{iconPath}' has changed. Invalidating cache and reloading.");
+                            if (imageCache.TryRemove(iconPath, out var oldCached))
+                            {
+                                oldCached.Image?.Dispose();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn($"[EmbyIcons] Could not check file time for '{iconPath}', reloading. Error: {ex.Message}");
+                        if (imageCache.TryRemove(iconPath, out var oldCached))
+                        {
+                            oldCached.Image?.Dispose();
+                        }
+                    }
                 }
             }
 
-            // Fallback for paths and loading if not in image cache
             iconPath = ResolveIconPathWithFallback(processedKey, pathCache);
             if (string.IsNullOrEmpty(iconPath)) return null;
 
-            // Re-check image cache in case it was populated by another thread
             if (imageCache.TryGetValue(iconPath, out var cachedAfterResolve))
             {
                 return cachedAfterResolve.Image;
             }
 
-            return TryLoadAndCacheIcon(iconPath, imageCache);
+            return await TryLoadAndCacheIconAsync(iconPath, imageCache, cancellationToken);
         }
 
-        private SKImage? TryLoadAndCacheIcon(string iconPath, ConcurrentDictionary<string, CachedIcon> imageCache)
+        private async Task<SKImage?> TryLoadAndCacheIconAsync(string iconPath, ConcurrentDictionary<string, CachedIcon> imageCache, CancellationToken cancellationToken)
         {
             try
             {
@@ -193,9 +211,17 @@ namespace EmbyIcons.Helpers
                     else _logger.Warn($"[EmbyIcons] Skipping small/corrupt icon: '{iconPath}'.");
                     return null;
                 }
-                using var stream = File.OpenRead(iconPath);
-                using var data = SKData.Create(stream);
+
+                using var memoryStream = new MemoryStream();
+                await using (var fileStream = new FileStream(iconPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
+                {
+                    await fileStream.CopyToAsync(memoryStream, cancellationToken).ConfigureAwait(false);
+                }
+                memoryStream.Position = 0;
+
+                using var data = SKData.Create(memoryStream);
                 var img = SKImage.FromEncodedData(data);
+
                 var lastWrite = File.GetLastWriteTimeUtc(iconPath);
                 imageCache[iconPath] = new CachedIcon(img, lastWrite);
                 return img;
@@ -211,7 +237,6 @@ namespace EmbyIcons.Helpers
         {
             if (cache.TryGetValue(iconNameKey, out var path)) return path;
 
-            // Fallback for audio language codes (e.g., 'en' to 'eng')
             if (iconNameKey.Length == 3 && cache == _audioIconPathCache && cache.TryGetValue(iconNameKey.Substring(0, 2), out path))
                 return cache.GetOrAdd(iconNameKey, path);
 
@@ -232,10 +257,10 @@ namespace EmbyIcons.Helpers
             _ => throw new ArgumentOutOfRangeException(nameof(iconType))
         };
 
-        private static string ComputeIconFilesVersion(string[] files)
+        private static string ComputeIconFilesVersion(Dictionary<string, DateTime> fileWriteTimes)
         {
             using var md5 = MD5.Create();
-            var combined = string.Join("|", files.OrderBy(f => f).Select(f => $"{f.ToLowerInvariant()}:{File.GetLastWriteTimeUtc(f).Ticks}"));
+            var combined = string.Join("|", fileWriteTimes.OrderBy(f => f.Key).Select(f => $"{f.Key.ToLowerInvariant()}:{f.Value.Ticks}"));
             var bytes = Encoding.UTF8.GetBytes(combined);
             return Convert.ToBase64String(md5.ComputeHash(bytes));
         }

@@ -1,6 +1,7 @@
 using EmbyIcons;
 using MediaBrowser.Model.Plugins;
 using System;
+using System.Text.Json.Serialization;
 
 namespace EmbyIcons
 {
@@ -15,8 +16,6 @@ namespace EmbyIcons
             else
                 return "/var/lib/emby/plugins/EmbyIcons/icons";
         }
-
-        public bool RefreshIconCacheNow { get; set; }
 
         public string SelectedLibraries { get; set; } = string.Empty;
 
@@ -37,8 +36,6 @@ namespace EmbyIcons
         public bool ShowVideoCodecIcons { get; set; } = false;
 
         public bool ShowTagIcons { get; set; } = false;
-
-        public string TagsToShow { get; set; } = string.Empty;
 
         public bool ShowResolutionIcons { get; set; } = false;
 
@@ -80,6 +77,12 @@ namespace EmbyIcons
 
         public bool CommunityScoreOverlayHorizontal { get; set; } = true;
 
+        public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
+
+        public string CommunityScoreBackgroundColor { get; set; } = "#404040";
+
+        public int CommunityScoreBackgroundOpacity { get; set; } = 80;
+
         public int IconSize { get; set; } = 10;
 
         public int JpegQuality { get; set; } = 75;
@@ -95,5 +98,12 @@ namespace EmbyIcons
         TopRight,
         BottomLeft,
         BottomRight
+    }
+
+    public enum ScoreBackgroundShape
+    {
+        None,
+        Circle,
+        Square
     }
 }
