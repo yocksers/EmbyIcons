@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
+    [Unauthenticated] 
     [Route("/EmbyIcons/Preview", "GET", Summary = "Generates a live preview image based on current settings")]
     public class GetIconPreview : IReturn<Stream>
     {

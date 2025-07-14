@@ -241,7 +241,7 @@ namespace EmbyIcons.Services
         #region Helper methods to create overlay info
         private async Task<List<OverlayGroupInfo>> CreateIconGroups(OverlayData data, PluginOptions options, CancellationToken cancellationToken)
         {
-            var groups = new List<OverlayGroupInfo>(8); 
+            var groups = new List<OverlayGroupInfo>(8); // Pre-size list
 
             if (options.ShowAudioIcons) await AddGroup(groups, data.AudioLanguages, IconCacheManager.IconType.Audio, options.AudioIconAlignment, 1, options.AudioOverlayHorizontal, cancellationToken);
             if (options.ShowSubtitleIcons) await AddGroup(groups, data.SubtitleLanguages, IconCacheManager.IconType.Subtitle, options.SubtitleIconAlignment, 2, options.SubtitleOverlayHorizontal, cancellationToken, "srt.");

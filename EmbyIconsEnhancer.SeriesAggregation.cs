@@ -191,7 +191,7 @@ namespace EmbyIcons
             };
 
             _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-            PruneSeriesAggregationCacheWithLimit(); // Prune on add
+            PruneSeriesAggregationCacheWithLimit(); 
             return result;
         }
 
