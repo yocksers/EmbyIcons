@@ -163,7 +163,7 @@ namespace EmbyIcons.Services
             textStrokePaint.TextSize = fontSize;
             textStrokePaint.Typeface = typeface;
             textStrokePaint.IsAntialias = options.EnableImageSmoothing;
-            textStrokePaint.StrokeWidth = Math.Max(1f, fontSize / 12f); 
+            textStrokePaint.StrokeWidth = Math.Max(1f, fontSize / 12f);
 
             SKRect textBounds = new();
             textPaint.MeasureText(scoreText, ref textBounds);
@@ -277,7 +277,7 @@ namespace EmbyIcons.Services
         {
             if (options.ShowCommunityScoreIcon && data.CommunityRating.HasValue && data.CommunityRating.Value > 0)
             {
-                var imdbIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.Audio, cancellationToken); // Type doesn't matter for imdb
+                var imdbIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, cancellationToken);
                 return new RatingOverlayInfo(options.CommunityScoreIconAlignment, 9, options.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, imdbIcon);
             }
             return null;

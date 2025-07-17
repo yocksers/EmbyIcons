@@ -26,6 +26,7 @@ namespace EmbyIcons.Helpers
         private readonly ConcurrentDictionary<string, string> _audioCodecIconPathCache = new();
         private readonly ConcurrentDictionary<string, string> _videoCodecIconPathCache = new();
         private readonly ConcurrentDictionary<string, string> _tagIconPathCache = new();
+        private readonly ConcurrentDictionary<string, string> _communityRatingIconPathCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _audioIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _subtitleIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _channelIconImageCache = new();
@@ -34,19 +35,41 @@ namespace EmbyIcons.Helpers
         private readonly ConcurrentDictionary<string, CachedIcon> _audioCodecIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _videoCodecIconImageCache = new();
         private readonly ConcurrentDictionary<string, CachedIcon> _tagIconImageCache = new();
+        private readonly ConcurrentDictionary<string, CachedIcon> _communityRatingIconImageCache = new();
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
         private string _currentIconVersion = string.Empty;
         public event EventHandler<string>? CacheRefreshedWithVersion;
+        private static readonly Random _random = new();
 
-        public enum IconType { Audio, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag }
+        private static readonly string[] SupportedIconExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
+
+        public enum IconType { Audio, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating }
 
         public IconCacheManager(TimeSpan cacheTtl, ILogger logger, int maxParallelism = 4)
         {
             _cacheTtl = cacheTtl;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _maxParallelism = maxParallelism;
+        }
+
+        public string? GetRandomIconName(IconType iconType)
+        {
+            var (pathCache, _) = GetCachesForType(iconType);
+            if (pathCache.IsEmpty) return null;
+
+            var keys = pathCache.Keys.ToList();
+            if (!keys.Any()) return null;
+
+            var randomKey = keys[_random.Next(keys.Count)];
+
+            if (iconType == IconType.Subtitle && randomKey.StartsWith("srt."))
+            {
+                return randomKey.Substring(4);
+            }
+
+            return randomKey;
         }
 
         public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -86,6 +109,7 @@ namespace EmbyIcons.Helpers
             _audioCodecIconPathCache.Clear();
             _videoCodecIconPathCache.Clear();
             _tagIconPathCache.Clear();
+            _communityRatingIconPathCache.Clear();
             ClearImageCache(_audioIconImageCache);
             ClearImageCache(_subtitleIconImageCache);
             ClearImageCache(_channelIconImageCache);
@@ -94,18 +118,20 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_audioCodecIconImageCache);
             ClearImageCache(_videoCodecIconImageCache);
             ClearImageCache(_tagIconImageCache);
+            ClearImageCache(_communityRatingIconImageCache);
 
             var channelNames = new HashSet<string> { "mono", "stereo", "5.1", "7.1" };
             var formatNames = new HashSet<string> { "hdr", "dv", "hdr10plus" };
             var resolutionNames = new HashSet<string> { "480p", "576p", "720p", "1080p", "4k" };
             var audioCodecNames = new HashSet<string> { "aac", "pcm", "flac", "mp3", "ac3", "eac3", "dts", "truehd" };
             var videoCodecNames = new HashSet<string> { "av1", "avc", "h264", "h265", "mp4", "vc1", "vp9", "h266" };
+            var communityRatingNames = new HashSet<string> { "imdb" };
 
             foreach (var file in allFiles)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var ext = Path.GetExtension(file).ToLowerInvariant();
-                if (string.IsNullOrEmpty(ext) || ext == ".db" || ext == ".ini") continue;
+                if (string.IsNullOrEmpty(ext) || !SupportedIconExtensions.Contains(ext)) continue;
 
                 var name = Path.GetFileNameWithoutExtension(file);
                 var lowerName = name.ToLowerInvariant();
@@ -117,6 +143,7 @@ namespace EmbyIcons.Helpers
                 else if (resolutionNames.Contains(lowerName)) dict = _resolutionIconPathCache;
                 else if (audioCodecNames.Contains(lowerName)) dict = _audioCodecIconPathCache;
                 else if (videoCodecNames.Contains(lowerName)) dict = _videoCodecIconPathCache;
+                else if (communityRatingNames.Contains(lowerName)) dict = _communityRatingIconPathCache;
                 else
                 {
                     _audioIconPathCache.TryAdd(lowerName, file);
@@ -127,28 +154,39 @@ namespace EmbyIcons.Helpers
             }
 
             _lastCacheRefreshTime = DateTime.UtcNow;
-            var newVersion = ComputeIconFilesVersion(currentWriteTimes);
+
+            string newVersion;
+            if (force)
+            {
+                newVersion = Guid.NewGuid().ToString("N");
+                _logger.Info("[EmbyIcons] Cache refresh was forced by user. Generating new cache-busting version.");
+            }
+            else
+            {
+                newVersion = ComputeIconFilesVersion(currentWriteTimes);
+            }
+
             if (newVersion != _currentIconVersion)
             {
                 _currentIconVersion = newVersion;
                 CacheRefreshedWithVersion?.Invoke(this, _currentIconVersion);
-                _logger.Debug($"[EmbyIcons] Icon cache refreshed. New version: {_currentIconVersion}");
+                _logger.Info($"[EmbyIcons] Icon cache version updated to: {_currentIconVersion}. Posters will be refreshed as they are viewed.");
             }
             return Task.CompletedTask;
         }
 
-        public async Task<SKImage?> GetFirstAvailableIconAsync(IconType iconType, CancellationToken cancellationToken)
+        private string? FindIconPathOnDisk(string iconNameKey)
         {
-            var (pathCache, _) = GetCachesForType(iconType);
+            if (string.IsNullOrEmpty(_iconsFolder)) return null;
 
-            var firstKey = pathCache.Keys.FirstOrDefault(key =>
-                pathCache.TryGetValue(key, out var path) && !string.IsNullOrEmpty(path));
-
-            if (firstKey != null)
+            foreach (var ext in SupportedIconExtensions)
             {
-                return await GetCachedIconAsync(firstKey, iconType, cancellationToken);
+                var fullPath = Path.Combine(_iconsFolder, iconNameKey + ext);
+                if (File.Exists(fullPath))
+                {
+                    return fullPath;
+                }
             }
-
             return null;
         }
 
@@ -156,46 +194,44 @@ namespace EmbyIcons.Helpers
         {
             if (_iconsFolder == null) return null;
             var processedKey = iconNameKey.ToLowerInvariant();
-
             var (pathCache, imageCache) = GetCachesForType(iconType);
 
-            if (pathCache.TryGetValue(processedKey, out var iconPath) && !string.IsNullOrEmpty(iconPath))
+            pathCache.TryGetValue(processedKey, out var iconPath);
+
+            if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath))
             {
-                if (imageCache.TryGetValue(iconPath, out var cached))
+                string? foundPath = FindIconPathOnDisk(processedKey);
+                if (!string.IsNullOrEmpty(foundPath))
                 {
-                    try
-                    {
-                        var lastWriteTime = File.GetLastWriteTimeUtc(iconPath);
-                        if (lastWriteTime == cached.FileWriteTimeUtc)
-                        {
-                            return cached.Image; 
-                        }
-                        else
-                        {
-                            _logger.Info($"[EmbyIcons] Icon file '{iconPath}' has changed. Invalidating cache and reloading.");
-                            if (imageCache.TryRemove(iconPath, out var oldCached))
-                            {
-                                oldCached.Image?.Dispose();
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Warn($"[EmbyIcons] Could not check file time for '{iconPath}', reloading. Error: {ex.Message}");
-                        if (imageCache.TryRemove(iconPath, out var oldCached))
-                        {
-                            oldCached.Image?.Dispose();
-                        }
-                    }
+                    _logger.Debug($"[EmbyIcons] Self-healing: Found new path '{foundPath}' for icon key '{processedKey}'. Updating path cache.");
+                    iconPath = foundPath;
+                    pathCache[processedKey] = iconPath; 
+                }
+                else
+                {
+                    pathCache.TryRemove(processedKey, out _); 
+                    return null; 
                 }
             }
 
-            iconPath = ResolveIconPathWithFallback(processedKey, pathCache);
-            if (string.IsNullOrEmpty(iconPath)) return null;
-
-            if (imageCache.TryGetValue(iconPath, out var cachedAfterResolve))
+            if (imageCache.TryGetValue(iconPath, out var cached))
             {
-                return cachedAfterResolve.Image;
+                try
+                {
+                    var lastWriteTime = File.GetLastWriteTimeUtc(iconPath);
+                    if (lastWriteTime == cached.FileWriteTimeUtc)
+                    {
+                        return cached.Image; 
+                    }
+
+                    _logger.Info($"[EmbyIcons] Icon file '{iconPath}' has been modified. Invalidating and reloading.");
+                    if (imageCache.TryRemove(iconPath, out var oldCached)) oldCached.Image?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn($"[EmbyIcons] Could not check file time for '{iconPath}', reloading. Error: {ex.Message}");
+                    if (imageCache.TryRemove(iconPath, out var oldCached)) oldCached.Image?.Dispose();
+                }
             }
 
             return await TryLoadAndCacheIconAsync(iconPath, imageCache, cancellationToken);
@@ -207,7 +243,7 @@ namespace EmbyIcons.Helpers
             {
                 if (!File.Exists(iconPath) || new FileInfo(iconPath).Length < 50)
                 {
-                    if (!File.Exists(iconPath)) _logger.Warn($"[EmbyIcons] Icon file not found: '{iconPath}'.");
+                    if (!File.Exists(iconPath)) _logger.Warn($"[EmbyIcons] Icon file not found on attempt to load: '{iconPath}'.");
                     else _logger.Warn($"[EmbyIcons] Skipping small/corrupt icon: '{iconPath}'.");
                     return null;
                 }
@@ -222,26 +258,21 @@ namespace EmbyIcons.Helpers
                 using var data = SKData.Create(memoryStream);
                 var img = SKImage.FromEncodedData(data);
 
+                if (img == null)
+                {
+                    _logger.Warn($"[EmbyIcons] Failed to decode icon file: '{iconPath}'. It may be corrupt or an unsupported format.");
+                    return null;
+                }
+
                 var lastWrite = File.GetLastWriteTimeUtc(iconPath);
                 imageCache[iconPath] = new CachedIcon(img, lastWrite);
                 return img;
             }
             catch (Exception ex)
             {
-                _logger.ErrorException($"Failed to load icon '{iconPath}'.", ex);
+                _logger.ErrorException($"[EmbyIcons] A critical error occurred while loading icon '{iconPath}'.", ex);
                 return null;
             }
-        }
-
-        private string ResolveIconPathWithFallback(string iconNameKey, ConcurrentDictionary<string, string> cache)
-        {
-            if (cache.TryGetValue(iconNameKey, out var path)) return path;
-
-            if (iconNameKey.Length == 3 && cache == _audioIconPathCache && cache.TryGetValue(iconNameKey.Substring(0, 2), out path))
-                return cache.GetOrAdd(iconNameKey, path);
-
-            cache.TryAdd(iconNameKey, string.Empty);
-            return string.Empty;
         }
 
         private (ConcurrentDictionary<string, string>, ConcurrentDictionary<string, CachedIcon>) GetCachesForType(IconType iconType) => iconType switch
@@ -254,6 +285,7 @@ namespace EmbyIcons.Helpers
             IconType.AudioCodec => (_audioCodecIconPathCache, _audioCodecIconImageCache),
             IconType.VideoCodec => (_videoCodecIconPathCache, _videoCodecIconImageCache),
             IconType.Tag => (_tagIconPathCache, _tagIconImageCache),
+            IconType.CommunityRating => (_communityRatingIconPathCache, _communityRatingIconImageCache),
             _ => throw new ArgumentOutOfRangeException(nameof(iconType))
         };
 
@@ -275,6 +307,7 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_audioCodecIconImageCache);
             ClearImageCache(_videoCodecIconImageCache);
             ClearImageCache(_tagIconImageCache);
+            ClearImageCache(_communityRatingIconImageCache);
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)

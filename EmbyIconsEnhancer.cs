@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -59,6 +59,13 @@ namespace EmbyIcons
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
         }
 
+        public void ClearAllItemDataCaches()
+        {
+            _seriesAggregationCache.Clear();
+            _episodeIconCache.Clear();
+            _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
+        }
+
         private BaseItem GetFullItem(BaseItem item)
         {
             if (item is Series series && series.Id == Guid.Empty && series.InternalId > 0)
@@ -98,7 +105,7 @@ namespace EmbyIcons
         {
             if (item == null || imageType != ImageType.Primary) return false;
 
-            bool isSupportedType = item is Movie || item is Series || item is Season || item is Episode;
+            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo;
             if (!isSupportedType) return false;
 
             if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return false;
@@ -122,7 +129,7 @@ namespace EmbyIcons
               .Append("_q").Append(options.JpegQuality)
               .Append("_sm").Append(options.EnableImageSmoothing ? 1 : 0)
               .Append("_iv").Append(_iconCacheVersion)
-              .Append("_pv").Append(plugin.ConfigurationVersion); 
+              .Append("_pv").Append(plugin.ConfigurationVersion);
 
             int settingsMask = (options.ShowAudioIcons ? 1 : 0) |
                                ((options.ShowSubtitleIcons ? 1 : 0) << 1) |

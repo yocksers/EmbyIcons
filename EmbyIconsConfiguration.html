@@ -25,7 +25,20 @@
                         <div class="fieldDescription">The full path to the folder where your custom icons are stored.</div>
                     </div>
 
-                    <div class="inputContainer">
+                    <div class="flex align-items-center" style="margin: 2em 0 .5em;">
+                        <h3 style="margin: 0;">Cache Management</h3>
+                    </div>
+                    <div class="fieldDescription" style="margin-bottom: 1em;">
+                        If you have added, removed, or changed any icon files, clear the cache to apply the changes.
+                        Your posters will be updated with the new icons as you browse your libraries.
+                    </div>
+                    <div>
+                        <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">
+                            <span>Clear Icon Cache</span>
+                        </button>
+                    </div>
+
+                    <div class="inputContainer" style="margin-top: 2.5em;">
                         <h3 style="margin-bottom: 0.5em;">Apply to these libraries</h3>
                         <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.5em 1.5em;">
                         </div>
@@ -239,9 +252,6 @@
                     <ul>
                         <li>Example: <code>imdb.png</code></li>
                     </ul>
-
-                    <h3 style="margin-top: 2em;">Troubleshooting</h3>
-                    <p>If you add, remove, or change any icon files, you must restart your Emby Server for the changes to be applied to your posters.</p>
 
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
                         <div style="display: flex; align-items: center; gap: 1em;">

@@ -6,6 +6,7 @@ using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
-    [Unauthenticated] 
+    [Unauthenticated]
     [Route("/EmbyIcons/Preview", "GET", Summary = "Generates a live preview image based on current settings")]
     public class GetIconPreview : IReturn<Stream>
     {
@@ -47,16 +48,29 @@ namespace EmbyIcons
             using var originalBitmap = SKBitmap.Decode(Assembly.GetExecutingAssembly().GetManifestResourceStream("EmbyIcons.Images.preview.png"))
                 ?? throw new InvalidOperationException("Failed to decode the preview background image.");
 
+            var enhancer = Plugin.Instance?.Enhancer ?? throw new InvalidOperationException("Enhancer is not initialized.");
+            var cacheManager = enhancer._iconCacheManager;
+
+            var audioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var audioLang1 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Audio);
+            if (audioLang1 != null) audioLangs.Add(audioLang1);
+
+            var audioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var audioCodec1 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.AudioCodec);
+            if (audioCodec1 != null) audioCodecs.Add(audioCodec1);
+            var audioCodec2 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.AudioCodec);
+            if (audioCodec2 != null) audioCodecs.Add(audioCodec2);
+
             var previewData = new OverlayData
             {
-                AudioLanguages = { "eng" },
-                SubtitleLanguages = { "eng" },
-                ResolutionIconName = "4k",
-                VideoFormatIconName = "hdr",
-                VideoCodecs = { "h265" },
-                Tags = { "tag" },
-                ChannelIconName = "5.1",
-                AudioCodecs = { "dts" },
+                AudioLanguages = audioLangs.Any() ? audioLangs : new HashSet<string> { "eng" },
+                SubtitleLanguages = new HashSet<string> { cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Subtitle) ?? "eng" },
+                ResolutionIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Resolution) ?? "4k",
+                VideoFormatIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.VideoFormat) ?? "hdr",
+                VideoCodecs = new HashSet<string> { cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.VideoCodec) ?? "h265" },
+                Tags = new HashSet<string> { "tag" },
+                ChannelIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Channel) ?? "5.1",
+                AudioCodecs = audioCodecs.Any() ? audioCodecs : new HashSet<string> { "dts" },
                 CommunityRating = 6.9f
             };
 
