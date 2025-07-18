@@ -12,9 +12,9 @@ namespace EmbyIcons
         private static string GetDefaultIconsFolder()
         {
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-                return @"D:\icons";
+                return @"C:\";
             else
-                return "/var/lib/emby/plugins/EmbyIcons/icons";
+                return "/";
         }
 
         public string SelectedLibraries { get; set; } = string.Empty;

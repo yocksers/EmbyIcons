@@ -84,79 +84,59 @@ namespace EmbyIcons
                 return emptyResult;
             }
 
-            var firstEpisode = episodes[0];
-            var firstStreams = firstEpisode.GetMediaStreams() ?? new List<MediaStream>();
 
-            var commonAudioLangs = firstStreams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language))
-                                               .Select(s => LanguageHelper.NormalizeLangCode(s.Language))
-                                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var commonAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var commonSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var commonVideoCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? commonChannelType = null;
+            string? commonResolution = null;
 
-            var commonSubtitleLangs = firstStreams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language))
-                                                  .Select(s => LanguageHelper.NormalizeLangCode(s.Language))
-                                                  .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var commonAudioCodecs = firstStreams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Codec))
-                                                .Select(s => MediaStreamHelper.GetAudioCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!)
-                                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var commonVideoCodecs = firstStreams.Where(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.Codec))
-                                                .Select(s => MediaStreamHelper.GetVideoCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!)
-                                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var commonChannelType = MediaStreamHelper.GetChannelIconName(firstStreams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
-            var commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video));
-
-            bool allHaveDV = MediaStreamHelper.HasDolbyVision(firstEpisode, firstStreams);
-            bool allHaveHdr10Plus = MediaStreamHelper.HasHdr10Plus(firstEpisode, firstStreams);
-            bool allHaveHdr = MediaStreamHelper.HasHdr(firstEpisode, firstStreams);
+            bool allHaveDV = true;
+            bool allHaveHdr10Plus = true;
+            bool allHaveHdr = true;
+            bool isFirstEpisode = true;
 
             var episodeHashes = new List<string>(episodes.Count);
 
-            for (int i = 0; i < episodes.Count; i++)
+            foreach (var ep in episodes)
             {
-                var ep = episodes[i];
-                var streams = (i == 0) ? firstStreams : (ep.GetMediaStreams() ?? new List<MediaStream>());
+                var streams = ep.GetMediaStreams() ?? new List<MediaStream>();
 
-                if (i > 0)
+                var currentAudioLangs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var currentSubtitleLangs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var currentAudioCodecs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Codec)).Select(s => MediaStreamHelper.GetAudioCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var currentVideoCodecs = streams.Where(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.Codec)).Select(s => MediaStreamHelper.GetVideoCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var currentChannel = MediaStreamHelper.GetChannelIconName(streams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
+                var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video));
+
+                if (isFirstEpisode)
                 {
-                    if (commonAudioLangs.Count > 0)
-                    {
-                        var currentAudio = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language));
-                        commonAudioLangs.IntersectWith(currentAudio);
-                    }
-                    if (commonSubtitleLangs.Count > 0)
-                    {
-                        var currentSubs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language));
-                        commonSubtitleLangs.IntersectWith(currentSubs);
-                    }
-                    if (commonAudioCodecs.Count > 0)
-                    {
-                        var currentCodecs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.Codec)).Select(s => MediaStreamHelper.GetAudioCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!);
-                        commonAudioCodecs.IntersectWith(currentCodecs);
-                    }
-                    if (commonVideoCodecs.Count > 0)
-                    {
-                        var currentCodecs = streams.Where(s => s.Type == MediaStreamType.Video && !string.IsNullOrEmpty(s.Codec)).Select(s => MediaStreamHelper.GetVideoCodecIconName(s.Codec)).Where(name => name != null).Select(name => name!);
-                        commonVideoCodecs.IntersectWith(currentCodecs);
-                    }
-                    if (commonChannelType != null)
-                    {
-                        var currentChannel = MediaStreamHelper.GetChannelIconName(streams.Where(s => s.Type == MediaStreamType.Audio && s.Channels.HasValue).Select(s => s.Channels!.Value).DefaultIfEmpty(0).Max());
-                        if (commonChannelType != currentChannel) commonChannelType = null;
-                    }
-                    if (commonResolution != null)
-                    {
-                        var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(streams.FirstOrDefault(s => s.Type == MediaStreamType.Video));
-                        if (commonResolution != currentRes) commonResolution = null;
-                    }
-
-                    if (allHaveDV) allHaveDV = MediaStreamHelper.HasDolbyVision(ep, streams);
-                    if (allHaveHdr10Plus) allHaveHdr10Plus = MediaStreamHelper.HasHdr10Plus(ep, streams);
-                    if (allHaveHdr) allHaveHdr = MediaStreamHelper.HasHdr(ep, streams);
+                    commonAudioLangs.UnionWith(currentAudioLangs);
+                    commonSubtitleLangs.UnionWith(currentSubtitleLangs);
+                    commonAudioCodecs.UnionWith(currentAudioCodecs);
+                    commonVideoCodecs.UnionWith(currentVideoCodecs);
+                    commonChannelType = currentChannel;
+                    commonResolution = currentRes;
+                    isFirstEpisode = false;
                 }
+                else
+                {
+                    commonAudioLangs.IntersectWith(currentAudioLangs);
+                    commonSubtitleLangs.IntersectWith(currentSubtitleLangs);
+                    commonAudioCodecs.IntersectWith(currentAudioCodecs);
+                    commonVideoCodecs.IntersectWith(currentVideoCodecs);
+                    if (commonChannelType != currentChannel) commonChannelType = null;
+                    if (commonResolution != currentRes) commonResolution = null;
+                }
+
+                allHaveDV &= MediaStreamHelper.HasDolbyVision(ep, streams);
+                allHaveHdr10Plus &= MediaStreamHelper.HasHdr10Plus(ep, streams);
+                allHaveHdr &= MediaStreamHelper.HasHdr(ep, streams);
 
                 episodeHashes.Add($"{ep.Id}:{MediaStreamHelper.GetItemMediaStreamHash(ep, streams)}");
             }
+
 
             var finalAudioLangs = (options.ShowAudioIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonAudioLangs : new HashSet<string>();
             var finalSubtitleLangs = (options.ShowSubtitleIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonSubtitleLangs : new HashSet<string>();
@@ -191,7 +171,7 @@ namespace EmbyIcons
             };
 
             _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-            PruneSeriesAggregationCacheWithLimit(); 
+            PruneSeriesAggregationCacheWithLimit();
             return result;
         }
 
