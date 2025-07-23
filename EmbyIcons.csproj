@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>3.4.00</Version>
-		<AssemblyVersion>3.4.0.0</AssemblyVersion>
-		<FileVersion>3.4.0.0</FileVersion>
+		<Version>3.39.00</Version>
+		<AssemblyVersion>3.39.0.0</AssemblyVersion>
+		<FileVersion>3.39.0.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -19,6 +19,7 @@
 
 	<ItemGroup>
 	  <None Remove="Images\preview.png" />
+	  <None Remove="Images\tag.png" />
 	  <None Remove="plugin.js" />
 	</ItemGroup>
 
@@ -28,6 +29,7 @@
 		<EmbeddedResource Include="EmbyIconsConfiguration.js" />
 		<EmbeddedResource Include="Images\logo.png" />
 		<EmbeddedResource Include="Images\preview.png" />
+		<EmbeddedResource Include="Images\tag.png" />
 		<EmbeddedResource Include="plugin.js" />
 	</ItemGroup>
 

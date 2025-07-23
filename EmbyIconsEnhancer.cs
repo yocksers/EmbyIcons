@@ -52,11 +52,18 @@ namespace EmbyIcons
             _iconCacheVersion = Guid.NewGuid().ToString("N");
             _logger.Info($"[EmbyIcons] New session started. Set icon cache version to '{_iconCacheVersion}' to force poster redraw.");
 
-            _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger, 4);
+            _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger);
             _iconCacheManager.CacheRefreshedWithVersion += (sender, version) => { _iconCacheVersion = version ?? string.Empty; };
 
             _overlayDataService = new OverlayDataService(this);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
+        }
+
+        public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
+        {
+            _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
+            ClearAllItemDataCaches();
+            await _iconCacheManager.RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
         }
 
         public void ClearAllItemDataCaches()
@@ -87,18 +94,17 @@ namespace EmbyIcons
                     if (_seriesAggregationCache.TryRemove(kvp.Key, out _)) removed++;
                 }
             }
-            if (removed > 0) _logger.Info($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
+            if (removed > 0 && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)) _logger.Debug($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
         }
 
         public void ClearSeriesAggregationCache(Guid seriesId)
         {
             if (seriesId != Guid.Empty && _seriesAggregationCache.TryRemove(seriesId, out _))
             {
-                _logger.Info($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
             }
         }
 
-        public Task RefreshIconCacheAsync(CancellationToken cancellationToken, bool force = false) => _iconCacheManager.RefreshCacheOnDemandAsync(cancellationToken, force);
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
 
         public bool Supports(BaseItem? item, ImageType imageType)
@@ -113,7 +119,7 @@ namespace EmbyIcons
             var options = Plugin.Instance?.GetConfiguredOptions();
             if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
 
-            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false) || (options?.ShowAudioCodecIcons ?? false) || (options?.ShowVideoCodecIcons ?? false) || (options?.ShowTagIcons ?? false);
+            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false) || (options?.ShowAudioCodecIcons ?? false) || (options?.ShowVideoCodecIcons ?? false) || (options?.ShowTagIcons ?? false) || (options?.ShowAspectRatioIcons ?? false);
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
@@ -142,7 +148,9 @@ namespace EmbyIcons
                                ((options.ShowCommunityScoreIcon ? 1 : 0) << 8) |
                                ((options.ShowOverlaysForEpisodes ? 1 : 0) << 9) |
                                ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 1 : 0) << 10) |
-                               ((options.UseSeriesLiteMode ? 1 : 0) << 11);
+                               ((options.UseSeriesLiteMode ? 1 : 0) << 11) |
+                               ((options.ShowAspectRatioIcons ? 1 : 0) << 12) |
+                               ((options.EnableDebugLogging ? 1 : 0) << 13);
             sb.Append("_cfg").Append(settingsMask);
 
             sb.Append("_align")
@@ -154,7 +162,8 @@ namespace EmbyIcons
               .Append((int)options.VideoCodecIconAlignment).Append(options.VideoCodecOverlayHorizontal ? 'h' : 'v')
               .Append((int)options.TagIconAlignment).Append(options.TagOverlayHorizontal ? 'h' : 'v')
               .Append((int)options.ResolutionIconAlignment).Append(options.ResolutionOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 'h' : 'v');
+              .Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 'h' : 'v')
+              .Append((int)options.AspectRatioIconAlignment).Append(options.AspectRatioOverlayHorizontal ? 'h' : 'v');
 
             if (options.ShowCommunityScoreIcon)
             {
@@ -220,12 +229,20 @@ namespace EmbyIcons
 
                     using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(sourceBitmap, overlayData, options, cancellationToken);
 
-                    string tempOutput = outputFile + "." + Guid.NewGuid() + ".tmp";
-                    await using (var fsOut = File.Create(tempOutput))
+                    string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                     {
                         await outputStream.CopyToAsync(fsOut, cancellationToken);
                     }
-                    File.Move(tempOutput, outputFile, true);
+
+                    if (File.Exists(outputFile))
+                    {
+                        File.Replace(tempOutput, outputFile, null);
+                    }
+                    else
+                    {
+                        File.Move(tempOutput, outputFile);
+                    }
                 }
                 finally
                 {
@@ -234,7 +251,7 @@ namespace EmbyIcons
             }
             catch (OperationCanceledException)
             {
-                _logger.Debug($"[EmbyIcons] Image enhancement task cancelled for item: {item?.Name}.");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Image enhancement task cancelled for item: {item?.Name}.");
             }
             catch (Exception ex)
             {

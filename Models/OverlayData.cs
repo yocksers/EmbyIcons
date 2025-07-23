@@ -13,5 +13,6 @@ namespace EmbyIcons.Models
         public string? VideoFormatIconName { get; set; }
         public string? ResolutionIconName { get; set; }
         public float? CommunityRating { get; set; }
+        public string? AspectRatioIconName { get; set; }
     }
 }

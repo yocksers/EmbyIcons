@@ -41,17 +41,16 @@ namespace EmbyIcons.Services
                     VideoFormatIconName = aggResult.VideoFormats.FirstOrDefault(),
                     ResolutionIconName = aggResult.Resolutions.FirstOrDefault(),
                     CommunityRating = item.CommunityRating,
-                    Tags = seriesTags
+                    Tags = seriesTags,
+                    AspectRatioIconName = null 
                 };
             }
 
             if (EmbyIconsEnhancer._episodeIconCache.TryGetValue(item.Id, out var cachedInfo) && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
             {
-                Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
-
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
                 var updatedInfo = cachedInfo with { DateCached = System.DateTime.UtcNow };
                 EmbyIconsEnhancer._episodeIconCache.TryUpdate(item.Id, updatedInfo, cachedInfo);
-
                 return new OverlayData
                 {
                     AudioLanguages = cachedInfo.AudioLangs,
@@ -62,11 +61,12 @@ namespace EmbyIcons.Services
                     ChannelIconName = cachedInfo.ChannelIconName,
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
                     ResolutionIconName = cachedInfo.ResolutionIconName,
-                    CommunityRating = item.CommunityRating
+                    CommunityRating = item.CommunityRating,
+                    AspectRatioIconName = cachedInfo.AspectRatioIconName
                 };
             }
 
-            Plugin.Instance?.Logger.Debug($"[EmbyIcons] No valid cache. Processing streams for '{item.Name}'.");
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] No valid cache. Processing streams for '{item.Name}'.");
             var overlayData = ProcessMediaStreams(item, options);
 
             var newInfo = new EmbyIconsEnhancer.EpisodeIconInfo
@@ -80,11 +80,11 @@ namespace EmbyIcons.Services
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
                 DateModifiedTicks = item.DateModified.Ticks,
-                DateCached = System.DateTime.UtcNow
+                DateCached = System.DateTime.UtcNow,
+                AspectRatioIconName = overlayData.AspectRatioIconName
             };
             EmbyIconsEnhancer._episodeIconCache[item.Id] = newInfo;
             _enhancer.PruneEpisodeCache();
-
             return overlayData;
         }
 
@@ -92,49 +92,44 @@ namespace EmbyIcons.Services
         {
             var data = new OverlayData { CommunityRating = item.CommunityRating };
             var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
-            int maxChannels = 0;
-            MediaStream? videoStream = null;
+
+            MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+            MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
             foreach (var stream in mainItemStreams)
             {
                 if (stream.Type == MediaStreamType.Audio)
                 {
-                    if (!string.IsNullOrEmpty(stream.Language)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.Language));
-                    if (stream.Channels.HasValue) maxChannels = System.Math.Max(maxChannels, stream.Channels.Value);
-                    if (!string.IsNullOrEmpty(stream.Codec))
-                    {
-                        var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream.Codec);
-                        if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
-                    }
+                    if (!string.IsNullOrEmpty(stream.DisplayLanguage)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                    var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream);
+                    if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
                 }
-                else if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.Language))
+                else if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
                 {
-                    data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.Language));
+                    data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
                 }
                 else if (stream.Type == MediaStreamType.Video)
                 {
-                    if (videoStream == null) videoStream = stream;
-                    if (!string.IsNullOrEmpty(stream.Codec))
-                    {
-                        var codecIcon = MediaStreamHelper.GetVideoCodecIconName(stream.Codec);
-                        if (codecIcon != null) data.VideoCodecs.Add(codecIcon);
-                    }
+                    var codecIcon = MediaStreamHelper.GetVideoCodecIconName(stream);
+                    if (codecIcon != null) data.VideoCodecs.Add(codecIcon);
                 }
             }
 
-            data.ChannelIconName = maxChannels > 0 ? MediaStreamHelper.GetChannelIconName(maxChannels) : null;
-            data.VideoFormatIconName = MediaStreamHelper.HasDolbyVision(item, mainItemStreams) ? "dv" : MediaStreamHelper.HasHdr10Plus(item, mainItemStreams) ? "hdr10plus" : MediaStreamHelper.HasHdr(item, mainItemStreams) ? "hdr" : null;
-            data.ResolutionIconName = videoStream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(videoStream) : null;
+            _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
+                .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
+
+            if (primaryAudioStream != null) data.ChannelIconName = MediaStreamHelper.GetChannelIconName(primaryAudioStream);
+            data.VideoFormatIconName = MediaStreamHelper.GetVideoFormatIconName(item, mainItemStreams);
+            data.ResolutionIconName = primaryVideoStream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>()) : null;
+            data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream);
 
             if (item.Tags != null && item.Tags.Length > 0)
             {
-                data.Tags = new HashSet<string>(item.Tags.Length);
                 foreach (var tag in item.Tags)
                 {
                     data.Tags.Add(string.Intern(tag));
                 }
             }
-
             return data;
         }
     }

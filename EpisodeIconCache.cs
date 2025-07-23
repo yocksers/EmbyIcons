@@ -16,10 +16,11 @@ namespace EmbyIcons
             public HashSet<string> SubtitleLangs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> AudioCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> VideoCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-            public HashSet<string> Tags { get; init; } = new();
+            public HashSet<string> Tags { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public string? ChannelIconName { get; init; }
             public string? VideoFormatIconName { get; init; }
             public string? ResolutionIconName { get; init; }
+            public string? AspectRatioIconName { get; init; }
             public long DateModifiedTicks { get; init; }
             public DateTime DateCached { get; init; }
         }
@@ -31,7 +32,7 @@ namespace EmbyIcons
 
             if (_episodeIconCache.TryRemove(episodeId, out _))
             {
-                _logger.Info($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
             }
         }
 
@@ -50,7 +51,7 @@ namespace EmbyIcons
                 {
                     _episodeIconCache.TryRemove(item.Key, out _);
                 }
-                _logger.Info($"[EmbyIcons] Pruned {toRemove} items from the episode icon cache.");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Pruned {toRemove} items from the episode icon cache.");
             }
         }
     }

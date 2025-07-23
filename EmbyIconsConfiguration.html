@@ -1,4 +1,4 @@
-﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
@@ -16,12 +16,13 @@
                     <div class="inputContainer">
                         <div style="display: flex; align-items: flex-end;">
                             <div style="flex-grow: 1;">
-                                <input is="emby-input" type="text" id="txtIconsFolder" label="Icons Folder:" autocomplete="off" />
+                                <input is="emby-input" type="text" id="txtIconsFolder" label="Icons Folder:" autocomplete="off" data-config-key="IconsFolder" />
                             </div>
                             <button type="button" is="emby-button" class="raised" id="btnSelectIconsFolder" title="Browse for folder" style="margin-left: 1em;">
                                 <span>...</span>
                             </button>
                         </div>
+                        <div id="iconsFolderWarning" class="fieldDescription" style="color: #ffc107; display: none; margin-top: .5em;"></div>
                         <div class="fieldDescription">The full path to the folder where your custom icons are stored.</div>
                     </div>
 
@@ -43,37 +44,38 @@
                         <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.5em 1.5em;">
                         </div>
                         <div class="fieldDescription" style="margin-top: 0.5em;">Leave all unchecked to apply to all libraries.</div>
-                        <input type="hidden" id="txtSelectedLibraries" />
+                        <input type="hidden" id="txtSelectedLibraries" data-config-key="SelectedLibraries" />
                     </div>
 
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
                         <h2 style="margin: 0;">Overlay Toggles</h2>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em 2em;">
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioIcons" /><span>Show Audio Language Icons</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowSubtitleIcons" /><span>Show Subtitle Language Icons</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioChannelIcons" /><span>Show Audio Channel Icons (e.g., 7.1)</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioCodecIcons" /><span>Show Audio Codec Icons (e.g., DTS)</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoFormatIcons" /><span>Show Video Format Icons (e.g., HDR)</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoCodecIcons" /><span>Show Video Codec Icons (e.g., H265)</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowTagIcons" /><span>Show Custom Tag Icons</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowResolutionIcons" /><span>Show Resolution Icons (e.g., 4K)</span></label></div>
-                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowCommunityScoreIcon" /><span>Show Community Rating Icon</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioIcons" data-config-key="ShowAudioIcons" /><span>Show Audio Language Icons</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowSubtitleIcons" data-config-key="ShowSubtitleIcons" /><span>Show Subtitle Language Icons</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioChannelIcons" data-config-key="ShowAudioChannelIcons" /><span>Show Audio Channel Icons (e.g., 7.1)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAudioCodecIcons" data-config-key="ShowAudioCodecIcons" /><span>Show Audio Codec Icons (e.g., DTS)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoFormatIcons" data-config-key="ShowVideoFormatIcons" /><span>Show Video Format Icons (e.g., HDR)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowVideoCodecIcons" data-config-key="ShowVideoCodecIcons" /><span>Show Video Codec Icons (e.g., H265)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowTagIcons" data-config-key="ShowTagIcons" /><span>Show Custom Tag Icons</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowResolutionIcons" data-config-key="ShowResolutionIcons" /><span>Show Resolution Icons (e.g., 4K)</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowCommunityScoreIcon" data-config-key="ShowCommunityScoreIcon" /><span>Show Community Rating Icon</span></label></div>
+                        <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkShowAspectRatioIcons" data-config-key="ShowAspectRatioIcons" /><span>Show Aspect Ratio Icons (e.g., 16:9)</span></label></div>
                     </div>
 
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
                         <h2 style="margin: 0;">TV Show Settings</h2>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input is="emby-checkbox" type="checkbox" id="chkShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
+                        <label><input is="emby-checkbox" type="checkbox" id="chkShowOverlaysForEpisodes" data-config-key="ShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
                         <div class="fieldDescription checkboxFieldDescription">When disabled, overlays will only appear on movies, series, and seasons.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input is="emby-checkbox" type="checkbox" id="chkShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on series/seasons</span></label>
+                        <label><input is="emby-checkbox" type="checkbox" id="chkShowSeriesIconsIfAllEpisodesHaveLanguage" data-config-key="ShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on series/seasons</span></label>
                         <div class="fieldDescription checkboxFieldDescription">Icons will only appear on a series/season poster if all child episodes share the same property.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input is="emby-checkbox" type="checkbox" id="chkUseSeriesLiteMode" /><span>Use Lite Mode for series scans</span></label>
+                        <label><input is="emby-checkbox" type="checkbox" id="chkUseSeriesLiteMode" data-config-key="UseSeriesLiteMode" /><span>Use Lite Mode for series scans</span></label>
                         <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
                     </div>
 
@@ -83,78 +85,90 @@
                     <div class="paper-card" style="padding: 1.5em;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2em 2.5em;">
                             <div>
-                                <select is="emby-select" id="selAudioIconAlignment" label="Audio Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selAudioIconAlignment" label="Audio Icon Alignment" data-config-key="AudioIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioOverlayHorizontal" data-config-key="AudioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selSubtitleIconAlignment" label="Subtitle Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkSubtitleOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selSubtitleIconAlignment" label="Subtitle Icon Alignment" data-config-key="SubtitleIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkSubtitleOverlayHorizontal" data-config-key="SubtitleOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selChannelIconAlignment" label="Channel Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkChannelOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selChannelIconAlignment" label="Channel Icon Alignment" data-config-key="ChannelIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkChannelOverlayHorizontal" data-config-key="ChannelOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selAudioCodecIconAlignment" label="Audio Codec Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selAudioCodecIconAlignment" label="Audio Codec Icon Alignment" data-config-key="AudioCodecIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAudioCodecOverlayHorizontal" data-config-key="AudioCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selVideoFormatIconAlignment" label="Video Format Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoFormatOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selVideoFormatIconAlignment" label="Video Format Icon Alignment" data-config-key="VideoFormatIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoFormatOverlayHorizontal" data-config-key="VideoFormatOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selVideoCodecIconAlignment" label="Video Codec Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selVideoCodecIconAlignment" label="Video Codec Icon Alignment" data-config-key="VideoCodecIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkVideoCodecOverlayHorizontal" data-config-key="VideoCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selTagIconAlignment" label="Tag Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkTagOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selTagIconAlignment" label="Tag Icon Alignment" data-config-key="TagIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkTagOverlayHorizontal" data-config-key="TagOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selResolutionIconAlignment" label="Resolution Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkResolutionOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selResolutionIconAlignment" label="Resolution Icon Alignment" data-config-key="ResolutionIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkResolutionOverlayHorizontal" data-config-key="ResolutionOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selCommunityScoreIconAlignment" label="Rating Icon Alignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkCommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                <select is="emby-select" id="selCommunityScoreIconAlignment" label="Rating Icon Alignment" data-config-key="CommunityScoreIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkCommunityScoreOverlayHorizontal" data-config-key="CommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                             </div>
                             <div>
-                                <select is="emby-select" id="selCommunityScoreBackgroundShape" label="Rating Background Shape">
+                                <select is="emby-select" id="selAspectRatioIconAlignment" label="Aspect Ratio Icon Alignment" data-config-key="AspectRatioIconAlignment"><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" id="chkAspectRatioOverlayHorizontal" data-config-key="AspectRatioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                            </div>
+                            <div>
+                                <select is="emby-select" id="selCommunityScoreBackgroundShape" label="Rating Background Shape" data-config-key="CommunityScoreBackgroundShape">
                                     <option value="None">None</option>
                                     <option value="Circle">Circle</option>
                                     <option value="Square">Square</option>
                                 </select>
                                 <div style="margin-top: 1.5em;">
                                     <label class="inputLabel" for="txtCommunityScoreBackgroundColor">Background Color</label>
-                                    <input type="color" id="txtCommunityScoreBackgroundColor" style="width: 100%; height: 2.5em; padding: 0.2em; background: transparent; border: 1px solid rgb(85, 85, 85); border-radius: 4px; box-sizing: border-box;">
+                                    <input type="color" id="txtCommunityScoreBackgroundColor" data-config-key="CommunityScoreBackgroundColor" style="width: 100%; height: 2.5em; padding: 0.2em; background: transparent; border: 1px solid rgb(85, 85, 85); border-radius: 4px; box-sizing: border-box;">
                                 </div>
                                 <div style="margin-top: 1.5em;">
                                     <label class="inputLabel" for="rngCommunityScoreBackgroundOpacity">Background Opacity: <span id="valCommunityScoreBackgroundOpacity"></span></label>
-                                    <input type="range" min="0" max="100" step="1" id="rngCommunityScoreBackgroundOpacity" class="slider" />
+                                    <input type="range" min="0" max="100" step="1" id="rngCommunityScoreBackgroundOpacity" data-config-key="CommunityScoreBackgroundOpacity" class="slider" />
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <div style="text-align: center; margin-top: 3em; margin-bottom: 2em;">
+                        <img class="previewImage" alt="Loading Preview..." style="max-height: 24em; display: block; background-color: #101010; margin: auto;" />
+                    </div>
+
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
                         <h2 style="margin: 0;">Advanced Settings</h2>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em 2em;">
                         <div class="inputContainer">
-                            <input is="emby-input" type="number" id="txtIconSize" label="Icon Size (% of poster height):" min="1" max="100" />
+                            <input is="emby-input" type="number" id="txtIconSize" label="Icon Size (% of poster height):" min="1" max="100" data-config-key="IconSize" />
                         </div>
                         <div class="inputContainer">
-                            <input is="emby-input" type="number" id="txtJpegQuality" label="Image Quality (10-100):" min="10" max="100" />
+                            <input is="emby-input" type="number" id="txtJpegQuality" label="Image Quality (10-100):" min="10" max="100" data-config-key="JpegQuality" />
                         </div>
                         <div class="checkboxContainer" style="grid-column: 1 / -1;">
                             <label>
-                                <input is="emby-checkbox" type="checkbox" id="chkEnableImageSmoothing" />
+                                <input is="emby-checkbox" type="checkbox" id="chkEnableImageSmoothing" data-config-key="EnableImageSmoothing" />
                                 <span>Enable image smoothing (improves icon quality on scaled images)</span>
                             </label>
                         </div>
-                    </div>
-
-                    <div style="text-align: center; margin-top: 2em;">
-                        <img class="previewImage" alt="Loading Preview..." style="max-height: 24em; display: block; background-color: #101010; margin: auto;" />
+                        <div class="checkboxContainer" style="grid-column: 1 / -1;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkEnableDebugLogging" data-config-key="EnableDebugLogging" />
+                                <span>Enable detailed debug logging</span>
+                            </label>
+                            <div class="fieldDescription">Enable this to log detailed information to the Emby server log. Useful for troubleshooting.</div>
+                        </div>
                     </div>
 
                     <div style="margin-top: 2em;">
@@ -174,88 +188,77 @@
                     <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, etc.</p>
 
                     <h3 style="margin-top: 2em;">Icon Naming Conventions</h3>
+                    <p>Icons are identified using a strict prefix-based naming scheme: <code>prefix.name.png</code>. The prefix tells the plugin what type of icon it is, and the name is matched against media properties. Any files that do not follow this convention will be ignored.</p>
 
-                    <h4>Audio Language Icons</h4>
-                    <p>Name audio icons using the 3-letter ISO 639-2 language code. The plugin will automatically try to map 2-letter codes to 3-letter codes.</p>
-                    <ul>
-                        <li>Example: <code>eng.png</code> (for English), <code>fre.png</code> (for French), <code>jpn.png</code> (for Japanese).</li>
-                    </ul>
+                    <h4 style="margin-top: 2em;">Language & Subtitle Icons</h4>
+                    <p>
+                        <strong>Audio Language (prefix: lang):</strong> <code>lang.{name}.png</code><br />
+                        The <code>{name}</code> should be the full language name (e.g., 'english', 'french') in lowercase, matching what Emby displays.<br />
+                        <em>Example:</em> <code>lang.english.png</code>, <code>lang.french.png</code>
+                    </p>
 
-                    <h4>Subtitle Language Icons</h4>
-                    <p>Name subtitle icons by prefixing the 3-letter language code with <code>srt.</code></p>
-                    <ul>
-                        <li>Example: <code>srt.eng.png</code>, <code>srt.fre.png</code></li>
-                    </ul>
+                    <p>
+                        <strong>Subtitle Language (prefix: sub):</strong> <code>sub.{name}.png</code><br />
+                        The <code>{name}</code> should be the full language name (e.g., 'english', 'japanese') in lowercase.<br />
+                        <em>Example:</em> <code>sub.english.png</code>, <code>sub.japanese.png</code>
+                    </p>
 
-                    <h4>Custom Tag Icons</h4>
-                    <p>You can display icons for specific media tags. The plugin will automatically look for an icon that matches the name of the tag on the media item. The matching is case-insensitive, so a tag of '3D' will match an icon named `3d.png`.</p>
-                    <ul>
-                        <li>Example: For the tag '3D', create an icon named <code>3D.png</code>. For `VR`, create `VR.png`.</li>
-                        <li>For the live preview, an icon named `tag.png` will be used if it exists in the icons folder.</li>
-                    </ul>
+                    <h4 style="margin-top: 2em;">Dynamic Detection</h4>
+                    <p>For most categories, the plugin dynamically detects properties directly from your media's metadata. This means you can create icons for any codec or audio layout that Emby recognizes, even if it's new.</p>
 
-                    <h4>Audio Channel Icons</h4>
-                    <p>These icons represent the number of audio channels.</p>
-                    <ul>
-                        <li>Mono: <code>mono.png</code></li>
-                        <li>Stereo (2.0): <code>stereo.png</code></li>
-                        <li>5.1 Surround: <code>5.1.png</code></li>
-                        <li>7.1 Surround: <code>7.1.png</code></li>
-                    </ul>
+                    <p>
+                        <strong>Audio Codec (prefix: ac):</strong> <code>ac.{codec_name}.png</code><br />
+                        The <code>{codec_name}</code> should match the codec reported by Emby (e.g., 'eac3', 'dts-hd ma').<br />
+                        <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts-hdma.png</code>
+                    </p>
 
-                    <h4>Audio Codec Icons</h4>
-                    <p>These icons represent the audio codec format.</p>
-                    <ul>
-                        <li>AAC: <code>aac.png</code></li>
-                        <li>PCM: <code>pcm.png</code></li>
-                        <li>FLAC: <code>flac.png</code></li>
-                        <li>MP3: <code>mp3.png</code></li>
-                        <li>AC3: <code>ac3.png</code></li>
-                        <li>EAC3: <code>eac3.png</code></li>
-                        <li>DTS: <code>dts.png</code></li>
-                        <li>TrueHD: <code>truehd.png</code></li>
-                    </ul>
+                    <p>
+                        <strong>Video Codec (prefix: vc):</strong> <code>vc.{codec_name}.png</code><br />
+                        The <code>{codec_name}</code> should match the codec reported by Emby (e.g., 'hevc').<br />
+                        <em>Example:</em> <code>vc.hevc.png</code>, <code>vc.av1.png</code>
+                    </p>
 
-                    <h4>Video Format Icons</h4>
-                    <p>For High Dynamic Range (HDR) formats.</p>
-                    <ul>
-                        <li>Generic HDR: <code>hdr.png</code></li>
-                        <li>Dolby Vision: <code>dv.png</code></li>
-                        <li>HDR10+: <code>hdr10plus.png</code></li>
-                    </ul>
-                    <p>For best results, including "HDR10+" in the video's filename provides a reliable detection method. The plugin will also attempt to detect this format from the video stream's metadata where available.</p>
+                    <p>
+                        <strong>Audio Channels (prefix: ch):</strong> <code>ch.{layout_name}.png</code><br />
+                        The <code>{layout_name}</code> should match the audio layout reported by Emby (e.g., '5.1', '7.1').<br />
+                        <em>Example:</em> <code>ch.5.1.png</code>, <code>ch.7.1.png</code>, <code>ch.stereo.png</code>
+                    </p>
 
-                    <h4>Video Codec Icons</h4>
-                    <p>These icons represent the video codec format.</p>
-                    <ul>
-                        <li>AV1: <code>av1.png</code></li>
-                        <li>AVC / H.264: <code>h264.png</code></li>
-                        <li>HEVC / H.265: <code>h265.png</code></li>
-                        <li>VVC / H.266: <code>h266.png</code></li>
-                        <li>MPEG-4: <code>mp4.png</code></li>
-                        <li>VC-1: <code>vc1.png</code></li>
-                        <li>VP9: <code>vp9.png</code></li>
-                    </ul>
+                    <p>
+                        <strong>Resolution (prefix: res):</strong> <code>res.{resolution_name}.png</code><br />
+                        The plugin searches the video title for the <code>{resolution_name}</code> from your filename.<br />
+                        <em>Example:</em> <code>res.4k.png</code>, <code>res.1080p.png</code>, <code>res.1080i.png</code>
+                    </p>
 
-                    <h4>Resolution Icons</h4>
-                    <p>Icons for video resolution.</p>
-                    <ul>
-                        <li>4K: <code>4k.png</code></li>
-                        <li>1080p: <code>1080p.png</code></li>
-                        <li>720p: <code>720p.png</code></li>
-                        <li>576p: <code>576p.png</code> </li>
-                        <li>480p: <code>480p.png</code> </li>
-                    </ul>
+                    <p>
+                        <strong>Aspect Ratio (prefix: ar):</strong> <code>ar.{ratio}.png</code><br />
+                        The <code>{ratio}</code> should match the aspect ratio reported by Emby, with the colon replaced by an 'x' (e.g., '16x9', '4x3').<br />
+                        <em>Example:</em> <code>ar.16x9.png</code>, <code>ar.4x3.png</code>
+                    </p>
 
-                    <h4>Community Rating Icon</h4>
-                    <p>This icon is displayed next to the IMDb rating. If no icon is provided it will just show the rating</p>
-                    <ul>
-                        <li>Example: <code>imdb.png</code></li>
-                    </ul>
+                    <p>
+                        <strong>Video Format (prefix: hdr):</strong> <code>hdr.{format_name}.png</code><br />
+                        This detection uses a mix of metadata and filename scanning for reliability. Supported names are `hdr`, `dv` (for Dolby Vision), and `hdr10plus`. For HDR10+, ensure the text 'hdr10plus' is in the movie's filename.<br />
+                        <em>Example:</em> <code>hdr.dv.png</code>, <code>hdr.hdr.png</code>
+                    </p>
+
+                    <h4 style="margin-top: 2em;">Other Categories</h4>
+
+                    <p>
+                        <strong>Custom Tags (prefix: tag):</strong> <code>tag.{name}.png</code><br />
+                        Matches against media tags on an item (case-insensitive). The live preview uses a built-in icon.<br />
+                        <em>Example:</em> For a media item tagged '3D', name the icon <code>tag.3d.png</code>.
+                    </p>
+
+                    <p>
+                        <strong>Community Rating (prefix: rating):</strong> <code>rating.{name}.png</code><br />
+                        Displayed next to the community score.<br />
+                        <em>Example:</em> <code>rating.imdb.png</code>
+                    </p>
 
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
                         <div style="display: flex; align-items: center; gap: 1em;">
-                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
                                 <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
                             </svg>
                             <div>

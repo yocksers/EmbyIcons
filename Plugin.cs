@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;

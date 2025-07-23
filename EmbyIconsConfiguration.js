@@ -109,7 +109,24 @@
             ApiClient.getPluginConfiguration(pluginId),
             ApiClient.getVirtualFolders()
         ]).then(function ([config, virtualFolders]) {
-            view.querySelector('#txtIconsFolder').value = config.IconsFolder || '';
+
+            view.querySelectorAll('[data-config-key]').forEach(el => {
+                const key = el.getAttribute('data-config-key');
+                const value = config[key];
+
+                if (el.type === 'checkbox') {
+                    el.checked = value;
+                } else {
+                    el.value = value == null ? '' : value;
+                }
+            });
+
+            const opacitySlider = view.querySelector('#rngCommunityScoreBackgroundOpacity');
+            const opacityValue = view.querySelector('#valCommunityScoreBackgroundOpacity');
+            if (opacitySlider && opacityValue) {
+                opacitySlider.value = config.CommunityScoreBackgroundOpacity == null ? 80 : config.CommunityScoreBackgroundOpacity;
+                opacityValue.textContent = opacitySlider.value + '%';
+            }
 
             const ignoredLibraryTypes = ['music', 'collections'];
             const filteredLibraries = virtualFolders.Items.filter(lib => {
@@ -120,54 +137,6 @@
             });
 
             self.populateLibraries(filteredLibraries, config.SelectedLibraries);
-            view.querySelector('#txtSelectedLibraries').value = config.SelectedLibraries || '';
-
-            view.querySelector('#chkShowAudioIcons').checked = config.ShowAudioIcons;
-            view.querySelector('#chkShowSubtitleIcons').checked = config.ShowSubtitleIcons;
-            view.querySelector('#chkShowAudioChannelIcons').checked = config.ShowAudioChannelIcons;
-            view.querySelector('#chkShowAudioCodecIcons').checked = config.ShowAudioCodecIcons;
-            view.querySelector('#chkShowVideoFormatIcons').checked = config.ShowVideoFormatIcons;
-            view.querySelector('#chkShowVideoCodecIcons').checked = config.ShowVideoCodecIcons;
-            view.querySelector('#chkShowTagIcons').checked = config.ShowTagIcons;
-            view.querySelector('#chkShowResolutionIcons').checked = config.ShowResolutionIcons;
-            view.querySelector('#chkShowCommunityScoreIcon').checked = config.ShowCommunityScoreIcon;
-
-            view.querySelector('#chkShowOverlaysForEpisodes').checked = config.ShowOverlaysForEpisodes;
-            view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked = config.ShowSeriesIconsIfAllEpisodesHaveLanguage;
-            view.querySelector('#chkUseSeriesLiteMode').checked = config.UseSeriesLiteMode;
-
-            view.querySelector('#selAudioIconAlignment').value = config.AudioIconAlignment || 'TopLeft';
-            view.querySelector('#selSubtitleIconAlignment').value = config.SubtitleIconAlignment || 'BottomLeft';
-            view.querySelector('#selChannelIconAlignment').value = config.ChannelIconAlignment || 'TopLeft';
-            view.querySelector('#selAudioCodecIconAlignment').value = config.AudioCodecIconAlignment || 'TopLeft';
-            view.querySelector('#selVideoFormatIconAlignment').value = config.VideoFormatIconAlignment || 'TopRight';
-            view.querySelector('#selVideoCodecIconAlignment').value = config.VideoCodecIconAlignment || 'TopRight';
-            view.querySelector('#selTagIconAlignment').value = config.TagIconAlignment || 'BottomLeft';
-            view.querySelector('#selResolutionIconAlignment').value = config.ResolutionIconAlignment || 'BottomRight';
-            view.querySelector('#selCommunityScoreIconAlignment').value = config.CommunityScoreIconAlignment || 'TopRight';
-            view.querySelector('#selCommunityScoreBackgroundShape').value = config.CommunityScoreBackgroundShape || 'None';
-            view.querySelector('#txtCommunityScoreBackgroundColor').value = config.CommunityScoreBackgroundColor || '#404040';
-            const opacitySlider = view.querySelector('#rngCommunityScoreBackgroundOpacity');
-            const opacityValue = view.querySelector('#valCommunityScoreBackgroundOpacity');
-            if (opacitySlider && opacityValue) {
-                opacitySlider.value = config.CommunityScoreBackgroundOpacity == null ? 80 : config.CommunityScoreBackgroundOpacity;
-                opacityValue.textContent = opacitySlider.value + '%';
-            }
-
-
-            view.querySelector('#chkAudioOverlayHorizontal').checked = config.AudioOverlayHorizontal;
-            view.querySelector('#chkSubtitleOverlayHorizontal').checked = config.SubtitleOverlayHorizontal;
-            view.querySelector('#chkChannelOverlayHorizontal').checked = config.ChannelOverlayHorizontal;
-            view.querySelector('#chkAudioCodecOverlayHorizontal').checked = config.AudioCodecOverlayHorizontal;
-            view.querySelector('#chkVideoFormatOverlayHorizontal').checked = config.VideoFormatOverlayHorizontal;
-            view.querySelector('#chkVideoCodecOverlayHorizontal').checked = config.VideoCodecOverlayHorizontal;
-            view.querySelector('#chkTagOverlayHorizontal').checked = config.TagOverlayHorizontal;
-            view.querySelector('#chkResolutionOverlayHorizontal').checked = config.ResolutionOverlayHorizontal;
-            view.querySelector('#chkCommunityScoreOverlayHorizontal').checked = config.CommunityScoreOverlayHorizontal;
-
-            view.querySelector('#txtIconSize').value = config.IconSize || 10;
-            view.querySelector('#txtJpegQuality').value = config.JpegQuality || 75;
-            view.querySelector('#chkEnableImageSmoothing').checked = config.EnableImageSmoothing;
 
             self.updatePreview();
             loading.hide();
@@ -210,46 +179,22 @@
 
     View.prototype.getFormOptions = function () {
         const view = this.view;
-        return {
-            IconsFolder: view.querySelector('#txtIconsFolder').value,
-            SelectedLibraries: view.querySelector('#txtSelectedLibraries').value,
-            ShowAudioIcons: view.querySelector('#chkShowAudioIcons').checked,
-            ShowSubtitleIcons: view.querySelector('#chkShowSubtitleIcons').checked,
-            ShowAudioChannelIcons: view.querySelector('#chkShowAudioChannelIcons').checked,
-            ShowAudioCodecIcons: view.querySelector('#chkShowAudioCodecIcons').checked,
-            ShowVideoFormatIcons: view.querySelector('#chkShowVideoFormatIcons').checked,
-            ShowVideoCodecIcons: view.querySelector('#chkShowVideoCodecIcons').checked,
-            ShowTagIcons: view.querySelector('#chkShowTagIcons').checked,
-            ShowResolutionIcons: view.querySelector('#chkShowResolutionIcons').checked,
-            ShowCommunityScoreIcon: view.querySelector('#chkShowCommunityScoreIcon').checked,
-            ShowOverlaysForEpisodes: view.querySelector('#chkShowOverlaysForEpisodes').checked,
-            ShowSeriesIconsIfAllEpisodesHaveLanguage: view.querySelector('#chkShowSeriesIconsIfAllEpisodesHaveLanguage').checked,
-            UseSeriesLiteMode: view.querySelector('#chkUseSeriesLiteMode').checked,
-            AudioIconAlignment: view.querySelector('#selAudioIconAlignment').value,
-            SubtitleIconAlignment: view.querySelector('#selSubtitleIconAlignment').value,
-            ChannelIconAlignment: view.querySelector('#selChannelIconAlignment').value,
-            AudioCodecIconAlignment: view.querySelector('#selAudioCodecIconAlignment').value,
-            VideoFormatIconAlignment: view.querySelector('#selVideoFormatIconAlignment').value,
-            VideoCodecIconAlignment: view.querySelector('#selVideoCodecIconAlignment').value,
-            TagIconAlignment: view.querySelector('#selTagIconAlignment').value,
-            ResolutionIconAlignment: view.querySelector('#selResolutionIconAlignment').value,
-            CommunityScoreIconAlignment: view.querySelector('#selCommunityScoreIconAlignment').value,
-            CommunityScoreBackgroundShape: view.querySelector('#selCommunityScoreBackgroundShape').value,
-            CommunityScoreBackgroundColor: view.querySelector('#txtCommunityScoreBackgroundColor').value,
-            CommunityScoreBackgroundOpacity: parseInt(view.querySelector('#rngCommunityScoreBackgroundOpacity').value) || 80,
-            AudioOverlayHorizontal: view.querySelector('#chkAudioOverlayHorizontal').checked,
-            SubtitleOverlayHorizontal: view.querySelector('#chkSubtitleOverlayHorizontal').checked,
-            ChannelOverlayHorizontal: view.querySelector('#chkChannelOverlayHorizontal').checked,
-            AudioCodecOverlayHorizontal: view.querySelector('#chkAudioCodecOverlayHorizontal').checked,
-            VideoFormatOverlayHorizontal: view.querySelector('#chkVideoFormatOverlayHorizontal').checked,
-            VideoCodecOverlayHorizontal: view.querySelector('#chkVideoCodecOverlayHorizontal').checked,
-            TagOverlayHorizontal: view.querySelector('#chkTagOverlayHorizontal').checked,
-            ResolutionOverlayHorizontal: view.querySelector('#chkResolutionOverlayHorizontal').checked,
-            CommunityScoreOverlayHorizontal: view.querySelector('#chkCommunityScoreOverlayHorizontal').checked,
-            IconSize: parseInt(view.querySelector('#txtIconSize').value) || 10,
-            JpegQuality: parseInt(view.querySelector('#txtJpegQuality').value) || 75,
-            EnableImageSmoothing: view.querySelector('#chkEnableImageSmoothing').checked
-        };
+        const options = {};
+
+        view.querySelectorAll('[data-config-key]').forEach(el => {
+            const key = el.getAttribute('data-config-key');
+            const type = el.getAttribute('type');
+
+            if (type === 'checkbox') {
+                options[key] = el.checked;
+            } else if (type === 'number' || el.classList.contains('slider')) {
+                options[key] = parseInt(el.value) || 0;
+            } else {
+                options[key] = el.value;
+            }
+        });
+
+        return options;
     };
 
     View.prototype.saveData = function () {

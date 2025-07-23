@@ -1,4 +1,5 @@
-﻿using EmbyIcons.Models;
+﻿using EmbyIcons.Helpers;
+using EmbyIcons.Models;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
@@ -34,8 +35,10 @@ namespace EmbyIcons
 
         public async Task<object> Get(GetIconPreview request)
         {
+            var enhancer = Plugin.Instance?.Enhancer ?? throw new InvalidOperationException("Enhancer is not initialized.");
             if (string.IsNullOrEmpty(request.OptionsJson))
             {
+                enhancer.Logger.Warn("[EmbyIcons] Preview request received with empty options.");
                 return new MemoryStream();
             }
 
@@ -48,33 +51,67 @@ namespace EmbyIcons
             using var originalBitmap = SKBitmap.Decode(Assembly.GetExecutingAssembly().GetManifestResourceStream("EmbyIcons.Images.preview.png"))
                 ?? throw new InvalidOperationException("Failed to decode the preview background image.");
 
-            var enhancer = Plugin.Instance?.Enhancer ?? throw new InvalidOperationException("Enhancer is not initialized.");
             var cacheManager = enhancer._iconCacheManager;
+            var allIcons = cacheManager.GetAllAvailableIconKeys(options.IconsFolder);
+            var random = new Random();
+
+            string GetRandom(IconCacheManager.IconType type, string fallback)
+            {
+                var list = allIcons[type];
+                return list.Any() ? list[random.Next(list.Count)] : fallback;
+            }
 
             var audioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var audioLang1 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Audio);
-            if (audioLang1 != null) audioLangs.Add(audioLang1);
+            audioLangs.Add(GetRandom(IconCacheManager.IconType.Language, "eng"));
 
             var audioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var audioCodec1 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.AudioCodec);
-            if (audioCodec1 != null) audioCodecs.Add(audioCodec1);
-            var audioCodec2 = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.AudioCodec);
-            if (audioCodec2 != null) audioCodecs.Add(audioCodec2);
+            audioCodecs.Add(GetRandom(IconCacheManager.IconType.AudioCodec, "dts"));
+            var secondCodec = GetRandom(IconCacheManager.IconType.AudioCodec, "ac3");
+            if (audioCodecs.Count < 2)
+            {
+                audioCodecs.Add(secondCodec);
+            }
 
             var previewData = new OverlayData
             {
-                AudioLanguages = audioLangs.Any() ? audioLangs : new HashSet<string> { "eng" },
-                SubtitleLanguages = new HashSet<string> { cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Subtitle) ?? "eng" },
-                ResolutionIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Resolution) ?? "4k",
-                VideoFormatIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.VideoFormat) ?? "hdr",
-                VideoCodecs = new HashSet<string> { cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.VideoCodec) ?? "h265" },
-                Tags = new HashSet<string> { "tag" },
-                ChannelIconName = cacheManager.GetRandomIconName(Helpers.IconCacheManager.IconType.Channel) ?? "5.1",
-                AudioCodecs = audioCodecs.Any() ? audioCodecs : new HashSet<string> { "dts" },
-                CommunityRating = 6.9f
+                AudioLanguages = audioLangs,
+                SubtitleLanguages = new HashSet<string> { GetRandom(IconCacheManager.IconType.Subtitle, "eng") },
+                ResolutionIconName = GetRandom(IconCacheManager.IconType.Resolution, "4k"),
+                VideoFormatIconName = GetRandom(IconCacheManager.IconType.VideoFormat, "hdr"),
+                VideoCodecs = new HashSet<string> { GetRandom(IconCacheManager.IconType.VideoCodec, "hevc") },
+                Tags = new HashSet<string> { "placeholder_for_preview" },
+                ChannelIconName = GetRandom(IconCacheManager.IconType.Channel, "5.1"),
+                AudioCodecs = audioCodecs,
+                CommunityRating = 6.9f,
+                AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9")
             };
 
-            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, options, CancellationToken.None);
+            var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
+            var asm = Assembly.GetExecutingAssembly();
+            var resourceName = $"{GetType().Namespace}.Images.tag.png";
+
+            using (var stream = asm.GetManifestResourceStream(resourceName))
+            {
+                if (stream != null && stream.Length > 0)
+                {
+                    using var data = SKData.Create(stream);
+                    var tagIcon = SKImage.FromEncodedData(data);
+                    if (tagIcon != null)
+                    {
+                        injectedIcons[IconCacheManager.IconType.Tag] = new List<SKImage> { tagIcon };
+                    }
+                    else
+                    {
+                        enhancer.Logger.Warn($"[EmbyIcons] Failed to decode embedded tag icon from resource: {resourceName}");
+                    }
+                }
+                else
+                {
+                    enhancer.Logger.Warn($"[EmbyIcons] Could not load embedded tag icon resource stream: {resourceName}. Stream was null or empty.");
+                }
+            }
+
+            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, options, CancellationToken.None, injectedIcons);
 
             return resultStream;
         }

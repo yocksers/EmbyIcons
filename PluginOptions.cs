@@ -17,6 +17,8 @@ namespace EmbyIcons
                 return "/";
         }
 
+        public bool EnableDebugLogging { get; set; } = false;
+
         public string SelectedLibraries { get; set; } = string.Empty;
 
         public bool ShowAudioIcons { get; set; } = true;
@@ -40,6 +42,8 @@ namespace EmbyIcons
         public bool ShowResolutionIcons { get; set; } = false;
 
         public bool ShowCommunityScoreIcon { get; set; } = false;
+
+        public bool ShowAspectRatioIcons { get; set; } = false;
 
         public IconAlignment AudioIconAlignment { get; set; } = IconAlignment.TopLeft;
 
@@ -76,6 +80,10 @@ namespace EmbyIcons
         public IconAlignment CommunityScoreIconAlignment { get; set; } = IconAlignment.TopRight;
 
         public bool CommunityScoreOverlayHorizontal { get; set; } = true;
+
+        public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.BottomRight;
+
+        public bool AspectRatioOverlayHorizontal { get; set; } = true;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
 
