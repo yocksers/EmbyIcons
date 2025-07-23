@@ -7,6 +7,7 @@ namespace EmbyIcons
 {
     public class PluginOptions : BasePluginConfiguration
     {
+        public string PersistedVersion { get; set; } = "1.0.0";
         public string IconsFolder { get; set; } = GetDefaultIconsFolder();
 
         private static string GetDefaultIconsFolder()

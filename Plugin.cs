@@ -41,7 +41,7 @@ namespace EmbyIcons
 
         public ILogger Logger => _logger;
 
-        public string ConfigurationVersion { get; private set; } = Guid.NewGuid().ToString("N");
+        public string ConfigurationVersion => Configuration.PersistedVersion;
 
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
 
@@ -214,14 +214,18 @@ namespace EmbyIcons
             }
         }
 
+        public void SaveCurrentConfiguration() => SaveConfiguration();
+
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var options = (PluginOptions)configuration;
             _logger.Info("[EmbyIcons] Saving new configuration.");
-            base.UpdateConfiguration(configuration);
 
-            ConfigurationVersion = Guid.NewGuid().ToString("N");
-            _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{ConfigurationVersion}'. Images will refresh as they are viewed.");
+            options.PersistedVersion = Guid.NewGuid().ToString("N");
+
+            base.UpdateConfiguration(options);
+
+            _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{options.PersistedVersion}'. Images will refresh as they are viewed.");
 
             try
             {

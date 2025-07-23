@@ -27,7 +27,6 @@ namespace EmbyIcons
         internal readonly ILogger _logger;
 
         private static readonly SemaphoreSlim _globalConcurrencyLock = new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
-        private static string _iconCacheVersion = string.Empty;
 
         internal readonly IconCacheManager _iconCacheManager;
         internal static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
@@ -49,11 +48,9 @@ namespace EmbyIcons
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
 
-            _iconCacheVersion = Guid.NewGuid().ToString("N");
-            _logger.Info($"[EmbyIcons] New session started. Set icon cache version to '{_iconCacheVersion}' to force poster redraw.");
+            _logger.Info("[EmbyIcons] Session started.");
 
             _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger);
-            _iconCacheManager.CacheRefreshedWithVersion += (sender, version) => { _iconCacheVersion = version ?? string.Empty; };
 
             _overlayDataService = new OverlayDataService(this);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
@@ -134,8 +131,7 @@ namespace EmbyIcons
               .Append("_s").Append(options.IconSize)
               .Append("_q").Append(options.JpegQuality)
               .Append("_sm").Append(options.EnableImageSmoothing ? 1 : 0)
-              .Append("_iv").Append(_iconCacheVersion)
-              .Append("_pv").Append(plugin.ConfigurationVersion);
+              .Append("_v").Append(plugin.ConfigurationVersion);
 
             int settingsMask = (options.ShowAudioIcons ? 1 : 0) |
                                ((options.ShowSubtitleIcons ? 1 : 0) << 1) |

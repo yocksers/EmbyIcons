@@ -27,7 +27,15 @@ namespace EmbyIcons.Services
         {
             _logger.Info("[EmbyIcons] Received request to clear all icon and data caches from the settings page.");
 
-            var iconsFolder = Plugin.Instance?.Configuration.IconsFolder;
+            var plugin = Plugin.Instance;
+            if (plugin == null)
+            {
+                _logger.Warn("[EmbyIcons] Plugin instance not available.");
+                return;
+            }
+
+            var config = plugin.Configuration;
+            var iconsFolder = config.IconsFolder;
             if (string.IsNullOrEmpty(iconsFolder))
             {
                 _logger.Warn("[EmbyIcons] Cannot refresh cache as icons folder is not configured.");
@@ -35,6 +43,10 @@ namespace EmbyIcons.Services
             }
 
             await _enhancer.ForceCacheRefreshAsync(iconsFolder, CancellationToken.None);
+
+            config.PersistedVersion = Guid.NewGuid().ToString("N");
+            plugin.SaveCurrentConfiguration();
+            _logger.Info($"[EmbyIcons] Cache cleared. New cache-busting version is '{config.PersistedVersion}'.");
         }
     }
 }

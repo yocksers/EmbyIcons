@@ -19,8 +19,6 @@ namespace EmbyIcons.Helpers
         private string? _iconsFolder;
         private DateTime _lastCacheRefreshTime = DateTime.MinValue;
         private readonly ConcurrentDictionary<string, DateTime> _iconFileLastWriteTimes = new();
-        private string _currentIconVersion = string.Empty;
-        public event EventHandler<string>? CacheRefreshedWithVersion;
         private static readonly Random _random = new();
 
         internal static readonly string[] SupportedIconExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
@@ -97,15 +95,11 @@ namespace EmbyIcons.Helpers
         public Task RefreshCacheOnDemandAsync(string iconsFolder, CancellationToken cancellationToken, bool force = false)
         {
             _iconsFolder = iconsFolder;
-            _logger.Info("[EmbyIcons] Clearing all cached icon image data and forcing poster refresh.");
+            _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
 
             ClearImageCache(_iconImageCache);
 
             _lastCacheRefreshTime = DateTime.UtcNow;
-
-            var newVersion = Guid.NewGuid().ToString("N");
-            CacheRefreshedWithVersion?.Invoke(this, newVersion);
-            _logger.Info($"[EmbyIcons] Icon cache version updated to: {newVersion}. Posters will be refreshed as they are viewed.");
 
             return Task.CompletedTask;
         }
