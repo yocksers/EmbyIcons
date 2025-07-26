@@ -26,6 +26,7 @@ namespace EmbyIcons.Services
         public async Task Post(RefreshCacheRequest request)
         {
             _logger.Info("[EmbyIcons] Received request to clear all icon and data caches from the settings page.");
+            IconManagerService.InvalidateCache();
 
             var plugin = Plugin.Instance;
             if (plugin == null)
@@ -36,11 +37,6 @@ namespace EmbyIcons.Services
 
             var config = plugin.Configuration;
             var iconsFolder = config.IconsFolder;
-            if (string.IsNullOrEmpty(iconsFolder))
-            {
-                _logger.Warn("[EmbyIcons] Cannot refresh cache as icons folder is not configured.");
-                return;
-            }
 
             await _enhancer.ForceCacheRefreshAsync(iconsFolder, CancellationToken.None);
 

@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>4.01.00</Version>
-		<AssemblyVersion>4.01.0.0</AssemblyVersion>
-		<FileVersion>4.01.0.0</FileVersion>
+		<Version>5.0.00</Version>
+		<AssemblyVersion>5.0.0.0</AssemblyVersion>
+		<FileVersion>5.0.0.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -18,6 +18,73 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Remove="EmbeddedIcons\ac.aac.png" />
+	  <None Remove="EmbeddedIcons\ac.ac3.png" />
+	  <None Remove="EmbeddedIcons\ac.dts.png" />
+	  <None Remove="EmbeddedIcons\ac.eac3.png" />
+	  <None Remove="EmbeddedIcons\ac.flac.png" />
+	  <None Remove="EmbeddedIcons\ac.mp3.png" />
+	  <None Remove="EmbeddedIcons\ac.truehd.png" />
+	  <None Remove="EmbeddedIcons\ar..4x3.png" />
+	  <None Remove="EmbeddedIcons\ar.160x67.png" />
+	  <None Remove="EmbeddedIcons\ar.16x9.png" />
+	  <None Remove="EmbeddedIcons\ar.2.40x1.png" />
+	  <None Remove="EmbeddedIcons\ar.40x17.png" />
+	  <None Remove="EmbeddedIcons\ch.5.1.jpg" />
+	  <None Remove="EmbeddedIcons\ch.5.1.png" />
+	  <None Remove="EmbeddedIcons\ch.7.1.jpg" />
+	  <None Remove="EmbeddedIcons\ch.7.1.png" />
+	  <None Remove="EmbeddedIcons\ch.Mono.jpg" />
+	  <None Remove="EmbeddedIcons\ch.Mono.png" />
+	  <None Remove="EmbeddedIcons\ch.stereo.jpg" />
+	  <None Remove="EmbeddedIcons\ch.stereo.png" />
+	  <None Remove="EmbeddedIcons\hdr.dv.png" />
+	  <None Remove="EmbeddedIcons\hdr.hdr.png" />
+	  <None Remove="EmbeddedIcons\hdr.hdr10plus.png" />
+	  <None Remove="EmbeddedIcons\lang.chinese.jpg" />
+	  <None Remove="EmbeddedIcons\lang.chinese.png" />
+	  <None Remove="EmbeddedIcons\lang.danish.jpg" />
+	  <None Remove="EmbeddedIcons\lang.danish.png" />
+	  <None Remove="EmbeddedIcons\lang.english.jpg" />
+	  <None Remove="EmbeddedIcons\lang.english.png" />
+	  <None Remove="EmbeddedIcons\lang.french.png" />
+	  <None Remove="EmbeddedIcons\lang.german.jpg" />
+	  <None Remove="EmbeddedIcons\lang.german.png" />
+	  <None Remove="EmbeddedIcons\lang.indian.jpg" />
+	  <None Remove="EmbeddedIcons\lang.indian.png" />
+	  <None Remove="EmbeddedIcons\lang.japanese.jpg" />
+	  <None Remove="EmbeddedIcons\lang.japanese.png" />
+	  <None Remove="EmbeddedIcons\lang.swedish.png" />
+	  <None Remove="EmbeddedIcons\rating.imdb.png" />
+	  <None Remove="EmbeddedIcons\res.1080p.png" />
+	  <None Remove="EmbeddedIcons\res.480p.png" />
+	  <None Remove="EmbeddedIcons\res.4k.png" />
+	  <None Remove="EmbeddedIcons\res.576p.png" />
+	  <None Remove="EmbeddedIcons\res.720p.png" />
+	  <None Remove="EmbeddedIcons\sub.chinese.jpg" />
+	  <None Remove="EmbeddedIcons\sub.chinese.png" />
+	  <None Remove="EmbeddedIcons\sub.danish.jpg" />
+	  <None Remove="EmbeddedIcons\sub.danish.png" />
+	  <None Remove="EmbeddedIcons\sub.english.jpg" />
+	  <None Remove="EmbeddedIcons\sub.english.png" />
+	  <None Remove="EmbeddedIcons\sub.french.png" />
+	  <None Remove="EmbeddedIcons\sub.german.jpg" />
+	  <None Remove="EmbeddedIcons\sub.german.png" />
+	  <None Remove="EmbeddedIcons\sub.indian.jpg" />
+	  <None Remove="EmbeddedIcons\sub.indian.png" />
+	  <None Remove="EmbeddedIcons\sub.japanese.jpg" />
+	  <None Remove="EmbeddedIcons\sub.japanese.png" />
+	  <None Remove="EmbeddedIcons\sub.swedish.png" />
+	  <None Remove="EmbeddedIcons\tag.bob.jpg" />
+	  <None Remove="EmbeddedIcons\tag.bob.png" />
+	  <None Remove="EmbeddedIcons\vc.av1.png" />
+	  <None Remove="EmbeddedIcons\vc.avc.png" />
+	  <None Remove="EmbeddedIcons\vc.h264.png" />
+	  <None Remove="EmbeddedIcons\vc.hevc.png" />
+	  <None Remove="EmbeddedIcons\vc.mp4.png" />
+	  <None Remove="EmbeddedIcons\vc.mpeg4.png" />
+	  <None Remove="EmbeddedIcons\vc.vc1.png" />
+	  <None Remove="EmbeddedIcons\vc.vp9.png" />
 	  <None Remove="Images\preview.png" />
 	  <None Remove="Images\tag.png" />
 	  <None Remove="plugin.js" />
@@ -25,6 +92,56 @@
 
 	<ItemGroup>
 		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.aac.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.ac3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.dts.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.eac3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.flac.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.mp3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac.truehd.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar..4x3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar.160x67.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar.16x9.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar.2.40x1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar.40x17.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch.5.1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch.7.1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch.Mono.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch.stereo.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr.dv.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr.hdr.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr.hdr10plus.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.chinese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.danish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.english.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.french.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.german.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.indian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang.swedish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\rating.imdb.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res.1080p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res.480p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res.4k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res.576p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res.720p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.chinese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.danish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.english.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.french.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.german.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.indian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub.swedish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\tag.bob.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.av1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.avc.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.h264.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.hevc.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.mp4.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.mpeg4.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.vc1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc.vp9.png" />
 		<EmbeddedResource Include="EmbyIconsConfiguration.html" />
 		<EmbeddedResource Include="EmbyIconsConfiguration.js" />
 		<EmbeddedResource Include="Images\logo.png" />
@@ -40,7 +157,7 @@
 
 	<ItemGroup>
 	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 

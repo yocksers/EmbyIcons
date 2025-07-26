@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -43,7 +43,7 @@ namespace EmbyIcons
             }
         }
 
-        internal AggregatedSeriesResult GetAggregatedDataForParentSync(BaseItem parent, PluginOptions options)
+        internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
             if (parent.Id == Guid.Empty)
             {
@@ -57,15 +57,15 @@ namespace EmbyIcons
                 return cachedResult;
             }
 
-            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No valid cache found. Aggregating data for series '{parent.Name}' ({parent.Id}). LiteMode: {options.UseSeriesLiteMode}.");
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No valid cache found. Aggregating data for series '{parent.Name}' ({parent.Id}). LiteMode: {profileOptions.UseSeriesLiteMode}.");
 
             var query = new InternalItemsQuery
             {
                 Parent = parent,
                 Recursive = true,
                 IncludeItemTypes = new[] { EmbyIcons.Constants.Episode },
-                Limit = options.UseSeriesLiteMode ? 1 : null,
-                OrderBy = options.UseSeriesLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
+                Limit = profileOptions.UseSeriesLiteMode ? 1 : null,
+                OrderBy = profileOptions.UseSeriesLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
             };
 
             var episodes = _libraryManager.GetItemList(query);
@@ -90,7 +90,7 @@ namespace EmbyIcons
             var primaryAudioStream = firstStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
             var commonChannelType = primaryAudioStream != null ? MediaStreamHelper.GetChannelIconName(primaryAudioStream) : null;
 
-            _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder).TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
+            _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
             var commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video), knownResolutionKeys ?? new List<string>());
 
             var episodeHashes = new List<string>(episodeList.Count) { $"{firstEpisode.Id}:{MediaStreamHelper.GetItemMediaStreamHash(firstEpisode, firstStreams)}" };
@@ -114,15 +114,15 @@ namespace EmbyIcons
                 episodeHashes.Add($"{ep.Id}:{MediaStreamHelper.GetItemMediaStreamHash(ep, streams)}");
             }
 
-            var finalAudioLangs = (options.ShowAudioIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonAudioLangs : new HashSet<string>();
-            var finalSubtitleLangs = (options.ShowSubtitleIcons && options.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonSubtitleLangs : new HashSet<string>();
-            var finalAudioCodecs = (options.ShowAudioCodecIcons) ? commonAudioCodecs : new HashSet<string>();
-            var finalVideoCodecs = (options.ShowVideoCodecIcons) ? commonVideoCodecs : new HashSet<string>();
-            var finalChannelTypes = (options.ShowAudioChannelIcons && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
-            var finalResolutions = (options.ShowResolutionIcons && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
+            var finalAudioLangs = (profileOptions.AudioIconAlignment != IconAlignment.Disabled && profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonAudioLangs : new HashSet<string>();
+            var finalSubtitleLangs = (profileOptions.SubtitleIconAlignment != IconAlignment.Disabled && profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage) ? commonSubtitleLangs : new HashSet<string>();
+            var finalAudioCodecs = (profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled) ? commonAudioCodecs : new HashSet<string>();
+            var finalVideoCodecs = (profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled) ? commonVideoCodecs : new HashSet<string>();
+            var finalChannelTypes = (profileOptions.ChannelIconAlignment != IconAlignment.Disabled && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
+            var finalResolutions = (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
 
             var finalVideoFormats = new HashSet<string>();
-            if (options.ShowVideoFormatIcons && episodeList.Any())
+            if (profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled && episodeList.Any())
             {
                 var episodeHdrStates = episodeList.Select(ep =>
                 {

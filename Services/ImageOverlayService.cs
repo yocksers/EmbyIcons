@@ -25,26 +25,26 @@ namespace EmbyIcons.Services
             _iconCache = iconCache;
         }
 
-        public Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, PluginOptions options, CancellationToken cancellationToken)
+        public Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
-            return ApplyOverlaysAsync(sourceBitmap, data, options, cancellationToken, null);
+            return ApplyOverlaysAsync(sourceBitmap, data, profileOptions, globalOptions, cancellationToken, null);
         }
 
-        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, PluginOptions options, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
+        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
-            await _iconCache.InitializeAsync(options.IconsFolder, cancellationToken);
+            await _iconCache.InitializeAsync(globalOptions.IconsFolder, cancellationToken);
 
             using var surface = SKSurface.Create(new SKImageInfo(sourceBitmap.Width, sourceBitmap.Height));
             var canvas = surface.Canvas;
             canvas.DrawBitmap(sourceBitmap, 0, 0);
 
-            var iconSize = System.Math.Clamp((System.Math.Min(sourceBitmap.Width, sourceBitmap.Height) * options.IconSize) / 100, 8, 512);
-            var edgePadding = System.Math.Clamp(iconSize / 4, 2, 64);
-            var interIconPadding = System.Math.Clamp(iconSize / 8, 1, 64);
-            var paint = options.EnableImageSmoothing ? EmbyIconsEnhancer.ResamplingPaint : EmbyIconsEnhancer.AliasedPaint;
+            var iconSize = Math.Clamp((Math.Min(sourceBitmap.Width, sourceBitmap.Height) * profileOptions.IconSize) / 100, 8, 512);
+            var edgePadding = Math.Clamp(iconSize / 4, 2, 64);
+            var interIconPadding = Math.Clamp(iconSize / 8, 1, 64);
+            var paint = profileOptions.EnableImageSmoothing ? EmbyIconsEnhancer.ResamplingPaint : EmbyIconsEnhancer.AliasedPaint;
 
-            var iconGroups = await CreateIconGroups(data, options, cancellationToken, injectedIcons);
-            var ratingInfo = await CreateRatingInfo(data, options, cancellationToken);
+            var iconGroups = await CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
+            var ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
 
             var overlaysByCorner = new Dictionary<IconAlignment, List<IOverlayInfo>>();
             foreach (var group in iconGroups)
@@ -60,11 +60,11 @@ namespace EmbyIcons.Services
 
             foreach (var corner in overlaysByCorner.Keys)
             {
-                DrawCorner(canvas, overlaysByCorner[corner], corner, iconSize, edgePadding, interIconPadding, sourceBitmap.Width, sourceBitmap.Height, paint, options);
+                DrawCorner(canvas, overlaysByCorner[corner], corner, iconSize, edgePadding, interIconPadding, sourceBitmap.Width, sourceBitmap.Height, paint, profileOptions);
             }
 
             using var image = surface.Snapshot();
-            using var encodedData = image.Encode(SKEncodedImageFormat.Jpeg, System.Math.Clamp(options.JpegQuality, 10, 100));
+            using var encodedData = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(profileOptions.JpegQuality, 10, 100));
 
             var memoryStream = new MemoryStream();
             await encodedData.AsStream().CopyToAsync(memoryStream, cancellationToken);
@@ -72,7 +72,7 @@ namespace EmbyIcons.Services
             return memoryStream;
         }
 
-        private void DrawCorner(SKCanvas canvas, List<IOverlayInfo> overlays, IconAlignment alignment, int iconSize, int edgePadding, int interIconPadding, int width, int height, SKPaint paint, PluginOptions options)
+        private void DrawCorner(SKCanvas canvas, List<IOverlayInfo> overlays, IconAlignment alignment, int iconSize, int edgePadding, int interIconPadding, int width, int height, SKPaint paint, ProfileSettings options)
         {
             var horizontalOverlays = overlays.Where(o => o.HorizontalLayout).OrderBy(o => o.Priority).ToList();
             var verticalOverlays = overlays.Where(o => !o.HorizontalLayout).OrderBy(o => o.Priority).ToList();
@@ -85,7 +85,7 @@ namespace EmbyIcons.Services
             {
                 var consumedSize = DrawOverlay(canvas, overlay, alignment, iconSize, edgePadding, interIconPadding, width, height, paint, currentVerticalOffset, currentHorizontalOffset, options);
                 currentHorizontalOffset += (int)consumedSize.Width + interIconPadding;
-                maxHeightOfHorizontalRow = System.Math.Max(maxHeightOfHorizontalRow, (int)consumedSize.Height);
+                maxHeightOfHorizontalRow = Math.Max(maxHeightOfHorizontalRow, (int)consumedSize.Height);
             }
 
             if (horizontalOverlays.Any())
@@ -102,7 +102,7 @@ namespace EmbyIcons.Services
             }
         }
 
-        private SKSize DrawOverlay(SKCanvas canvas, IOverlayInfo overlay, IconAlignment alignment, int iconSize, int edgePadding, int interIconPadding, int width, int height, SKPaint paint, int verticalOffset, int horizontalOffset, PluginOptions options)
+        private SKSize DrawOverlay(SKCanvas canvas, IOverlayInfo overlay, IconAlignment alignment, int iconSize, int edgePadding, int interIconPadding, int width, int height, SKPaint paint, int verticalOffset, int horizontalOffset, ProfileSettings options)
         {
             if (overlay is OverlayGroupInfo iconGroup)
             {
@@ -120,7 +120,7 @@ namespace EmbyIcons.Services
             bool isRight = group.Alignment == IconAlignment.TopRight || group.Alignment == IconAlignment.BottomRight;
             bool isBottom = group.Alignment == IconAlignment.BottomLeft || group.Alignment == IconAlignment.BottomRight;
 
-            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)System.Math.Round(size * ((float)i.Width / i.Height)) : size;
+            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(size * ((float)i.Width / i.Height)) : size;
 
             int totalWidth = group.HorizontalLayout ? group.Icons.Sum(GetIconWidth) + (group.Icons.Count - 1) * interIconPadding : group.Icons.Select(GetIconWidth).DefaultIfEmpty(0).Max();
             int totalHeight = group.HorizontalLayout ? size : (group.Icons.Count * size) + (group.Icons.Count - 1) * interIconPadding;
@@ -151,7 +151,7 @@ namespace EmbyIcons.Services
             return new SKSize(totalWidth, totalHeight);
         }
 
-        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, RatingOverlayInfo rating, int iconSize, int padding, int canvasWidth, int canvasHeight, SKPaint basePaint, int verticalOffset, int horizontalOffset, PluginOptions options)
+        private SKSize DrawCommunityRatingOverlay(SKCanvas canvas, RatingOverlayInfo rating, int iconSize, int padding, int canvasWidth, int canvasHeight, SKPaint basePaint, int verticalOffset, int horizontalOffset, ProfileSettings options)
         {
             var typeface = FontHelper.GetDefaultBold(_logger);
             if (typeface == null) return SKSize.Empty;
@@ -201,7 +201,7 @@ namespace EmbyIcons.Services
             return new SKSize(totalWidth, totalHeight);
         }
 
-        private void DrawRatingBackground(SKCanvas canvas, PluginOptions options, SKRect bgRect)
+        private void DrawRatingBackground(SKCanvas canvas, ProfileSettings options, SKRect bgRect)
         {
             if (!SKColor.TryParse(options.CommunityScoreBackgroundColor, out var baseBgColor)) return;
 
@@ -218,7 +218,7 @@ namespace EmbyIcons.Services
             }
         }
 
-        private void DrawRatingText(SKCanvas canvas, PluginOptions options, string text, SKTypeface typeface, float fontSize, SKRect textBounds, SKPoint position)
+        private void DrawRatingText(SKCanvas canvas, ProfileSettings options, string text, SKTypeface typeface, float fontSize, SKRect textBounds, SKPoint position)
         {
             using var textPaint = EmbyIconsEnhancer.TextPaint.Clone();
             textPaint.Typeface = typeface;
@@ -239,24 +239,35 @@ namespace EmbyIcons.Services
         }
 
         #region Helper methods to create overlay info
-        private async Task<List<OverlayGroupInfo>> CreateIconGroups(OverlayData data, PluginOptions options, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
+        private async Task<List<OverlayGroupInfo>> CreateIconGroups(OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             var groups = new List<OverlayGroupInfo>(8);
 
-            if (options.ShowAudioIcons) await AddGroup(groups, data.AudioLanguages, IconCacheManager.IconType.Language, options.AudioIconAlignment, 1, options.AudioOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowSubtitleIcons) await AddGroup(groups, data.SubtitleLanguages, IconCacheManager.IconType.Subtitle, options.SubtitleIconAlignment, 2, options.SubtitleOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowResolutionIcons && data.ResolutionIconName != null) await AddGroup(groups, new List<string> { data.ResolutionIconName }, IconCacheManager.IconType.Resolution, options.ResolutionIconAlignment, 3, options.ResolutionOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowVideoFormatIcons && data.VideoFormatIconName != null) await AddGroup(groups, new List<string> { data.VideoFormatIconName }, IconCacheManager.IconType.VideoFormat, options.VideoFormatIconAlignment, 4, options.VideoFormatOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowVideoCodecIcons) await AddGroup(groups, data.VideoCodecs, IconCacheManager.IconType.VideoCodec, options.VideoCodecIconAlignment, 5, options.VideoCodecOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowTagIcons) await AddGroup(groups, data.Tags, IconCacheManager.IconType.Tag, options.TagIconAlignment, 6, options.TagOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowAudioChannelIcons && data.ChannelIconName != null) await AddGroup(groups, new List<string> { data.ChannelIconName }, IconCacheManager.IconType.Channel, options.ChannelIconAlignment, 7, options.ChannelOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowAudioCodecIcons) await AddGroup(groups, data.AudioCodecs, IconCacheManager.IconType.AudioCodec, options.AudioCodecIconAlignment, 8, options.AudioCodecOverlayHorizontal, cancellationToken, injectedIcons);
-            if (options.ShowAspectRatioIcons && data.AspectRatioIconName != null) await AddGroup(groups, new List<string> { data.AspectRatioIconName }, IconCacheManager.IconType.AspectRatio, options.AspectRatioIconAlignment, 10, options.AspectRatioOverlayHorizontal, cancellationToken, injectedIcons);
+            var groupDefinitions = new List<(IconAlignment Alignment, int Priority, bool Horizontal, IconCacheManager.IconType Type, ICollection<string>? Names)>
+            {
+                (profileOptions.AudioIconAlignment, profileOptions.AudioIconPriority, profileOptions.AudioOverlayHorizontal, IconCacheManager.IconType.Language, data.AudioLanguages),
+                (profileOptions.SubtitleIconAlignment, profileOptions.SubtitleIconPriority, profileOptions.SubtitleOverlayHorizontal, IconCacheManager.IconType.Subtitle, data.SubtitleLanguages),
+                (profileOptions.ResolutionIconAlignment, profileOptions.ResolutionIconPriority, profileOptions.ResolutionOverlayHorizontal, IconCacheManager.IconType.Resolution, data.ResolutionIconName != null ? new[] { data.ResolutionIconName } : null),
+                (profileOptions.VideoFormatIconAlignment, profileOptions.VideoFormatIconPriority, profileOptions.VideoFormatOverlayHorizontal, IconCacheManager.IconType.VideoFormat, data.VideoFormatIconName != null ? new[] { data.VideoFormatIconName } : null),
+                (profileOptions.VideoCodecIconAlignment, profileOptions.VideoCodecIconPriority, profileOptions.VideoCodecOverlayHorizontal, IconCacheManager.IconType.VideoCodec, data.VideoCodecs),
+                (profileOptions.TagIconAlignment, profileOptions.TagIconPriority, profileOptions.TagOverlayHorizontal, IconCacheManager.IconType.Tag, data.Tags),
+                (profileOptions.ChannelIconAlignment, profileOptions.ChannelIconPriority, profileOptions.ChannelOverlayHorizontal, IconCacheManager.IconType.Channel, data.ChannelIconName != null ? new[] { data.ChannelIconName } : null),
+                (profileOptions.AudioCodecIconAlignment, profileOptions.AudioCodecIconPriority, profileOptions.AudioCodecOverlayHorizontal, IconCacheManager.IconType.AudioCodec, data.AudioCodecs),
+                (profileOptions.AspectRatioIconAlignment, profileOptions.AspectRatioIconPriority, profileOptions.AspectRatioOverlayHorizontal, IconCacheManager.IconType.AspectRatio, data.AspectRatioIconName != null ? new[] { data.AspectRatioIconName } : null)
+            };
+
+            foreach (var def in groupDefinitions)
+            {
+                if (def.Alignment != IconAlignment.Disabled && def.Names != null && def.Names.Any())
+                {
+                    await AddGroup(groups, def.Names, def.Type, def.Alignment, def.Priority, def.Horizontal, globalOptions, cancellationToken, injectedIcons);
+                }
+            }
 
             return groups;
         }
 
-        private async Task AddGroup(List<OverlayGroupInfo> groups, ICollection<string> names, IconCacheManager.IconType type, IconAlignment alignment, int priority, bool horizontal, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
+        private async Task AddGroup(List<OverlayGroupInfo> groups, ICollection<string> names, IconCacheManager.IconType type, IconAlignment alignment, int priority, bool horizontal, PluginOptions options, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             List<SKImage> icons;
 
@@ -268,7 +279,7 @@ namespace EmbyIcons.Services
             {
                 if (names == null || !names.Any()) return;
                 var iconTasks = names.OrderBy(n => n)
-                                     .Select(name => _iconCache.GetCachedIconAsync(name, type, cancellationToken))
+                                     .Select(name => _iconCache.GetCachedIconAsync(name, type, options, cancellationToken))
                                      .ToList();
 
                 var loadedIcons = await Task.WhenAll(iconTasks);
@@ -282,12 +293,12 @@ namespace EmbyIcons.Services
             }
         }
 
-        private async Task<RatingOverlayInfo?> CreateRatingInfo(OverlayData data, PluginOptions options, CancellationToken cancellationToken)
+        private async Task<RatingOverlayInfo?> CreateRatingInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
-            if (options.ShowCommunityScoreIcon && data.CommunityRating.HasValue && data.CommunityRating.Value > 0)
+            if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled && data.CommunityRating.HasValue && data.CommunityRating.Value > 0)
             {
-                var imdbIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, cancellationToken);
-                return new RatingOverlayInfo(options.CommunityScoreIconAlignment, 9, options.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, imdbIcon);
+                var imdbIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, globalOptions, cancellationToken);
+                return new RatingOverlayInfo(profileOptions.CommunityScoreIconAlignment, profileOptions.CommunityScoreIconPriority, profileOptions.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, imdbIcon);
             }
             return null;
         }

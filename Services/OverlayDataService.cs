@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -17,11 +17,11 @@ namespace EmbyIcons.Services
             _enhancer = enhancer;
         }
 
-        public OverlayData GetOverlayData(BaseItem item, PluginOptions options)
+        public OverlayData GetOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
-            if (item is Series seriesItem && options.ShowSeriesIconsIfAllEpisodesHaveLanguage)
+            if (item is Series seriesItem && profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage)
             {
-                var aggResult = _enhancer.GetAggregatedDataForParentSync(seriesItem, options);
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
                 var seriesTags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
                 if (seriesItem.Tags != null && seriesItem.Tags.Length > 0)
                 {
@@ -42,7 +42,7 @@ namespace EmbyIcons.Services
                     ResolutionIconName = aggResult.Resolutions.FirstOrDefault(),
                     CommunityRating = item.CommunityRating,
                     Tags = seriesTags,
-                    AspectRatioIconName = null 
+                    AspectRatioIconName = null
                 };
             }
 
@@ -67,7 +67,7 @@ namespace EmbyIcons.Services
             }
 
             if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] No valid cache. Processing streams for '{item.Name}'.");
-            var overlayData = ProcessMediaStreams(item, options);
+            var overlayData = ProcessMediaStreams(item, globalOptions);
 
             var newInfo = new EmbyIconsEnhancer.EpisodeIconInfo
             {

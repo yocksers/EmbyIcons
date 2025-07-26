@@ -1,4 +1,5 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
+using EmbyIcons.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -14,9 +15,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using EmbyIcons.Services;
 
 namespace EmbyIcons
 {
@@ -50,7 +51,7 @@ namespace EmbyIcons
 
             _logger.Info("[EmbyIcons] Session started.");
 
-            _iconCacheManager = new IconCacheManager(TimeSpan.FromMinutes(30), _logger);
+            _iconCacheManager = new IconCacheManager(_logger);
 
             _overlayDataService = new OverlayDataService(this);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
@@ -68,6 +69,18 @@ namespace EmbyIcons
             _seriesAggregationCache.Clear();
             _episodeIconCache.Clear();
             _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
+        }
+
+        public void ForceSeriesRefresh(Guid seriesId)
+        {
+            ClearSeriesAggregationCache(seriesId);
+            var episodesToClear = _episodeIconCache.Where(kvp =>
+                _libraryManager.GetItemById(kvp.Key) is Episode ep &&
+                ep.Series?.Id == seriesId).ToList();
+            foreach (var episode in episodesToClear)
+            {
+                _episodeIconCache.TryRemove(episode.Key, out _);
+            }
         }
 
         private BaseItem GetFullItem(BaseItem item)
@@ -108,71 +121,49 @@ namespace EmbyIcons
         {
             if (item == null || imageType != ImageType.Primary) return false;
 
+            var profile = Plugin.Instance?.GetProfileForItem(item);
+            if (profile == null) return false;
+
             bool isSupportedType = item is Video || item is Series || item is Season || item is Photo;
             if (!isSupportedType) return false;
 
-            if (!(Plugin.Instance?.IsLibraryAllowed(item) ?? false)) return false;
+            var options = profile.Settings;
+            if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
 
-            var options = Plugin.Instance?.GetConfiguredOptions();
-            if (item is Episode && !(options?.ShowOverlaysForEpisodes ?? true)) return false;
-
-            return (options?.ShowAudioIcons ?? false) || (options?.ShowSubtitleIcons ?? false) || (options?.ShowAudioChannelIcons ?? false) || (options?.ShowVideoFormatIcons ?? false) || (options?.ShowResolutionIcons ?? false) || (options?.ShowCommunityScoreIcon ?? false) || (options?.ShowAudioCodecIcons ?? false) || (options?.ShowVideoCodecIcons ?? false) || (options?.ShowTagIcons ?? false) || (options?.ShowAspectRatioIcons ?? false);
+            return options.AudioIconAlignment != IconAlignment.Disabled ||
+                   options.SubtitleIconAlignment != IconAlignment.Disabled ||
+                   options.ChannelIconAlignment != IconAlignment.Disabled ||
+                   options.VideoFormatIconAlignment != IconAlignment.Disabled ||
+                   options.ResolutionIconAlignment != IconAlignment.Disabled ||
+                   options.CommunityScoreIconAlignment != IconAlignment.Disabled ||
+                   options.AudioCodecIconAlignment != IconAlignment.Disabled ||
+                   options.VideoCodecIconAlignment != IconAlignment.Disabled ||
+                   options.TagIconAlignment != IconAlignment.Disabled ||
+                   options.AspectRatioIconAlignment != IconAlignment.Disabled;
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
             var plugin = Plugin.Instance;
-            if (plugin == null || !plugin.IsLibraryAllowed(item)) return "";
-            var options = plugin.GetConfiguredOptions();
+            if (plugin == null) return "";
 
+            var profile = plugin.GetProfileForItem(item);
+            if (profile == null) return "";
+
+            var options = profile.Settings;
             var sb = new StringBuilder(512);
 
-            sb.Append("ei4_").Append(item.Id).Append('_').Append((int)imageType)
-              .Append("_s").Append(options.IconSize)
-              .Append("_q").Append(options.JpegQuality)
-              .Append("_sm").Append(options.EnableImageSmoothing ? 1 : 0)
-              .Append("_v").Append(plugin.ConfigurationVersion);
+            sb.Append("ei5_").Append(item.Id).Append('_').Append((int)imageType)
+              .Append("_v").Append(plugin.ConfigurationVersion)
+              .Append("_p").Append(profile.Id.ToString("N"));
 
-            int settingsMask = (options.ShowAudioIcons ? 1 : 0) |
-                               ((options.ShowSubtitleIcons ? 1 : 0) << 1) |
-                               ((options.ShowAudioChannelIcons ? 1 : 0) << 2) |
-                               ((options.ShowAudioCodecIcons ? 1 : 0) << 3) |
-                               ((options.ShowVideoFormatIcons ? 1 : 0) << 4) |
-                               ((options.ShowVideoCodecIcons ? 1 : 0) << 5) |
-                               ((options.ShowTagIcons ? 1 : 0) << 6) |
-                               ((options.ShowResolutionIcons ? 1 : 0) << 7) |
-                               ((options.ShowCommunityScoreIcon ? 1 : 0) << 8) |
-                               ((options.ShowOverlaysForEpisodes ? 1 : 0) << 9) |
-                               ((options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 1 : 0) << 10) |
-                               ((options.UseSeriesLiteMode ? 1 : 0) << 11) |
-                               ((options.ShowAspectRatioIcons ? 1 : 0) << 12) |
-                               ((options.EnableDebugLogging ? 1 : 0) << 13);
-            sb.Append("_cfg").Append(settingsMask);
-
-            sb.Append("_align")
-              .Append((int)options.AudioIconAlignment).Append(options.AudioOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.SubtitleIconAlignment).Append(options.SubtitleOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.ChannelIconAlignment).Append(options.ChannelOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.AudioCodecIconAlignment).Append(options.AudioCodecOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.VideoFormatIconAlignment).Append(options.VideoFormatOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.VideoCodecIconAlignment).Append(options.VideoCodecOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.TagIconAlignment).Append(options.TagOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.ResolutionIconAlignment).Append(options.ResolutionOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 'h' : 'v')
-              .Append((int)options.AspectRatioIconAlignment).Append(options.AspectRatioOverlayHorizontal ? 'h' : 'v');
-
-            if (options.ShowCommunityScoreIcon)
-            {
-                sb.Append("_rbs")
-                  .Append((int)options.CommunityScoreBackgroundShape)
-                  .Append("_rbc").Append(options.CommunityScoreBackgroundColor)
-                  .Append("_rbo").Append(options.CommunityScoreBackgroundOpacity);
-            }
+            var settingsJson = JsonSerializer.Serialize(options);
+            sb.Append("_cfg").Append(System.BitConverter.ToString(System.Security.Cryptography.MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(settingsJson))).Replace("-", ""));
 
             if (item is Series series)
             {
                 var fullSeries = GetFullItem(series) as Series ?? series;
-                var aggResult = GetAggregatedDataForParentSync(fullSeries, options);
+                var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, plugin.GetConfiguredOptions());
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else
@@ -199,12 +190,16 @@ namespace EmbyIcons
         {
             var plugin = Plugin.Instance;
             if (plugin == null) return;
-            var options = plugin.GetConfiguredOptions();
-            if (!plugin.IsLibraryAllowed(item))
+
+            var profile = plugin.GetProfileForItem(item);
+            if (profile == null)
             {
                 await FileUtils.SafeCopyAsync(inputFile, outputFile, cancellationToken);
                 return;
             }
+
+            var globalOptions = plugin.GetConfiguredOptions();
+            var profileOptions = profile.Settings;
 
             await _globalConcurrencyLock.WaitAsync(cancellationToken);
             try
@@ -214,7 +209,7 @@ namespace EmbyIcons
                 try
                 {
                     item = GetFullItem(item);
-                    var overlayData = _overlayDataService.GetOverlayData(item, options);
+                    var overlayData = _overlayDataService.GetOverlayData(item, profileOptions, globalOptions);
 
                     using var sourceBitmap = SKBitmap.Decode(inputFile);
                     if (sourceBitmap == null)
@@ -223,7 +218,7 @@ namespace EmbyIcons
                         return;
                     }
 
-                    using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(sourceBitmap, overlayData, options, cancellationToken);
+                    using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(sourceBitmap, overlayData, profileOptions, globalOptions, cancellationToken);
 
                     string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                     await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
