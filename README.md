@@ -44,7 +44,7 @@ EmbyIcons is a powerful plugin for Emby Server that enhances your media library 
     *   Clone, rename, and manage profiles with ease.
 *   **Complete Layout Control**:
     *   Independently set the on-screen corner alignment for each icon category.
-    *   **NEW**: Control the display **Priority** to define the drawing order of icons within a corner.
+    *   Control the display **Priority** to define the drawing order of icons within a corner.
     *   Choose between horizontal or vertical stacking for icons.
     *   Customize the Community Rating icon's background shape, color, and opacity.
 *   **Smart TV Show Handling**:
