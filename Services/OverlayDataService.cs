@@ -54,6 +54,7 @@ namespace EmbyIcons.Services
 
             if (item is BoxSet collectionItem)
             {
+                // If collection icons are disabled in the profile, return empty data to prevent any overlays.
                 if (!profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
                 {
                     if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)

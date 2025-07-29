@@ -79,6 +79,8 @@ namespace EmbyIcons.Services
             var horizontalDrawableItems = new List<object>();
             var verticalDrawableItems = new List<IOverlayInfo>();
 
+            // Deconstruct horizontal groups into individual drawable items.
+            // A drawable item is either a single SKImage (from a group) or a whole RatingOverlayInfo (which is treated as one block).
             foreach (var overlay in allOverlays)
             {
                 if (overlay.HorizontalLayout)
@@ -98,6 +100,7 @@ namespace EmbyIcons.Services
                 }
             }
 
+            // Layout and draw the horizontal items with wrapping.
             float currentHorizontalOffset = 0;
             float currentVerticalOffset = 0;
             float maxHeightOfCurrentRow = 0;
