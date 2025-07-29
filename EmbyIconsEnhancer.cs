@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -40,6 +40,7 @@ namespace EmbyIcons
         internal static readonly SKPaint ResamplingPaint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
         internal static readonly SKPaint AliasedPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None };
         internal static readonly SKPaint TextPaint = new() { IsAntialias = true, Color = SKColors.White };
+        internal static readonly SKPaint AliasedTextPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None, Color = SKColors.White };
         internal static readonly SKPaint TextStrokePaint = new() { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
 
         public ILogger Logger => _logger;
@@ -119,15 +120,26 @@ namespace EmbyIcons
 
         public bool Supports(BaseItem? item, ImageType imageType)
         {
-            if (item == null || imageType != ImageType.Primary) return false;
+            if (item == null) return false;
 
             var profile = Plugin.Instance?.GetProfileForItem(item);
             if (profile == null) return false;
 
-            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo;
+            var options = profile.Settings;
+
+            bool isTypeSupported = imageType switch
+            {
+                ImageType.Primary => options.EnableForPosters,
+                ImageType.Thumb => options.EnableForThumbs,
+                ImageType.Banner => options.EnableForBanners,
+                _ => false
+            };
+
+            if (!isTypeSupported) return false;
+
+            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo || item is BoxSet;
             if (!isSupportedType) return false;
 
-            var options = profile.Settings;
             if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
 
             return options.AudioIconAlignment != IconAlignment.Disabled ||
@@ -164,6 +176,11 @@ namespace EmbyIcons
             {
                 var fullSeries = GetFullItem(series) as Series ?? series;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, plugin.GetConfiguredOptions());
+                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+            }
+            else if (item is BoxSet collection)
+            {
+                var aggResult = GetOrBuildAggregatedDataForParent(collection, options, plugin.GetConfiguredOptions());
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else
@@ -273,6 +290,7 @@ namespace EmbyIcons
             ResamplingPaint.Dispose();
             AliasedPaint.Dispose();
             TextPaint.Dispose();
+            AliasedTextPaint.Dispose();
             TextStrokePaint.Dispose();
         }
     }

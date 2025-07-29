@@ -90,7 +90,8 @@ namespace EmbyIcons
                 VideoFormatIconName = GetRandom(IconCacheManager.IconType.VideoFormat, "hdr"),
                 ResolutionIconName = GetRandom(IconCacheManager.IconType.Resolution, "1080p"),
                 CommunityRating = 6.9f,
-                AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9")
+                AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9"),
+                ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13")
             };
 
             var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();

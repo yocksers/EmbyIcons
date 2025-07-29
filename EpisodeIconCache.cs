@@ -21,6 +21,7 @@ namespace EmbyIcons
             public string? VideoFormatIconName { get; init; }
             public string? ResolutionIconName { get; init; }
             public string? AspectRatioIconName { get; init; }
+            public string? ParentalRatingIconName { get; init; }
             public long DateModifiedTicks { get; init; }
             public DateTime DateCached { get; init; }
         }

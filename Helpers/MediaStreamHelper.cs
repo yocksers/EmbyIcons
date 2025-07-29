@@ -72,6 +72,15 @@ namespace EmbyIcons.Helpers
             return null;
         }
 
+        public static string? GetParentalRatingIconName(string? officialRating)
+        {
+            if (string.IsNullOrWhiteSpace(officialRating))
+            {
+                return null;
+            }
+            return officialRating.ToLowerInvariant();
+        }
+
         public static string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
             var parts = new List<string>(8);

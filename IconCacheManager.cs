@@ -22,7 +22,7 @@ namespace EmbyIcons.Helpers
 
         private string? _iconsFolder;
         internal static readonly string[] SupportedCustomIconExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
-        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio }
+        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating }
 
         public IconCacheManager(ILogger logger)
         {
@@ -78,7 +78,7 @@ namespace EmbyIcons.Helpers
             foreach (var name in resourceNames)
             {
                 var fileNameWithExt = name.Substring(resourcePrefix.Length);
-                var parts = Path.GetFileNameWithoutExtension(fileNameWithExt).Split(new[] { '.' }, 2);
+                var parts = Path.GetFileNameWithoutExtension(fileNameWithExt).Split(new[] { '_' }, 2);
                 if (parts.Length == 2 && prefixLookup.TryGetValue(parts[0], out var iconType))
                 {
                     embeddedKeys[iconType].Add(parts[1].ToLowerInvariant());
@@ -117,21 +117,25 @@ namespace EmbyIcons.Helpers
         {
             var loadingMode = options.IconLoadingMode;
             var prefix = Constants.PrefixMap[iconType];
-            var baseFileName = $"{prefix}.{iconNameKey.ToLowerInvariant()}";
+            var lowerIconNameKey = iconNameKey.ToLowerInvariant();
+
+            var customIconFileName = $"{prefix}.{lowerIconNameKey}";
+            var embeddedIconFileName = $"{prefix}_{lowerIconNameKey}";
             var customIconsFolder = options.IconsFolder;
 
             if (loadingMode == IconLoadingMode.CustomOnly)
             {
-                return await LoadCustomIconAsync(baseFileName, customIconsFolder, cancellationToken);
+                return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken);
             }
 
             if (loadingMode == IconLoadingMode.BuiltInOnly)
             {
-                return await LoadEmbeddedIconAsync(baseFileName, cancellationToken);
+                return await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
             }
 
-            var customIcon = await LoadCustomIconAsync(baseFileName, customIconsFolder, cancellationToken);
-            return customIcon ?? await LoadEmbeddedIconAsync(baseFileName, cancellationToken);
+            // Hybrid mode
+            var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken);
+            return customIcon ?? await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
         }
 
         private async Task<SKImage?> LoadCustomIconAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken)

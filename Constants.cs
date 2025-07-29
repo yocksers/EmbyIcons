@@ -18,7 +18,8 @@ namespace EmbyIcons
             { IconCacheManager.IconType.VideoCodec, "vc" },
             { IconCacheManager.IconType.Tag, "tag" },
             { IconCacheManager.IconType.CommunityRating, "rating" },
-            { IconCacheManager.IconType.AspectRatio, "ar" }
+            { IconCacheManager.IconType.AspectRatio, "ar" },
+            { IconCacheManager.IconType.ParentalRating, "pr" }
         };
     }
 }

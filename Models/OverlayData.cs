@@ -14,5 +14,6 @@ namespace EmbyIcons.Models
         public string? ResolutionIconName { get; set; }
         public float? CommunityRating { get; set; }
         public string? AspectRatioIconName { get; set; }
+        public string? ParentalRatingIconName { get; set; }
     }
 }

@@ -96,7 +96,8 @@ namespace EmbyIcons.Services
                 { IconCacheManager.IconType.VideoFormat, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
                 { IconCacheManager.IconType.Resolution, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
                 { IconCacheManager.IconType.AspectRatio, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.Tag, new HashSet<string>(StringComparer.OrdinalIgnoreCase) }
+                { IconCacheManager.IconType.Tag, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
+                { IconCacheManager.IconType.ParentalRating, new HashSet<string>(StringComparer.OrdinalIgnoreCase) }
             };
 
             var customIcons = _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
@@ -106,6 +107,10 @@ namespace EmbyIcons.Services
             foreach (var item in allItems)
             {
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+
+                var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
+                if (rating != null) libraryProperties[IconCacheManager.IconType.ParentalRating].Add(rating);
+
                 if (!streams.Any()) continue;
 
                 foreach (var stream in streams)

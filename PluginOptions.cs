@@ -131,8 +131,14 @@ namespace EmbyIcons
 
     public class ProfileSettings
     {
+        public bool EnableForPosters { get; set; } = true;
+        public bool EnableForThumbs { get; set; } = false;
+        public bool EnableForBanners { get; set; } = false;
+
         public bool ShowOverlaysForEpisodes { get; set; } = true;
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; } = true;
+        public bool ShowCollectionIconsIfAllChildrenHaveLanguage { get; set; } = true;
+        public bool UseCollectionLiteMode { get; set; } = true;
 
         public IconAlignment AudioIconAlignment { get; set; } = IconAlignment.TopLeft;
         public bool AudioOverlayHorizontal { get; set; } = true;
@@ -173,6 +179,10 @@ namespace EmbyIcons
         public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool AspectRatioOverlayHorizontal { get; set; } = true;
         public int AspectRatioIconPriority { get; set; } = 10;
+
+        public IconAlignment ParentalRatingIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool ParentalRatingOverlayHorizontal { get; set; } = true;
+        public int ParentalRatingIconPriority { get; set; } = 11;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";

@@ -1,3 +1,4 @@
+﻿--- START OF FILE EmbyIconsConfiguration.html ---
 ﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
@@ -60,20 +61,49 @@
                             </div>
                         </div>
 
+                        <!-- Image Type Settings -->
+                        <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                            <h2 style="margin: 0;">Image Type Settings</h2>
+                        </div>
+                        <div class="paper-card" style="padding: 1.5em;">
+                            <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">Select which image types should have icons overlaid. 'Primary' refers to the main poster image.</p>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableForPosters" /><span>Enable overlays on Posters (Primary)</span></label>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableForThumbs" /><span>Enable overlays on Thumbs</span></label>
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableForBanners" /><span>Enable overlays on Banners</span></label>
+                            </div>
+                        </div>
+
                         <div class="flex align-items-center" style="margin: 3em 0 .5em;">
                             <h2 style="margin: 0;">TV Show Settings</h2>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">When disabled, overlays will only appear on movies, series, and seasons.</div>
+                            <div class="fieldDescription checkboxFieldDescription">When disabled, overlays will only appear on movies and tv shows.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on series/seasons</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">Icons will only appear on a series/season poster if all child episodes share the same property.</div>
+                            <div class="fieldDescription checkboxFieldDescription">Icons will only appear on a TV show poster if all child episodes share the same property.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for series scans</span></label>
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for TV show scans</span></label>
                             <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
+                        </div>
+
+                        <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                            <h2 style="margin: 0;">Collection Settings</h2>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowCollectionIconsIfAllChildrenHaveLanguage" /><span>Show icons on collections</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Language icons will only appear on a collection poster if all child items (movies/episodes) share the same language. Other icons will appear if they are common to all children.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseCollectionLiteMode" /><span>Use Lite Mode for collection scans</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first item to determine icons for the entire collection.</div>
                         </div>
 
                         <div class="flex align-items-center" style="margin: 3em 0 .5em;">
@@ -84,72 +114,79 @@
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Audio Language Icons" data-profile-key="AudioIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="AudioIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="AudioIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="AudioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Subtitle Language Icons" data-profile-key="SubtitleIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="SubtitleIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="SubtitleIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="SubtitleOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Audio Channel Icons (e.g., 7.1)" data-profile-key="ChannelIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="ChannelIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="ChannelIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="ChannelOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Audio Codec Icons (e.g., DTS)" data-profile-key="AudioCodecIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="AudioCodecIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="AudioCodecIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="AudioCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Video Format Icons (e.g., HDR)" data-profile-key="VideoFormatIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="VideoFormatIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="VideoFormatIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="VideoFormatOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Video Codec Icons (e.g., H265)" data-profile-key="VideoCodecIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="VideoCodecIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="VideoCodecIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="VideoCodecOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Custom Tag Icons" data-profile-key="TagIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="TagIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="TagIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="TagOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Resolution Icons (e.g., 4K)" data-profile-key="ResolutionIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="ResolutionIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="ResolutionIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="ResolutionOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Aspect Ratio Icons (e.g., 16:9)" data-profile-key="AspectRatioIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="AspectRatioIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="AspectRatioIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="AspectRatioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
                                         <select is="emby-select" label="Community Rating Icon" data-profile-key="CommunityScoreIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
-                                        <select is="emby-select" label="Priority" data-profile-key="CommunityScoreIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="CommunityScoreIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="CommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                </div>
+                                <div>
+                                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                                        <select is="emby-select" label="Parental Rating Icons" data-profile-key="ParentalRatingIconAlignment"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="ParentalRatingIconPriority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
+                                    </div>
+                                    <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="ParentalRatingOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
                                 <div id="ratingAppearanceControls">
                                     <select is="emby-select" label="Rating Background Shape" data-profile-key="CommunityScoreBackgroundShape">
@@ -269,6 +306,12 @@
                     <p>For most categories, the plugin dynamically detects properties directly from your media's metadata. This means you can create icons for any codec or audio layout that Emby recognizes, even if it's new.</p>
 
                     <p>
+                        <strong>Parental Rating (prefix: pr):</strong> <code>pr.{rating}.png</code><br />
+                        The <code>{rating}</code> should match the official rating reported by Emby (e.g., 'pg-13', 'tv-ma') in lowercase.<br />
+                        <em>Example:</em> <code>pr.pg-13.png</code>, <code>pr.tv-ma.png</code>
+                    </p>
+
+                    <p>
                         <strong>Audio Codec (prefix: ac):</strong> <code>ac.{codec_name}.png</code><br />
                         The <code>{codec_name}</code> should match the codec reported by Emby (e.g., 'eac3', 'dts-hd ma').<br />
                         <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts-hdma.png</code>
@@ -319,7 +362,7 @@
                     </p>
 
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
-                        <div style="display: flex; align-items: center; gap: 1em;">
+                        <div style="display: flex; align-items-center; gap: 1em;">
                             <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
                                 <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
                             </svg>
@@ -336,3 +379,4 @@
         </div>
     </div>
 </div>
+--- END OF FILE EmbyIconsConfiguration.html ---

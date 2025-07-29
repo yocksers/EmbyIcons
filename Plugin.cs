@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
@@ -13,6 +13,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Plugins;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Generic;
@@ -155,7 +156,7 @@ namespace EmbyIcons
                         }
                     }
                 }
-                else 
+                else
                 {
                     foreach (var lib in _libraryPathCache)
                     {
@@ -202,9 +203,9 @@ namespace EmbyIcons
             }
         }
 
-        public IconProfile? GetProfileForItem(BaseItem item)
+        private IconProfile? GetProfileForPath(string path)
         {
-            if (string.IsNullOrEmpty(item.Path))
+            if (string.IsNullOrEmpty(path))
             {
                 return null;
             }
@@ -226,7 +227,7 @@ namespace EmbyIcons
 
             foreach (var libInfo in currentLibraryCache)
             {
-                if (item.Path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
+                if (path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
                 {
                     var mapping = Configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libInfo.Id);
                     if (mapping != null)
@@ -238,6 +239,30 @@ namespace EmbyIcons
             }
 
             return null;
+        }
+
+        public IconProfile? GetProfileForItem(BaseItem item)
+        {
+            if (item is BoxSet boxSet)
+            {
+                var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    CollectionIds = new[] { boxSet.InternalId },
+                    Limit = 1,
+                    Recursive = true,
+                    IncludeItemTypes = new[] { "Movie", "Episode" }
+                }).FirstOrDefault();
+
+                if (firstChild != null)
+                {
+                    return GetProfileForPath(firstChild.Path);
+                }
+
+                _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
+                return null;
+            }
+
+            return GetProfileForPath(item.Path);
         }
 
         public bool IsLibraryAllowed(BaseItem item)
