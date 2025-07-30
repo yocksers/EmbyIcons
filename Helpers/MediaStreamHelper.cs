@@ -78,7 +78,7 @@ namespace EmbyIcons.Helpers
             {
                 return null;
             }
-            return officialRating.ToLowerInvariant();
+            return officialRating.ToLowerInvariant().Replace('/', '-');
         }
 
         public static string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams)

@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -28,7 +28,6 @@ namespace EmbyIcons
             public HashSet<string> VideoFormats { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> Resolutions { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> AspectRatios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-            public HashSet<string> ParentalRatings { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public string CombinedEpisodesHashShort { get; init; } = "";
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
         }
@@ -66,7 +65,7 @@ namespace EmbyIcons
             if (parent is Series)
             {
                 useLiteMode = profileOptions.UseSeriesLiteMode;
-                requireAllItemsToMatchForLanguage = profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
+                requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
                 query = new InternalItemsQuery
                 {
                     Parent = parent,
@@ -79,7 +78,7 @@ namespace EmbyIcons
             else if (parent is BoxSet boxSet)
             {
                 useLiteMode = profileOptions.UseCollectionLiteMode;
-                requireAllItemsToMatchForLanguage = profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage;
+                requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage;
                 query = new InternalItemsQuery
                 {
                     CollectionIds = new[] { boxSet.InternalId },
@@ -127,7 +126,6 @@ namespace EmbyIcons
             var primaryAudioStream = firstStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
             var commonChannelType = primaryAudioStream != null ? MediaStreamHelper.GetChannelIconName(primaryAudioStream) : null;
             var commonAspectRatio = MediaStreamHelper.GetAspectRatioIconName(firstVideoStream);
-            var commonParentalRating = MediaStreamHelper.GetParentalRatingIconName(firstItem.OfficialRating);
 
             var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
             var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
@@ -166,9 +164,6 @@ namespace EmbyIcons
                 var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream);
                 if (commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
 
-                var currentParentalRating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
-                if (commonParentalRating != currentParentalRating) commonParentalRating = null;
-
                 var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
                 if (commonResolution != currentRes) commonResolution = null;
 
@@ -187,7 +182,6 @@ namespace EmbyIcons
             var finalChannelTypes = (profileOptions.ChannelIconAlignment != IconAlignment.Disabled && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
             var finalResolutions = (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
             var finalAspectRatios = (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled && commonAspectRatio != null) ? new HashSet<string> { commonAspectRatio } : new HashSet<string>();
-            var finalParentalRatings = (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled && commonParentalRating != null) ? new HashSet<string> { commonParentalRating } : new HashSet<string>();
 
             var finalVideoFormats = new HashSet<string>();
             if (profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled && itemList.Any())
@@ -227,7 +221,6 @@ namespace EmbyIcons
                 Resolutions = finalResolutions,
                 VideoFormats = finalVideoFormats,
                 AspectRatios = finalAspectRatios,
-                ParentalRatings = finalParentalRatings,
                 CombinedEpisodesHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
             };
 

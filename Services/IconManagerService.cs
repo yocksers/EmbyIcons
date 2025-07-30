@@ -81,7 +81,7 @@ namespace EmbyIcons.Services
 
             var allItems = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                IncludeItemTypes = new[] { "Movie", "Episode" },
+                IncludeItemTypes = new[] { "Movie", "Episode", "Series" },
                 IsVirtualItem = false,
                 Recursive = true
             });

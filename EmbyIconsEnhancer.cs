@@ -151,7 +151,8 @@ namespace EmbyIcons
                    options.AudioCodecIconAlignment != IconAlignment.Disabled ||
                    options.VideoCodecIconAlignment != IconAlignment.Disabled ||
                    options.TagIconAlignment != IconAlignment.Disabled ||
-                   options.AspectRatioIconAlignment != IconAlignment.Disabled;
+                   options.AspectRatioIconAlignment != IconAlignment.Disabled ||
+                   options.ParentalRatingIconAlignment != IconAlignment.Disabled;
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)

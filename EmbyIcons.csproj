@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.24.60</Version>
-		<AssemblyVersion>5.24.6.0</AssemblyVersion>
-		<FileVersion>5.24.6.0</FileVersion>
+		<Version>5.25.20</Version>
+		<AssemblyVersion>5.25.2.0</AssemblyVersion>
+		<FileVersion>5.25.2.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -34,6 +34,9 @@
 	  <None Remove="EmbeddedIcons\pr_pg-13.png" />
 	  <None Remove="EmbeddedIcons\pr_pg.png" />
 	  <None Remove="EmbeddedIcons\pr_r.png" />
+	  <None Remove="EmbeddedIcons\pr_tv-14.png" />
+	  <None Remove="EmbeddedIcons\pr_tv-ma.png" />
+	  <None Remove="EmbeddedIcons\pr_tv-pg.png" />
 	  <None Remove="EmbeddedIcons\res.480p.png" />
 	  <None Remove="EmbeddedIcons\res.4k.png" />
 	  <None Remove="EmbeddedIcons\res.576p.png" />
@@ -84,6 +87,9 @@
 		<EmbeddedResource Include="EmbeddedIcons\pr_pg-13.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_r.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-14.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-ma.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_1080p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res.480p.png" />

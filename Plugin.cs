@@ -243,10 +243,8 @@ namespace EmbyIcons
 
         public IconProfile? GetProfileForItem(BaseItem item)
         {
-            // Special handling for BoxSet (Collections)
             if (item is BoxSet boxSet)
             {
-                // Collections don't have a direct file path. We find the profile based on the location of its first child item.
                 var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     CollectionIds = new[] { boxSet.InternalId },
@@ -257,16 +255,13 @@ namespace EmbyIcons
 
                 if (firstChild != null)
                 {
-                    // Use the child's path to find the library and its associated profile.
                     return GetProfileForPath(firstChild.Path);
                 }
 
-                // Log a warning if the collection is empty, as we can't determine the profile.
                 _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
                 return null;
             }
 
-            // For all other item types, use the item's own path.
             return GetProfileForPath(item.Path);
         }
 

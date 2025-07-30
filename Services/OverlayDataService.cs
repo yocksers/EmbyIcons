@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -40,7 +40,7 @@ namespace EmbyIcons.Services
                 CommunityRating = item.CommunityRating,
                 Tags = tags,
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
-                ParentalRatingIconName = aggResult.ParentalRatings.FirstOrDefault()
+                ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
         }
 
@@ -54,12 +54,11 @@ namespace EmbyIcons.Services
 
             if (item is BoxSet collectionItem)
             {
-                // If collection icons are disabled in the profile, return empty data to prevent any overlays.
-                if (!profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
+                if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
                 {
                     if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                     {
-                        Plugin.Instance.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile. Skipping '{item.Name}'.");
+                        Plugin.Instance.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
                     }
                     return new OverlayData();
                 }
