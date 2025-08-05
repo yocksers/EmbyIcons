@@ -19,6 +19,8 @@ namespace EmbyIcons.Helpers
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
         private static readonly object _embeddedCacheLock = new object();
+        private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
+
 
         private string? _iconsFolder;
         internal static readonly string[] SupportedCustomIconExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
@@ -37,13 +39,12 @@ namespace EmbyIcons.Helpers
 
             try
             {
-                var prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
                 foreach (var file in Directory.GetFiles(iconsFolder))
                 {
                     var ext = Path.GetExtension(file).ToLowerInvariant();
                     if (string.IsNullOrEmpty(ext) || !SupportedCustomIconExtensions.Contains(ext)) continue;
                     var parts = Path.GetFileNameWithoutExtension(file).Split(new[] { '.' }, 2);
-                    if (parts.Length == 2 && prefixLookup.TryGetValue(parts[0], out var iconType))
+                    if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
                     {
                         allKeys[iconType].Add(parts[1].ToLowerInvariant());
                     }
@@ -70,7 +71,6 @@ namespace EmbyIcons.Helpers
             var embeddedKeys = new Dictionary<IconType, List<string>>();
             foreach (IconType type in Enum.GetValues(typeof(IconType))) embeddedKeys[type] = new List<string>();
 
-            var prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
             var assembly = Assembly.GetExecutingAssembly();
             const string resourcePrefix = "EmbyIcons.EmbeddedIcons.";
             var resourceNames = assembly.GetManifestResourceNames().Where(name => name.StartsWith(resourcePrefix) && name.EndsWith(".png"));
@@ -79,7 +79,7 @@ namespace EmbyIcons.Helpers
             {
                 var fileNameWithExt = name.Substring(resourcePrefix.Length);
                 var parts = Path.GetFileNameWithoutExtension(fileNameWithExt).Split(new[] { '_' }, 2);
-                if (parts.Length == 2 && prefixLookup.TryGetValue(parts[0], out var iconType))
+                if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
                 {
                     embeddedKeys[iconType].Add(parts[1].ToLowerInvariant());
                 }
@@ -133,7 +133,6 @@ namespace EmbyIcons.Helpers
                 return await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
             }
 
-            // Hybrid mode
             var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken);
             return customIcon ?? await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
         }

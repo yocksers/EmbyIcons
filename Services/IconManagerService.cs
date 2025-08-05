@@ -1,4 +1,5 @@
-﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Api;
+using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
@@ -6,12 +7,14 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Route("/EmbyIcons/IconManagerReport", "GET", Summary = "Generates a report of used, missing, and unused icons")]
+    [Route(ApiRoutes.IconManagerReport, "GET", Summary = "Generates a report of used, missing, and unused icons")]
     public class GetIconManagerReport : IReturn<IconManagerReport> { }
 
     public class IconManagerReport
@@ -68,6 +71,20 @@ namespace EmbyIcons.Services
             }
         }
 
+        private class LocalItemReport
+        {
+            public HashSet<string> Languages { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> Subtitles { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> Channels { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> AudioCodecs { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> VideoCodecs { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> VideoFormats { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> Resolutions { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> AspectRatios { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> Tags { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> ParentalRatings { get; } = new(StringComparer.OrdinalIgnoreCase);
+        }
+
         private IconManagerReport GenerateReport()
         {
             var pluginInstance = Plugin.Instance;
@@ -86,85 +103,110 @@ namespace EmbyIcons.Services
                 Recursive = true
             });
 
-            var libraryProperties = new Dictionary<IconCacheManager.IconType, HashSet<string>>
-            {
-                { IconCacheManager.IconType.Language, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.Subtitle, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.Channel, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.AudioCodec, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.VideoCodec, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.VideoFormat, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.Resolution, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.AspectRatio, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.Tag, new HashSet<string>(StringComparer.OrdinalIgnoreCase) },
-                { IconCacheManager.IconType.ParentalRating, new HashSet<string>(StringComparer.OrdinalIgnoreCase) }
-            };
-
             var customIcons = _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
             customIcons.TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutions);
             knownResolutions ??= new List<string>();
 
-            foreach (var item in allItems)
-            {
-                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-
-                var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
-                if (rating != null) libraryProperties[IconCacheManager.IconType.ParentalRating].Add(rating);
-
-                if (!streams.Any()) continue;
-
-                foreach (var stream in streams)
+            var finalReportData = allItems
+                .AsParallel()
+                .WithDegreeOfParallelism(Environment.ProcessorCount)
+                .Select(item =>
                 {
-                    if (stream.Type == MediaStreamType.Audio)
+                    var localReport = new LocalItemReport();
+                    var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+
+                    var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
+                    if (rating != null) localReport.ParentalRatings.Add(rating);
+
+                    if (item.Tags != null)
                     {
-                        if (!string.IsNullOrEmpty(stream.DisplayLanguage)) libraryProperties[IconCacheManager.IconType.Language].Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
-                        var codec = MediaStreamHelper.GetAudioCodecIconName(stream);
-                        if (codec != null) libraryProperties[IconCacheManager.IconType.AudioCodec].Add(codec);
+                        foreach (var tag in item.Tags) localReport.Tags.Add(tag);
                     }
-                    else if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
+
+                    if (!streams.Any()) return localReport;
+
+                    var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
+                    if (format != null) localReport.VideoFormats.Add(format);
+
+                    var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                    if (primaryAudio != null)
                     {
-                        libraryProperties[IconCacheManager.IconType.Subtitle].Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                        var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
+                        if (ch != null) localReport.Channels.Add(ch);
                     }
-                    else if (stream.Type == MediaStreamType.Video)
+
+                    foreach (var stream in streams)
                     {
-                        var codec = MediaStreamHelper.GetVideoCodecIconName(stream);
-                        if (codec != null) libraryProperties[IconCacheManager.IconType.VideoCodec].Add(codec);
-
-                        var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
-                        if (res != null) libraryProperties[IconCacheManager.IconType.Resolution].Add(res);
-
-                        var ar = MediaStreamHelper.GetAspectRatioIconName(stream);
-                        if (ar != null) libraryProperties[IconCacheManager.IconType.AspectRatio].Add(ar);
+                        switch (stream.Type)
+                        {
+                            case MediaStreamType.Audio:
+                                if (!string.IsNullOrEmpty(stream.DisplayLanguage)) localReport.Languages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                                var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
+                                if (audioCodec != null) localReport.AudioCodecs.Add(audioCodec);
+                                break;
+                            case MediaStreamType.Subtitle:
+                                if (!string.IsNullOrEmpty(stream.DisplayLanguage)) localReport.Subtitles.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                                break;
+                            case MediaStreamType.Video:
+                                var videoCodec = MediaStreamHelper.GetVideoCodecIconName(stream);
+                                if (videoCodec != null) localReport.VideoCodecs.Add(videoCodec);
+                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
+                                if (res != null) localReport.Resolutions.Add(res);
+                                var ar = MediaStreamHelper.GetAspectRatioIconName(stream);
+                                if (ar != null) localReport.AspectRatios.Add(ar);
+                                break;
+                        }
                     }
-                }
+                    return localReport;
+                })
+                .Aggregate(
+                    seedFactory: () => new LocalItemReport(),
+                    updateAccumulatorFunc: (threadReport, itemReport) =>
+                    {
+                        threadReport.Languages.UnionWith(itemReport.Languages);
+                        threadReport.Subtitles.UnionWith(itemReport.Subtitles);
+                        threadReport.Channels.UnionWith(itemReport.Channels);
+                        threadReport.AudioCodecs.UnionWith(itemReport.AudioCodecs);
+                        threadReport.VideoCodecs.UnionWith(itemReport.VideoCodecs);
+                        threadReport.VideoFormats.UnionWith(itemReport.VideoFormats);
+                        threadReport.Resolutions.UnionWith(itemReport.Resolutions);
+                        threadReport.AspectRatios.UnionWith(itemReport.AspectRatios);
+                        threadReport.Tags.UnionWith(itemReport.Tags);
+                        threadReport.ParentalRatings.UnionWith(itemReport.ParentalRatings);
+                        return threadReport;
+                    },
+                    // 3. Combine Accumulators: Merges the results from two parallel threads.
+                    combineAccumulatorsFunc: (mainReport, threadReport) =>
+                    {
+                        mainReport.Languages.UnionWith(threadReport.Languages);
+                        mainReport.Subtitles.UnionWith(threadReport.Subtitles);
+                        mainReport.Channels.UnionWith(threadReport.Channels);
+                        mainReport.AudioCodecs.UnionWith(threadReport.AudioCodecs);
+                        mainReport.VideoCodecs.UnionWith(threadReport.VideoCodecs);
+                        mainReport.VideoFormats.UnionWith(threadReport.VideoFormats);
+                        mainReport.Resolutions.UnionWith(threadReport.Resolutions);
+                        mainReport.AspectRatios.UnionWith(threadReport.AspectRatios);
+                        mainReport.Tags.UnionWith(threadReport.Tags);
+                        mainReport.ParentalRatings.UnionWith(threadReport.ParentalRatings);
+                        return mainReport;
+                    },
+                    resultSelector: finalReport => finalReport);
 
-                var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
-                if (primaryAudio != null)
-                {
-                    var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
-                    if (ch != null) libraryProperties[IconCacheManager.IconType.Channel].Add(ch);
-                }
+            var report = new IconManagerReport { ReportDate = DateTime.UtcNow };
 
-                var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
-                if (format != null) libraryProperties[IconCacheManager.IconType.VideoFormat].Add(format);
+            report.Groups[IconCacheManager.IconType.Language.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Languages.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Language, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.Subtitle.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Subtitles.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Subtitle, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.Channel.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Channels.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Channel, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.AudioCodec.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.AudioCodecs.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.AudioCodec, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.VideoCodec.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.VideoCodecs.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.VideoCodec, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.VideoFormat.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.VideoFormats.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.VideoFormat, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.Resolution.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Resolutions.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.AspectRatio.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.AspectRatios.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.AspectRatio, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.Tag.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Tags.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Tag, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.ParentalRating.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.ParentalRatings.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.ParentalRating, new List<string>()) };
 
-                if (item.Tags != null)
-                {
-                    foreach (var tag in item.Tags) libraryProperties[IconCacheManager.IconType.Tag].Add(tag);
-                }
-            }
-
-            var finalReport = new IconManagerReport { ReportDate = DateTime.UtcNow };
-            foreach (var type in libraryProperties.Keys)
-            {
-                finalReport.Groups[type.ToString()] = new IconGroupReport
-                {
-                    FoundInLibrary = libraryProperties[type].OrderBy(p => p).ToList(),
-                    FoundInFolder = customIcons.TryGetValue(type, out var folderIcons) ? folderIcons.OrderBy(p => p).ToList() : new List<string>()
-                };
-            }
             pluginInstance.Logger.Info("[EmbyIcons] Icon Manager report generation complete.");
-            return finalReport;
+            return report;
         }
     }
 }

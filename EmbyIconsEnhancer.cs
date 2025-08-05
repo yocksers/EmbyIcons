@@ -86,9 +86,9 @@ namespace EmbyIcons
 
         private BaseItem GetFullItem(BaseItem item)
         {
-            if (item is Series series && series.Id == Guid.Empty && series.InternalId > 0)
+            if ((item is Series || item is BoxSet) && item.Id == Guid.Empty && item.InternalId > 0)
             {
-                var fullItem = _libraryManager.GetItemById(series.InternalId);
+                var fullItem = _libraryManager.GetItemById(item.InternalId);
                 return fullItem ?? item;
             }
             return item;
@@ -166,12 +166,26 @@ namespace EmbyIcons
             var options = profile.Settings;
             var sb = new StringBuilder(512);
 
-            sb.Append("ei5_").Append(item.Id).Append('_').Append((int)imageType)
+            sb.Append("ei6_") 
+              .Append(item.Id.ToString("N")).Append('_').Append((int)imageType)
               .Append("_v").Append(plugin.ConfigurationVersion)
               .Append("_p").Append(profile.Id.ToString("N"));
 
-            var settingsJson = JsonSerializer.Serialize(options);
-            sb.Append("_cfg").Append(System.BitConverter.ToString(System.Security.Cryptography.MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(settingsJson))).Replace("-", ""));
+            sb.Append('_').Append((int)options.AudioIconAlignment).Append(options.AudioOverlayHorizontal ? 't' : 'f').Append(options.AudioIconPriority);
+            sb.Append('_').Append((int)options.SubtitleIconAlignment).Append(options.SubtitleOverlayHorizontal ? 't' : 'f').Append(options.SubtitleIconPriority);
+            sb.Append('_').Append((int)options.ChannelIconAlignment).Append(options.ChannelOverlayHorizontal ? 't' : 'f').Append(options.ChannelIconPriority);
+            sb.Append('_').Append((int)options.AudioCodecIconAlignment).Append(options.AudioCodecOverlayHorizontal ? 't' : 'f').Append(options.AudioCodecIconPriority);
+            sb.Append('_').Append((int)options.VideoFormatIconAlignment).Append(options.VideoFormatOverlayHorizontal ? 't' : 'f').Append(options.VideoFormatIconPriority);
+            sb.Append('_').Append((int)options.VideoCodecIconAlignment).Append(options.VideoCodecOverlayHorizontal ? 't' : 'f').Append(options.VideoCodecIconPriority);
+            sb.Append('_').Append((int)options.TagIconAlignment).Append(options.TagOverlayHorizontal ? 't' : 'f').Append(options.TagIconPriority);
+            sb.Append('_').Append((int)options.ResolutionIconAlignment).Append(options.ResolutionOverlayHorizontal ? 't' : 'f').Append(options.ResolutionIconPriority);
+            sb.Append('_').Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 't' : 'f').Append(options.CommunityScoreIconPriority);
+            sb.Append('_').Append((int)options.AspectRatioIconAlignment).Append(options.AspectRatioOverlayHorizontal ? 't' : 'f').Append(options.AspectRatioIconPriority);
+            sb.Append('_').Append((int)options.ParentalRatingIconAlignment).Append(options.ParentalRatingOverlayHorizontal ? 't' : 'f').Append(options.ParentalRatingIconPriority);
+            sb.Append('_').Append(options.IconSize).Append(options.JpegQuality).Append(options.EnableImageSmoothing ? 't' : 'f');
+            sb.Append('_').Append((int)options.CommunityScoreBackgroundShape).Append(options.CommunityScoreBackgroundColor).Append(options.CommunityScoreBackgroundOpacity);
+            sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
+            sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
 
             if (item is Series series)
             {
@@ -181,7 +195,8 @@ namespace EmbyIcons
             }
             else if (item is BoxSet collection)
             {
-                var aggResult = GetOrBuildAggregatedDataForParent(collection, options, plugin.GetConfiguredOptions());
+                var fullCollection = GetFullItem(collection) as BoxSet ?? collection;
+                var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, plugin.GetConfiguredOptions());
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else

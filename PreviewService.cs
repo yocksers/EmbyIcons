@@ -1,4 +1,5 @@
-﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Api;
+using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Net;
@@ -17,7 +18,7 @@ using System.Threading.Tasks;
 namespace EmbyIcons
 {
     [Unauthenticated]
-    [Route("/EmbyIcons/Preview", "GET", Summary = "Generates a live preview image based on current settings")]
+    [Route(ApiRoutes.Preview, "GET", Summary = "Generates a live preview image based on current settings")]
     public class GetIconPreview : IReturn<Stream>
     {
         public string? OptionsJson { get; set; }

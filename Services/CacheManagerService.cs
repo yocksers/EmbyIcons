@@ -1,4 +1,5 @@
-﻿using MediaBrowser.Controller.Net;
+﻿using EmbyIcons.Api;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Services;
 using System;
@@ -7,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Route("/EmbyIcons/RefreshCache", "POST", Summary = "Forces the icon cache to be cleared and refreshed")]
+    [Route(ApiRoutes.RefreshCache, "POST", Summary = "Forces the icon cache to be cleared and refreshed")]
     public class RefreshCacheRequest : IReturnVoid
     {
     }

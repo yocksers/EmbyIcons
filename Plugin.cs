@@ -1,4 +1,5 @@
-﻿﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Api;
+using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
@@ -35,9 +36,8 @@ namespace EmbyIcons
         private readonly ILogManager _logManager;
         private EmbyIconsEnhancer? _enhancer;
         private Timer? _pruningTimer;
+        private ProfileManagerService? _profileManager;
 
-        private static List<(string Path, string Name, string Id)>? _libraryPathCache;
-        private static readonly object _libraryPathCacheLock = new object();
         private bool _migrationPerformed = false;
 
         public static Plugin? Instance { get; private set; }
@@ -47,6 +47,8 @@ namespace EmbyIcons
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
         public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _userViewManager, _logManager);
+        private ProfileManagerService ProfileManager => _profileManager ??= new ProfileManagerService(_libraryManager, _logger, Configuration);
+
 
         public Plugin(
             IApplicationHost appHost,
@@ -134,35 +136,35 @@ namespace EmbyIcons
                 }
                 Configuration.Profiles.Add(defaultProfile);
 
-                var oldSelectedLibs = new HashSet<string>((Configuration.SelectedLibraries ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+                var oldSelectedLibsSet = new HashSet<string>((Configuration.SelectedLibraries ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+                oldSelectedLibsSet.RemoveWhere(string.IsNullOrWhiteSpace);
 
-                PopulateLibraryPathCache();
-                if (_libraryPathCache == null)
-                {
-                    _logger.Error("[EmbyIcons] Library cache is null after population. Aborting migration.");
-                    return;
-                }
+                var virtualFolders = _libraryManager.GetVirtualFolders();
+                var libraryNameMap = virtualFolders
+                    .GroupBy(lib => lib.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First().Id.ToString(), StringComparer.OrdinalIgnoreCase);
 
-                if (oldSelectedLibs.Any(s => !string.IsNullOrWhiteSpace(s)))
+                if (oldSelectedLibsSet.Any())
                 {
-                    foreach (var lib in _libraryPathCache)
+                    foreach (var libName in oldSelectedLibsSet)
                     {
-                        if (oldSelectedLibs.Contains(lib.Name.Trim().ToLowerInvariant()))
+                        if (libraryNameMap.TryGetValue(libName, out var libId))
                         {
-                            if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != lib.Id))
+                            if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
                             {
-                                Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = lib.Id, ProfileId = defaultProfile.Id });
+                                Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
                             }
                         }
                     }
                 }
                 else
                 {
-                    foreach (var lib in _libraryPathCache)
+                    foreach (var lib in virtualFolders)
                     {
-                        if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != lib.Id))
+                        var libId = lib.Id.ToString();
+                        if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
                         {
-                            Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = lib.Id, ProfileId = defaultProfile.Id });
+                            Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
                         }
                     }
                 }
@@ -174,95 +176,9 @@ namespace EmbyIcons
             _migrationPerformed = true;
         }
 
-        private void PopulateLibraryPathCache()
-        {
-            _logger.Debug("[EmbyIcons] Populating library path cache.");
-            var newCache = new List<(string Path, string Name, string Id)>();
-            try
-            {
-                foreach (var lib in _libraryManager.GetVirtualFolders())
-                {
-                    if (lib?.Locations == null) continue;
-                    foreach (var loc in lib.Locations)
-                    {
-                        if (!string.IsNullOrEmpty(loc))
-                        {
-                            newCache.Add((loc, lib.Name, lib.Id.ToString()));
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to get virtual folders from LibraryManager.", ex);
-            }
-
-            lock (_libraryPathCacheLock)
-            {
-                _libraryPathCache = newCache.OrderByDescending(i => i.Path.Length).ToList();
-            }
-        }
-
-        private IconProfile? GetProfileForPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                return null;
-            }
-
-            lock (_libraryPathCacheLock)
-            {
-                if (_libraryPathCache == null)
-                {
-                    PopulateLibraryPathCache();
-                }
-            }
-
-            var currentLibraryCache = _libraryPathCache;
-            if (currentLibraryCache == null)
-            {
-                _logger.Warn("[EmbyIcons] Library path cache is null, cannot check library restrictions.");
-                return null;
-            }
-
-            foreach (var libInfo in currentLibraryCache)
-            {
-                if (path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
-                {
-                    var mapping = Configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libInfo.Id);
-                    if (mapping != null)
-                    {
-                        return Configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
-                    }
-                    return null;
-                }
-            }
-
-            return null;
-        }
-
         public IconProfile? GetProfileForItem(BaseItem item)
         {
-            if (item is BoxSet boxSet)
-            {
-                var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    CollectionIds = new[] { boxSet.InternalId },
-                    Limit = 1,
-                    Recursive = true,
-                    IncludeItemTypes = new[] { "Movie", "Episode" }
-                }).FirstOrDefault();
-
-                if (firstChild != null)
-                {
-                    return GetProfileForPath(firstChild.Path);
-                }
-
-                _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
-                return null;
-            }
-
-            return GetProfileForPath(item.Path);
+            return ProfileManager.GetProfileForItem(item);
         }
 
         public bool IsLibraryAllowed(BaseItem item)
@@ -309,11 +225,7 @@ namespace EmbyIcons
             {
                 if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
                 {
-                    _logger.Info("[EmbyIcons] A library folder has changed. Clearing the library path cache.");
-                    lock (_libraryPathCacheLock)
-                    {
-                        _libraryPathCache = null;
-                    }
+                    ProfileManager.InvalidateLibraryCache();
                     return;
                 }
 
@@ -356,6 +268,7 @@ namespace EmbyIcons
             base.UpdateConfiguration(options);
 
             IconManagerService.InvalidateCache();
+            ProfileManager.InvalidateLibraryCache();
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{options.PersistedVersion}'. Images will refresh as they are viewed.");
 
@@ -370,7 +283,7 @@ namespace EmbyIcons
                     .Any(f =>
                     {
                         var ext = Path.GetExtension(f.FullName).ToLowerInvariant();
-                        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".bmp" || ext == ".gif" || ext == ".ico" || ext == ".svg" || ext == ".avif";
+                        return IconCacheManager.SupportedCustomIconExtensions.Contains(ext);
                     }))
                 {
                     _logger.Warn($"[EmbyIcons] No common icon image files found in '{expandedPath}'. Overlays may not work unless you are using fallback mode.");

@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -143,6 +143,18 @@ namespace EmbyIcons
 
             for (int i = 1; i < itemList.Count; i++)
             {
+                if (commonChannelType == null &&
+                    commonAspectRatio == null &&
+                    commonResolution == null &&
+                    !commonAudioCodecs.Any() &&
+                    !commonVideoCodecs.Any() &&
+                    (!requireAllItemsToMatchForLanguage || (!commonAudioLangs.Any() && !commonSubtitleLangs.Any())))
+                {
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                        _logger.Debug($"[EmbyIcons] Early exit from aggregation for '{parent.Name}' at item {i} of {itemList.Count}. No common properties remaining to check.");
+                    break;
+                }
+
                 var item = itemList[i];
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
                 var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
@@ -150,22 +162,25 @@ namespace EmbyIcons
                 var currentAudioLangs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
                 var currentSubtitleLangs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
 
-                commonAudioLangs.IntersectWith(currentAudioLangs);
-                commonSubtitleLangs.IntersectWith(currentSubtitleLangs);
+                if (requireAllItemsToMatchForLanguage)
+                {
+                    if (commonAudioLangs.Any()) commonAudioLangs.IntersectWith(currentAudioLangs);
+                    if (commonSubtitleLangs.Any()) commonSubtitleLangs.IntersectWith(currentSubtitleLangs);
+                }
                 allAudioLangs.UnionWith(currentAudioLangs);
                 allSubtitleLangs.UnionWith(currentSubtitleLangs);
 
-                commonAudioCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(name => name != null).Select(name => name!));
-                commonVideoCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(name => name != null).Select(name => name!));
+                if (commonAudioCodecs.Any()) commonAudioCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(name => name != null).Select(name => name!));
+                if (commonVideoCodecs.Any()) commonVideoCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(name => name != null).Select(name => name!));
 
                 var currentPrimaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
-                if (commonChannelType != (currentPrimaryAudio != null ? MediaStreamHelper.GetChannelIconName(currentPrimaryAudio) : null)) commonChannelType = null;
+                if (commonChannelType != null && commonChannelType != (currentPrimaryAudio != null ? MediaStreamHelper.GetChannelIconName(currentPrimaryAudio) : null)) commonChannelType = null;
 
                 var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream);
-                if (commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
+                if (commonAspectRatio != null && commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
 
                 var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
-                if (commonResolution != currentRes) commonResolution = null;
+                if (commonResolution != null && commonResolution != currentRes) commonResolution = null;
 
                 itemHashes.Add($"{item.Id}:{MediaStreamHelper.GetItemMediaStreamHash(item, streams)}");
             }
