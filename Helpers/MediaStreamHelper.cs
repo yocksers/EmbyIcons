@@ -19,7 +19,6 @@ namespace EmbyIcons.Helpers
                 var codec = (stream.Codec ?? "").Trim().ToLowerInvariant();
                 if (string.IsNullOrEmpty(codec)) return null;
 
-                // Normalize common variants
                 codec = codec.Replace("dts-hd ma", "dts-hdma")
                              .Replace("dts:x", "dtsx")
                              .Replace("e-ac-3", "eac3")
@@ -102,7 +101,6 @@ namespace EmbyIcons.Helpers
         {
             if (videoStream == null) return null;
 
-            // First try resolution by dimensions
             if (videoStream.Height.HasValue)
             {
                 var h = videoStream.Height.Value;
@@ -113,7 +111,6 @@ namespace EmbyIcons.Helpers
                 if (h >= 400) return knownKeys.FirstOrDefault(k => k.Equals("480p", StringComparison.OrdinalIgnoreCase)) ?? "480p";
             }
 
-            // Fallback to DisplayTitle scanning if present
             var title = (videoStream.DisplayTitle ?? "").ToLowerInvariant();
             foreach (var key in knownKeys)
             {
@@ -132,7 +129,6 @@ namespace EmbyIcons.Helpers
             bool hasHDR10Plus = false;
             bool hasHDR = false;
 
-            // --- Step 1: Check structured VideoRange property ---
             if (videoStream?.VideoRange != null)
             {
                 var videoRange = videoStream.VideoRange.ToLowerInvariant();
@@ -151,7 +147,6 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            // --- Step 2: Check filename and title. This will augment the findings. ---
             var title = ((item.Path ?? "") + " " + (item.Name ?? "")).ToLowerInvariant();
 
             if (title.Contains("dolby vision") || title.Contains("dolbyvision"))
@@ -159,20 +154,16 @@ namespace EmbyIcons.Helpers
                 hasDV = true;
             }
 
-            // Per user request, check for "hdr10+" and "hdr10plus" in the filename.
             if (title.Contains("hdr10+") || title.Contains("hdr10plus"))
             {
                 hasHDR10Plus = true;
             }
 
-            // If we found HDR10+ or the filename contains a generic HDR tag, set the HDR flag.
             if (hasHDR10Plus || title.Contains("hdr"))
             {
                 hasHDR = true;
             }
 
-            // --- Step 3: Apply priority to determine the final icon ---
-            // The hierarchy is generally DV > HDR10+ > HDR.
             if (hasDV) return "dv";
             if (hasHDR10Plus) return "hdr10plus";
             if (hasHDR) return "hdr";
@@ -189,7 +180,6 @@ namespace EmbyIcons.Helpers
             return officialRating.ToLowerInvariant().Replace('/', '-');
         }
 
-        // NOTE: legacy hash kept for backwards-compat callers elsewhere in the codebase.
         public static string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
             var parts = new List<string>(8);
@@ -212,7 +202,6 @@ namespace EmbyIcons.Helpers
             }
         }
 
-        // NEW: DisplayLanguage-based hash to align with overlay logic and avoid cache misses.
         public static string GetItemMediaStreamHashV2(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
             var parts = new List<string>(8);
@@ -244,7 +233,6 @@ namespace EmbyIcons.Helpers
             var aspect = videoStream != null ? (GetAspectRatioIconName(videoStream) ?? "none") : "none";
             parts.Add(aspect);
 
-            // Keep date modified to force refresh when metadata changes
             parts.Add(item.DateModified.Ticks.ToString());
 
             using (var md5 = System.Security.Cryptography.MD5.Create())

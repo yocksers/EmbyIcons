@@ -35,10 +35,8 @@ namespace EmbyIcons
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
 
-        // NEW: output format for generated images
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
-        // MOVED from ProfileSettings, now global
         public int JpegQuality { get; set; } = 75;
         public bool EnableImageSmoothing { get; set; } = false;
 

@@ -82,7 +82,6 @@ namespace EmbyIcons.Services
             }
             bool runAllChecks = !requestedChecks.Any();
 
-            // Handle scan for a single, specific series
             if (!string.IsNullOrEmpty(request.SeriesId) && _libraryManager.GetItemById(request.SeriesId) is Series seriesItem)
             {
                 var report = GenerateReportForSeries(seriesItem, requestedChecks, runAllChecks);
@@ -93,22 +92,17 @@ namespace EmbyIcons.Services
                 return reports;
             }
 
-            // --- IMPROVED LOGIC FOR "SCAN ALL" ---
-            // 1. Get all series and all episodes in two efficient queries.
             var allSeries = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Series" }, Recursive = true })
                                            .OfType<Series>()
-                                           .ToDictionary(s => s.InternalId); // Key by InternalId (long)
+                                           .ToDictionary(s => s.InternalId); 
 
             var allEpisodes = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Recursive = true })
                                              .OfType<Episode>();
 
-            // 2. Group episodes by their parent series ID (long) in memory.
             var episodesBySeries = allEpisodes.GroupBy(e => e.SeriesId);
 
-            // 3. Process each group.
             foreach (var seriesGroup in episodesBySeries)
             {
-                // The key (long) now matches the dictionary's key type.
                 if (allSeries.TryGetValue(seriesGroup.Key, out var series))
                 {
                     var report = GenerateReportForSeries(series, requestedChecks, runAllChecks, seriesGroup.ToList());

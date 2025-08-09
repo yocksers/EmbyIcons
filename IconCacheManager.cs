@@ -23,7 +23,6 @@ namespace EmbyIcons.Helpers
 
         private string? _iconsFolder;
 
-        // Fast O(1) extension lookups
         internal static readonly HashSet<string> SupportedCustomIconExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"
@@ -31,7 +30,6 @@ namespace EmbyIcons.Helpers
 
         public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating }
 
-        // NEW: cache for custom icon keys to avoid repeated directory scans
         private readonly object _customKeysLock = new();
         private string? _customKeysFolder;
         private Dictionary<IconType, List<string>>? _customIconKeys;
@@ -50,7 +48,6 @@ namespace EmbyIcons.Helpers
 
             lock (_customKeysLock)
             {
-                // If folder unchanged and we have a cache, use it
                 if (_customIconKeys != null &&
                     _customKeysFolder != null &&
                     string.Equals(_customKeysFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
@@ -58,7 +55,6 @@ namespace EmbyIcons.Helpers
                     return _customIconKeys;
                 }
 
-                // Rebuild
                 var allKeys = CreateEmptyIconKeyMap();
                 try
                 {
@@ -123,7 +119,6 @@ namespace EmbyIcons.Helpers
 
         public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
-            // Fast path: same folder (case-insensitive) -> no work
             if (!string.IsNullOrEmpty(_iconsFolder) &&
                 string.Equals(_iconsFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
             {
@@ -132,7 +127,6 @@ namespace EmbyIcons.Helpers
 
             _iconsFolder = iconsFolder;
 
-            // When folder changes, clear in-memory caches so next call repopulates
             return RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
         }
 
@@ -145,7 +139,6 @@ namespace EmbyIcons.Helpers
             foreach (var icon in _embeddedIconCache.Values) icon.Dispose();
             _embeddedIconCache.Clear();
 
-            // Invalidate custom key cache too
             lock (_customKeysLock)
             {
                 _customIconKeys = null;

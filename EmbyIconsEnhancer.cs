@@ -289,7 +289,6 @@ namespace EmbyIcons
                         return;
                     }
 
-                    // Detect PNG input for Auto output format
                     bool sourceWasPng = string.Equals(Path.GetExtension(inputFile), ".png", StringComparison.OrdinalIgnoreCase);
 
                     using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(
