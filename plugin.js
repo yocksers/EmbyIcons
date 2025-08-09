@@ -1,7 +1,7 @@
 ﻿(function () {
     const pluginId = "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f";
 
-    const pluginVersion = "5.28.5";
+    const pluginVersion = "5.30.1";
 
     window.Dashboard.getPluginPages = function () {
         return [

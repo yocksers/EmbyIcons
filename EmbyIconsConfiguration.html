@@ -6,41 +6,75 @@
             <div data-role="controlgroup" data-type="horizontal" class="localnav">
                 <a is="emby-linkbutton" class="nav-button ui-btn-active" href="#" data-role="button" data-target="settingsPage">Settings</a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="iconManagerPage">Icon Manager</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="troubleshooterPage">Troubleshooter</a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="readmePage">Readme</a>
             </div>
 
             <div id="settingsPage" style="margin-top: 2em;">
                 <form class="embyIconsForm">
-                    <!-- General Settings -->
+                    <!-- Global Settings -->
                     <div class="flex align-items-center" style="margin: 2em 0 .5em;">
-                        <h2 style="margin: 0;">General Settings</h2>
+                        <h2 style="margin: 0;">Global Settings</h2>
                     </div>
-                    <div class="inputContainer">
-                        <select is="emby-select" id="selIconLoadingMode" label="Icon Loading Mode:" data-config-key="IconLoadingMode">
-                            <option value="Hybrid">Custom with Built-in Fallback (Recommended)</option>
-                            <option value="CustomOnly">Custom Icons Only</option>
-                            <option value="BuiltInOnly">Built-in Icons Only</option>
-                        </select>
-                        <div class="fieldDescription">"Fallback" will use the bundled icons if a custom one isn't found. This provides a great default experience.</div>
-                    </div>
-                    <div class="inputContainer" style="margin-top: 1.5em;">
-                        <div style="display: flex; align-items: flex-end;">
-                            <div class="emby-input-with-icon" style="flex-grow: 1;">
-                                <input is="emby-input" type="text" id="txtIconsFolder" label="Custom Icons Folder:" autocomplete="off" data-config-key="IconsFolder" />
-                                <i id="folderWarningIcon" class="input-icon md-icon" style="color: #ffc107; display: none;" title="The specified folder does not exist on the server.">warning</i>
-                            </div>
-                            <button type="button" is="emby-button" class="raised" id="btnSelectIconsFolder" title="Browse for folder" style="margin-left: 1em;">
-                                <span>...</span>
-                            </button>
+                    <p class="fieldDescription" style="margin-bottom: 1.5em;">These settings apply to all profiles and libraries.</p>
+
+                    <div class="paper-card" style="padding: 1.5em;">
+                        <div class="inputContainer">
+                            <select is="emby-select" id="selIconLoadingMode" label="Icon Loading Mode:" data-config-key="IconLoadingMode">
+                                <option value="Hybrid">Custom with Built-in Fallback (Recommended)</option>
+                                <option value="CustomOnly">Custom Icons Only</option>
+                                <option value="BuiltInOnly">Built-in Icons Only</option>
+                            </select>
+                            <div class="fieldDescription">"Fallback" will use bundled icons if a custom one isn't found. This provides a great default experience.</div>
                         </div>
-                        <div id="iconsFolderWarning" class="fieldDescription" style="color: #ffc107; display: none; margin-top: .5em;"></div>
-                        <div class="fieldDescription">The full path to the folder where your custom icons are stored. This is ignored if the mode is "Built-in Icons Only".</div>
+                        <div class="inputContainer" style="margin-top: 1.5em;">
+                            <div style="display: flex; align-items: flex-end;">
+                                <div class="emby-input-with-icon" style="flex-grow: 1;">
+                                    <input is="emby-input" type="text" id="txtIconsFolder" label="Custom Icons Folder:" autocomplete="off" data-config-key="IconsFolder" />
+                                    <i id="folderWarningIcon" class="input-icon md-icon" style="color: #ffc107; display: none;" title="The specified folder does not exist on the server.">warning</i>
+                                </div>
+                                <button type="button" is="emby-button" class="raised" id="btnSelectIconsFolder" title="Browse for folder" style="margin-left: 1em;">
+                                    <span>...</span>
+                                </button>
+                            </div>
+                            <div id="iconsFolderWarning" class="fieldDescription" style="color: #ffc107; display: none; margin-top: .5em;"></div>
+                            <div class="fieldDescription">Full path to your custom icons. Ignored if mode is “Built-in Icons Only”.</div>
+                        </div>
+
+                        <div class="inputContainer" style="margin-top: 1.5em;">
+                            <select is="emby-select" id="selOutputFormat" label="Image Output Format:" data-config-key="OutputFormat">
+                                <option value="Auto">Auto (Recommended, preserves transparency)</option>
+                                <option value="Jpeg">JPEG (Smaller files, no transparency)</option>
+                                <option value="Png">PNG (Highest quality, large files)</option>
+                            </select>
+                            <div class="fieldDescription">"Auto" will output PNGs if the original poster is a PNG, otherwise it will use JPEG.</div>
+                        </div>
+
+                        <div class="inputContainer" style="margin-top: 1.5em;">
+                            <input is="emby-input" type="number" label="Image Quality (10-100):" min="10" max="100" data-config-key="JpegQuality" />
+                            <div class="fieldDescription">Used for JPEG output format. Higher is better.</div>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" data-config-key="EnableImageSmoothing" />
+                                <span>Enable image smoothing (improves icon quality on scaled images)</span>
+                            </label>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkEnableDebugLogging" data-config-key="EnableDebugLogging" />
+                                <span>Enable detailed debug logging</span>
+                            </label>
+                            <div class="fieldDescription">Logs additional information to the Emby server log (useful for troubleshooting).</div>
+                        </div>
                     </div>
 
                     <!-- Profiles Section -->
                     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
                         <h2 style="margin: 0;">Icon Profiles</h2>
                     </div>
+                    <p class="fieldDescription" style="margin-bottom: 1.5em;">Create different sets of icon rules and assign them to specific libraries. All settings below this point are specific to the profile being edited.</p>
+
                     <div class="paper-card" style="padding: 1.5em;">
                         <div class="inputContainer">
                             <label for="selActiveProfile" class="inputLabel">Editing Profile:</label>
@@ -66,7 +100,7 @@
                             <h2 style="margin: 0;">Image Type Settings</h2>
                         </div>
                         <div class="paper-card" style="padding: 1.5em;">
-                            <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">Select which image types should have icons overlaid. 'Primary' refers to the main poster image.</p>
+                            <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">Select which image types should have icons overlaid. “Primary” refers to the main poster image.</p>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableForPosters" /><span>Enable overlays on Posters (Primary)</span></label>
                             </div>
@@ -83,11 +117,11 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">When disabled, overlays will only appear on movies and tv shows.</div>
+                            <div class="fieldDescription checkboxFieldDescription">When disabled, overlays only appear on movies and TV shows.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on TV shows.</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">Icons will only appear on a TV show poster if all child episodes share the same property.</div>
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on TV show posters</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">Language icons require all child episodes share the same language (matched by the display language name).</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for TV show scans</span></label>
@@ -99,7 +133,7 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowCollectionIconsIfAllChildrenHaveLanguage" /><span>Show icons on collections</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">Language icons will only appear on a collection poster if all child items (movies/episodes) share the same language. Other icons will appear if they are common to all children.</div>
+                            <div class="fieldDescription checkboxFieldDescription">Language icons appear only if all child items share the same display language. Other icons appear when common to all children.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseCollectionLiteMode" /><span>Use Lite Mode for collection scans</span></label>
@@ -211,34 +245,13 @@
                         </div>
 
                         <div class="flex align-items-center" style="margin: 3em 0 .5em;">
-                            <h2 style="margin: 0;">Advanced Settings</h2>
+                            <h2 style="margin: 0;">Advanced Profile Settings</h2>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em 2em;">
+                        <div class="paper-card" style="padding: 1.5em;">
                             <div class="inputContainer">
                                 <input is="emby-input" type="number" label="Icon Size (% of poster height):" min="1" max="100" data-profile-key="IconSize" />
                             </div>
-                            <div class="inputContainer">
-                                <input is="emby-input" type="number" label="Image Quality (10-100):" min="10" max="100" data-profile-key="JpegQuality" />
-                            </div>
-                            <div class="checkboxContainer" style="grid-column: 1 / -1;">
-                                <label>
-                                    <input is="emby-checkbox" type="checkbox" data-profile-key="EnableImageSmoothing" />
-                                    <span>Enable image smoothing (improves icon quality on scaled images)</span>
-                                </label>
-                            </div>
                         </div>
-                    </div>
-
-                    <!-- Non-profile settings -->
-                    <div class="flex align-items-center" style="margin: 3em 0 .5em;">
-                        <h2 style="margin: 0;">Advanced Global Settings</h2>
-                    </div>
-                    <div class="checkboxContainer" style="grid-column: 1 / -1;">
-                        <label>
-                            <input is="emby-checkbox" type="checkbox" id="chkEnableDebugLogging" data-config-key="EnableDebugLogging" />
-                            <span>Enable detailed debug logging</span>
-                        </label>
-                        <div class="fieldDescription">Enable this to log detailed information to the Emby server log. Useful for troubleshooting.</div>
                     </div>
 
                     <!-- Cache Management -->
@@ -246,8 +259,7 @@
                         <h2 style="margin: 0;">Cache Management</h2>
                     </div>
                     <div class="fieldDescription" style="margin-bottom: 1em;">
-                        If you have added, removed, or changed any icon files, clear the cache to apply the changes.
-                        Your posters will be updated with the new icons as you browse your libraries.
+                        If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse.
                     </div>
                     <div>
                         <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">
@@ -266,7 +278,7 @@
             <div id="iconManagerPage" class="hide" style="margin-top: 2em;">
                 <div style="max-width: 900px; margin: auto;">
                     <h1 style="margin-bottom: 0.5em;">Icon Manager</h1>
-                    <p class="fieldDescription">This tool scans your media library and your custom icons folder to help you identify which icons are missing or unused. The library scan can take several minutes on large servers and the results are cached until the next server restart or configuration change.</p>
+                    <p class="fieldDescription">Scan your media library and custom icon folder to find missing or unused icons. On very large libraries this can take several minutes; results are cached until server restart or configuration changes.</p>
                     <div style="margin-top: 1.5em;">
                         <button is="emby-button" type="button" class="raised button-submit" id="btnRunIconScan">
                             <span>Scan Library & Icons</span>
@@ -278,72 +290,125 @@
                 </div>
             </div>
 
+            <div id="troubleshooterPage" class="hide" style="margin-top: 2em;">
+                <div style="max-width: 900px; margin: auto;">
+                    <h1 style="margin-bottom: 0.5em;">Series Troubleshooter</h1>
+                    <p class="fieldDescription">
+                        Many icons (e.g., audio language, resolution) appear on a TV show poster only if all episodes share the same property. This tool scans a series and reports inconsistencies.
+                    </p>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+                        <h3 style="margin-top:0;">Checks to Perform</h3>
+                        <p class="fieldDescription" style="margin-top:0;">Uncheck properties you don’t care about to speed up scans and reduce report noise.</p>
+                        <div id="troubleshooterChecksContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1em; margin-top: 1.5em;">
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioLanguage" checked /><span>Audio Language</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="Subtitles" checked /><span>Subtitles</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioCodec" checked /><span>Audio Codec</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="VideoCodec" checked /><span>Video Codec</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioChannels" checked /><span>Audio Channels</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="Resolution" checked /><span>Resolution</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AspectRatio" checked /><span>Aspect Ratio</span></label></div>
+                            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="VideoFormat" checked /><span>Video Format (HDR)</span></label></div>
+                        </div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em; position: relative;">
+                        <h3 style="margin-top:0;">Scan a Specific TV Show</h3>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="txtSeriesSearch" label="Search for a TV Show:" autocomplete="off" />
+                            <div id="seriesSearchResults" class="raised paper-card" style="position: absolute; width: calc(100% - 3em); z-index: 10; max-height: 250px; overflow-y: auto; display: none;"></div>
+                        </div>
+                        <div style="margin-top: 1.5em;">
+                            <button is="emby-button" type="button" class="raised button-submit" id="btnRunSeriesScan">
+                                <span>Scan Selected Show</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+                        <h3 style="margin-top:0;">Scan All TV Shows</h3>
+                        <p class="fieldDescription" style="margin-top:0;">
+                            Scan your entire library to find all TV shows with inconsistencies. This may take several minutes on a large library.
+                        </p>
+                        <div style="margin-top: 1.5em;">
+                            <button is="emby-button" type="button" class="raised" id="btnRunFullSeriesScan">
+                                <span>Scan All TV Shows for Inconsistencies</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="seriesReportContainer" style="margin-top: 2em;">
+                        <!-- Report will be injected here by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
             <div id="readmePage" class="hide" style="margin-top: 2em;">
                 <div style="max-width: 800px; margin: auto;">
                     <h1 style="margin-bottom: 1em;">EmbyIcons Plugin Guide</h1>
 
                     <h3>Introduction</h3>
-                    <p>This plugin overlays icons for language, audio channels, video format, resolution, and community ratings onto your media posters. To work correctly, you must provide your own icon images in a designated folder and name them according to the conventions below.</p>
-                    <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, etc.</p>
+                    <p>This plugin overlays icons for language, audio channels, video format, resolution, aspect ratio, parental rating, and community ratings onto your media posters. Provide your own icon images in a designated folder and name them according to the conventions below.</p>
+                    <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.bmp</code>, and <code>.gif</code>.</p>
 
                     <h3 style="margin-top: 2em;">Icon Naming Conventions</h3>
-                    <p>Icons are identified using a strict prefix-based naming scheme: <code>prefix.name.png</code>. The prefix tells the plugin what type of icon it is, and the name is matched against media properties. Any files that do not follow this convention will be ignored.</p>
+                    <p>Icons use a strict prefix-based naming scheme: <code>prefix.name.png</code>. The prefix indicates the category; the name is matched against media properties. Files that don’t follow this convention are ignored.</p>
 
-                    <h4 style="margin-top: 2em;">Language & Subtitle Icons</h4>
+                    <h4 style="margin-top: 2em;">Language &amp; Subtitle Icons</h4>
                     <p>
                         <strong>Audio Language (prefix: lang):</strong> <code>lang.{name}.png</code><br />
-                        The <code>{name}</code> should be the full language name (e.g., 'english', 'french') in lowercase, matching what Emby displays.<br />
+                        <em>{name}</em> must be the full display language name (exactly as Emby shows it), lowercased.<br />
                         <em>Example:</em> <code>lang.english.png</code>, <code>lang.french.png</code>
                     </p>
 
                     <p>
                         <strong>Subtitle Language (prefix: sub):</strong> <code>sub.{name}.png</code><br />
-                        The <code>{name}</code> should be the full language name (e.g., 'english', 'japanese') in lowercase.<br />
+                        <em>{name}</em> must be the full display language name, lowercased.<br />
                         <em>Example:</em> <code>sub.english.png</code>, <code>sub.japanese.png</code>
                     </p>
 
                     <h4 style="margin-top: 2em;">Dynamic Detection</h4>
-                    <p>For most categories, the plugin dynamically detects properties directly from your media's metadata. This means you can create icons for any codec or audio layout that Emby recognizes, even if it's new.</p>
+                    <p>Most categories are detected directly from media stream metadata (no filename hacks required). You can create icons for any codec/layout Emby recognizes.</p>
 
                     <p>
                         <strong>Parental Rating (prefix: pr):</strong> <code>pr.{rating}.png</code><br />
-                        The <code>{rating}</code> should match the official rating reported by Emby (e.g., 'pg-13', 'tv-ma') in lowercase.<br />
+                        <em>{rating}</em> should match the official rating reported by Emby (e.g., <code>pg-13</code>, <code>tv-ma</code>) in lowercase.<br />
                         <em>Example:</em> <code>pr.pg-13.png</code>, <code>pr.tv-ma.png</code>
                     </p>
 
                     <p>
                         <strong>Audio Codec (prefix: ac):</strong> <code>ac.{codec_name}.png</code><br />
-                        The <code>{codec_name}</code> should match the codec reported by Emby (e.g., 'eac3', 'dts-hd ma').<br />
+                        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>eac3</code>, <code>dts-hdma</code>).<br />
                         <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts-hdma.png</code>
                     </p>
 
                     <p>
                         <strong>Video Codec (prefix: vc):</strong> <code>vc.{codec_name}.png</code><br />
-                        The <code>{codec_name}</code> should match the codec reported by Emby (e.g., 'hevc').<br />
+                        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>hevc</code>, <code>av1</code>).<br />
                         <em>Example:</em> <code>vc.hevc.png</code>, <code>vc.av1.png</code>
                     </p>
 
                     <p>
                         <strong>Audio Channels (prefix: ch):</strong> <code>ch.{layout_name}.png</code><br />
-                        The <code>{layout_name}</code> should match the audio layout reported by Emby (e.g., '5.1', '7.1').<br />
+                        <em>{layout_name}</em> should match the audio layout reported by Emby (e.g., <code>5.1</code>, <code>7.1</code>, <code>stereo</code>).<br />
                         <em>Example:</em> <code>ch.5.1.png</code>, <code>ch.7.1.png</code>, <code>ch.stereo.png</code>
                     </p>
 
                     <p>
                         <strong>Resolution (prefix: res):</strong> <code>res.{resolution_name}.png</code><br />
-                        The plugin searches the video title for the <code>{resolution_name}</code> from your filename.<br />
+                        Resolution is derived from the video stream (e.g., <code>4k</code>, <code>1080p</code>, <code>1080i</code>) and matched against available icon keys.<br />
                         <em>Example:</em> <code>res.4k.png</code>, <code>res.1080p.png</code>, <code>res.1080i.png</code>
                     </p>
 
                     <p>
                         <strong>Aspect Ratio (prefix: ar):</strong> <code>ar.{ratio}.png</code><br />
-                        The <code>{ratio}</code> should match the aspect ratio reported by Emby, with the colon replaced by an 'x' (e.g., '16x9', '4x3').<br />
+                        Uses video stream aspect ratio with the colon replaced by <code>x</code> (e.g., <code>16x9</code>, <code>4x3</code>).<br />
                         <em>Example:</em> <code>ar.16x9.png</code>, <code>ar.4x3.png</code>
                     </p>
 
                     <p>
                         <strong>Video Format (prefix: hdr):</strong> <code>hdr.{format_name}.png</code><br />
-                        This detection uses a mix of metadata and filename scanning for reliability. Supported names are `hdr`, `dv` (for Dolby Vision), and `hdr10plus`. For HDR10+, ensure the text 'hdr10plus' is in the movie's filename.<br />
+                        Detects HDR/Dolby Vision from stream metadata; supported names include <code>hdr</code> and <code>dv</code>. You can also add others you provide icons for.<br />
                         <em>Example:</em> <code>hdr.dv.png</code>, <code>hdr.hdr.png</code>
                     </p>
 
@@ -351,8 +416,8 @@
 
                     <p>
                         <strong>Custom Tags (prefix: tag):</strong> <code>tag.{name}.png</code><br />
-                        Matches against media tags on an item (case-insensitive). The live preview uses a built-in icon.<br />
-                        <em>Example:</em> For a media item tagged '3D', name the icon <code>tag.3d.png</code>.
+                        Matches against media item tags (case-insensitive). Tags are normalized: lowercased, whitespace collapsed to hyphens, and leading/trailing hyphens removed.<br />
+                        <em>Examples:</em> <code>Behind the Scenes</code> → <code>tag.behind-the-scenes.png</code>, <code>3D</code> → <code>tag.3d.png</code>
                     </p>
 
                     <p>
@@ -361,14 +426,21 @@
                         <em>Example:</em> <code>rating.imdb.png</code>
                     </p>
 
+                    <h3 style="margin-top: 2em;">Notes &amp; Tips</h3>
+                    <ul>
+                        <li>Language and subtitle icons use the <em>display language</em> shown by Emby (not ISO codes).</li>
+                        <li>For collections and series, language icons require all children to share the same display language unless Lite Mode is used.</li>
+                        <li>If icons don’t appear as expected, use the <strong>Troubleshooter</strong> tab to find inconsistencies.</li>
+                    </ul>
+
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
                         <div style="display: flex; align-items: center; gap: 1em;">
-                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
                                 <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
                             </svg>
                             <div>
-                                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you to all supporters and people that helped testing this, specially Neminem from the Emby forum.</p>
-                                <p style="margin: 0;">If you like this project and would like to support it then you can <a href="https://buymeacoffee.com/yockser" target="_blank" rel="noopener noreferrer">donate me a coffee</a>, remember to write your name and i will add it here!</p>
+                                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you to all supporters and everyone who helped test this, especially Neminem from the Emby forum.</p>
+                                <p style="margin: 0;">If you like this project and want to support it you can <a href="https://buymeacoffee.com/yockser" target="_blank" rel="noopener noreferrer">donate a coffee</a>. Add your name and we’ll list it here!</p>
                                 <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you for the donations to:</p>
                                 <p style="margin: 0 0 0.5em 0; font-weight: 500;">Alexander Hürter.</p>
                             </div>

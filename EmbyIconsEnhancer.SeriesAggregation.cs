@@ -100,10 +100,8 @@ namespace EmbyIcons
             var items = _libraryManager.GetItemList(query);
             if (!items.Any())
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Caching empty result.");
-                var emptyResult = new AggregatedSeriesResult { Timestamp = DateTime.UtcNow };
-                _seriesAggregationCache.AddOrUpdate(parent.Id, emptyResult, (_, __) => emptyResult);
-                return emptyResult;
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
+                return new AggregatedSeriesResult();
             }
 
             var itemList = items.ToList();

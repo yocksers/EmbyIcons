@@ -8,7 +8,8 @@
         RefreshCache: "EmbyIcons/RefreshCache",
         IconManagerReport: "EmbyIcons/IconManagerReport",
         Preview: "EmbyIcons/Preview",
-        ValidatePath: "EmbyIcons/ValidatePath"
+        ValidatePath: "EmbyIcons/ValidatePath",
+        SeriesTroubleshooter: "EmbyIcons/SeriesTroubleshooter"
     };
 
     const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -32,6 +33,8 @@
             this.previewUpdateTimer = null;
             this.configSaveTimer = null;
             this.folderValidationTimer = null;
+            this.selectedSeriesId = null;
+            this.libraryMap = new Map();
 
             this.getDomElements(view);
             this.bindEvents();
@@ -58,11 +61,17 @@
                 opacitySlider: view.querySelector('[data-profile-key="CommunityScoreBackgroundOpacity"]'),
                 opacityValue: view.querySelector('.valCommunityScoreBackgroundOpacity'),
                 ratingAppearanceControls: view.querySelector('#ratingAppearanceControls'),
-                pages: view.querySelectorAll('#settingsPage, #readmePage, #iconManagerPage'),
+                pages: view.querySelectorAll('#settingsPage, #readmePage, #iconManagerPage, #troubleshooterPage'),
                 previewImage: view.querySelector('.previewImage'),
                 iconManagerReportContainer: view.querySelector('#iconManagerReportContainer'),
                 alignmentGrid: view.querySelector('.alignment-grid'),
-                prioritySelects: view.querySelectorAll('[data-profile-key$="Priority"]')
+                prioritySelects: view.querySelectorAll('[data-profile-key$="Priority"]'),
+                txtSeriesSearch: view.querySelector('#txtSeriesSearch'),
+                seriesSearchResults: view.querySelector('#seriesSearchResults'),
+                btnRunSeriesScan: view.querySelector('#btnRunSeriesScan'),
+                btnRunFullSeriesScan: view.querySelector('#btnRunFullSeriesScan'),
+                seriesReportContainer: view.querySelector('#seriesReportContainer'),
+                troubleshooterChecks: view.querySelectorAll('#troubleshooterChecksContainer input[type=checkbox]')
             };
         }
 
@@ -91,10 +100,22 @@
                 select.addEventListener('change', this.onPriorityChange.bind(this));
             });
 
+            this.dom.txtSeriesSearch.addEventListener('input', debounce(this.searchForSeries.bind(this), 300));
+            this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
+            this.dom.btnRunSeriesScan.addEventListener('click', this.runSeriesScan.bind(this));
+            this.dom.btnRunFullSeriesScan.addEventListener('click', this.runFullSeriesScan.bind(this));
+            this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
+
             this.dom.form.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.saveData();
                 return false;
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
+                    this.dom.seriesSearchResults.style.display = 'none';
+                }
             });
         }
 
@@ -194,15 +215,19 @@
         async loadData() {
             loading.show();
             try {
-                const [config, virtualFolders] = await Promise.all([
+                const [config, virtualFolders, user] = await Promise.all([
                     ApiClient.getPluginConfiguration(pluginId),
-                    ApiClient.getVirtualFolders()
+                    ApiClient.getVirtualFolders(),
+                    ApiClient.getCurrentUser()
                 ]);
+
                 this.pluginConfiguration = config;
+                this.currentUser = user;
                 this.loadGlobalSettings(config);
 
                 const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
                 this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
+                this.libraryMap = new Map(this.allLibraries.map(lib => [lib.Id, lib.Name]));
 
                 this.populateProfileSelector();
                 this.loadProfileSettings(this.dom.profileSelector.value);
@@ -270,8 +295,14 @@
             this.toggleDependentSetting('UseCollectionLiteMode', 'ShowCollectionIconsIfAllChildrenHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one item.');
         }
 
-        populateLibraryAssignments(profileId) {
+        async populateLibraryAssignments(profileId) {
             const container = this.dom.librarySelectionContainer;
+            if (!this.allLibraries) {
+                const virtualFolders = await ApiClient.getVirtualFolders();
+                const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
+                this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
+            }
+
             container.innerHTML = this.allLibraries.map(library => `<div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-library-id="${library.Id}" /><span>${library.Name}</span></label></div>`).join('');
             const mappedLibraryIds = new Set(this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId === profileId).map(m => m.LibraryId));
             container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
@@ -563,6 +594,187 @@
             htmlParts.push(`<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }</style>`);
 
             container.innerHTML = htmlParts.join('');
+        }
+
+        async searchForSeries() {
+            const searchTerm = this.dom.txtSeriesSearch.value;
+            const resultsContainer = this.dom.seriesSearchResults;
+
+            if (searchTerm.length < 2) {
+                resultsContainer.innerHTML = '';
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            try {
+                const results = await ApiClient.getItems(this.currentUser.Id, {
+                    IncludeItemTypes: 'Series',
+                    Recursive: true,
+                    SearchTerm: searchTerm,
+                    Limit: 10,
+                    Fields: 'Path'
+                });
+
+                if (results.Items.length) {
+                    resultsContainer.innerHTML = results.Items.map(item =>
+                        `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.75em 1em; cursor: pointer;">${item.Name} <span style="color:#aaa; font-size:0.9em;">(${item.Path || 'Unknown'})</span></div>`
+                    ).join('');
+                    resultsContainer.style.display = 'block';
+                } else {
+                    resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
+                    resultsContainer.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Error searching for series', err);
+                resultsContainer.style.display = 'none';
+            }
+        }
+
+        onSeriesSearchResultClick(e) {
+            const target = e.target.closest('.searchResultItem');
+            if (target) {
+                this.selectedSeriesId = target.getAttribute('data-id');
+                this.dom.txtSeriesSearch.value = target.getAttribute('data-name');
+                this.dom.seriesSearchResults.style.display = 'none';
+                this.dom.seriesSearchResults.innerHTML = '';
+            }
+        }
+
+        getTroubleshooterChecks() {
+            return Array.from(this.dom.troubleshooterChecks)
+                .filter(cb => cb.checked)
+                .map(cb => cb.getAttribute('data-check-name'))
+                .join(',');
+        }
+
+        async runSeriesScan() {
+            if (!this.selectedSeriesId) {
+                toast({ type: 'error', text: 'Please search for and select a TV show first.' });
+                return;
+            }
+            const checksToRun = this.getTroubleshooterChecks();
+            if (!checksToRun) {
+                toast({ type: 'error', text: 'Please select at least one property to check.' });
+                return;
+            }
+
+            loading.show();
+            this.dom.btnRunSeriesScan.disabled = true;
+            const container = this.dom.seriesReportContainer;
+            container.innerHTML = '<p>Scanning series... This might take a moment.</p>';
+
+            try {
+                const reports = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { SeriesId: this.selectedSeriesId, ChecksToRun: checksToRun }),
+                    dataType: "json"
+                });
+                this.renderSeriesReport(reports);
+            } catch (error) {
+                console.error('Error getting series troubleshooter report', error);
+                container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+            } finally {
+                loading.hide();
+                this.dom.btnRunSeriesScan.disabled = false;
+            }
+        }
+
+        async runFullSeriesScan() {
+            const checksToRun = this.getTroubleshooterChecks();
+            if (!checksToRun) {
+                toast({ type: 'error', text: 'Please select at least one property to check.' });
+                return;
+            }
+
+            loading.show();
+            this.dom.btnRunFullSeriesScan.disabled = true;
+            const container = this.dom.seriesReportContainer;
+            container.innerHTML = '<p>Scanning all TV shows in your library... This can take several minutes.</p>';
+
+            try {
+                const reports = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { ChecksToRun: checksToRun }),
+                    dataType: "json"
+                });
+                this.renderSeriesReport(reports);
+            } catch (error) {
+                console.error('Error getting full series troubleshooter report', error);
+                container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+            } finally {
+                loading.hide();
+                this.dom.btnRunFullSeriesScan.disabled = false;
+            }
+        }
+
+        renderSeriesReport(reports) {
+            const container = this.dom.seriesReportContainer;
+            if (!reports || reports.length === 0) {
+                container.innerHTML = '<h2>Scan Complete</h2><p>No inconsistencies found for the selected criteria.</p>';
+                return;
+            }
+
+            const html = reports.map(report => {
+                const mismatchChecks = report.Checks.filter(c => c.Status === 'Mismatch');
+                if (mismatchChecks.length === 0) {
+                    return ''; // Don't render shows that are OK for the full scan
+                }
+
+                const checksHtml = mismatchChecks.map(check => {
+                    const episodesHtml = check.MismatchedEpisodes.map(ep =>
+                        `<li>
+                            <code>${ep.EpisodeName || `Item ID: ${ep.EpisodeId}`}</code>
+                            <br>
+                            <span style="font-size: 0.9em;">
+                                Expected: <code class="report-code report-code-ok">${check.DominantValues.join(', ') || 'N/A'}</code>, 
+                                Found: <code class="report-code report-code-warn">${ep.Actual.join(', ') || 'Nothing'}</code>
+                            </span>
+                         </li>`
+                    ).join('');
+
+                    return `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                                <h4 style="margin:0; color: #ffc107;">${check.CheckName}</h4>
+                                <p class="fieldDescription" style="margin: 0.5em 0;">${check.Message}</p>
+                                <ul style="margin: 1em 0 0.5em; padding-left: 1.5em; list-style-type: disc;">${episodesHtml}</ul>
+                            </div>`;
+                }).join('');
+
+                return `<div class="report-group collapsible" style="margin-bottom: 1em;">
+                            <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                <h2 style="margin: 0;">${report.SeriesName} <span class="fieldDescription">(${report.TotalEpisodes} episodes)</span></h2>
+                                <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
+                            </div>
+                            <div class="collapsible-content" style="display: none; padding-top: 0.5em;">
+                                ${checksHtml}
+                            </div>
+                        </div>`;
+
+            }).join('');
+
+            container.innerHTML = (html.trim() === '') ? '<h2>Scan Complete</h2><p>No inconsistencies found in any TV show for the selected criteria.</p>' : html;
+
+            container.insertAdjacentHTML('beforeend', `<style>
+                .report-code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; }
+                .report-code-ok { color: #4CAF50; }
+                .report-code-warn { color: #ffc107; }
+            </style>`);
+        }
+
+        onSeriesReportHeaderClick(e) {
+            const header = e.target.closest('.collapsible-header');
+            if (!header) return;
+
+            const content = header.nextElementSibling;
+            const indicator = header.querySelector('.collapsible-indicator');
+
+            if (content && content.classList.contains('collapsible-content')) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+
+                if (indicator) {
+                    indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+                }
+            }
         }
     }
 

@@ -21,10 +21,20 @@ namespace EmbyIcons.Helpers
         private static readonly object _embeddedCacheLock = new object();
         private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
-
         private string? _iconsFolder;
-        internal static readonly string[] SupportedCustomIconExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
+
+        // Fast O(1) extension lookups
+        internal static readonly HashSet<string> SupportedCustomIconExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"
+        };
+
         public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating }
+
+        // NEW: cache for custom icon keys to avoid repeated directory scans
+        private readonly object _customKeysLock = new();
+        private string? _customKeysFolder;
+        private Dictionary<IconType, List<string>>? _customIconKeys;
 
         public IconCacheManager(ILogger logger)
         {
@@ -33,32 +43,51 @@ namespace EmbyIcons.Helpers
 
         public Dictionary<IconType, List<string>> GetAllAvailableIconKeys(string iconsFolder)
         {
-            var allKeys = new Dictionary<IconType, List<string>>();
-            foreach (IconType type in Enum.GetValues(typeof(IconType))) allKeys[type] = new List<string>();
-            if (string.IsNullOrEmpty(iconsFolder) || !Directory.Exists(iconsFolder)) return allKeys;
-
-            try
+            if (string.IsNullOrEmpty(iconsFolder) || !Directory.Exists(iconsFolder))
             {
-                foreach (var file in Directory.GetFiles(iconsFolder))
+                return CreateEmptyIconKeyMap();
+            }
+
+            lock (_customKeysLock)
+            {
+                // If folder unchanged and we have a cache, use it
+                if (_customIconKeys != null &&
+                    _customKeysFolder != null &&
+                    string.Equals(_customKeysFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
                 {
-                    var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (string.IsNullOrEmpty(ext) || !SupportedCustomIconExtensions.Contains(ext)) continue;
-                    var parts = Path.GetFileNameWithoutExtension(file).Split(new[] { '.' }, 2);
-                    if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
+                    return _customIconKeys;
+                }
+
+                // Rebuild
+                var allKeys = CreateEmptyIconKeyMap();
+                try
+                {
+                    foreach (var file in Directory.GetFiles(iconsFolder))
                     {
-                        allKeys[iconType].Add(parts[1].ToLowerInvariant());
+                        var ext = Path.GetExtension(file);
+                        if (string.IsNullOrEmpty(ext) || !SupportedCustomIconExtensions.Contains(ext)) continue;
+
+                        var parts = Path.GetFileNameWithoutExtension(file).Split(new[] { '.' }, 2);
+                        if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
+                        {
+                            allKeys[iconType].Add(parts[1].ToLowerInvariant());
+                        }
+                    }
+
+                    if (allKeys.ContainsKey(IconType.Resolution))
+                    {
+                        allKeys[IconType.Resolution] = allKeys[IconType.Resolution].OrderByDescending(x => x.Length).ToList();
                     }
                 }
-                if (allKeys.ContainsKey(IconType.Resolution))
+                catch (Exception ex)
                 {
-                    allKeys[IconType.Resolution] = allKeys[IconType.Resolution].OrderByDescending(x => x.Length).ToList();
+                    _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan.", ex);
                 }
+
+                _customKeysFolder = iconsFolder;
+                _customIconKeys = allKeys;
+                return allKeys;
             }
-            catch (Exception ex)
-            {
-                _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan.", ex);
-            }
-            return allKeys;
         }
 
         public Dictionary<IconType, List<string>> GetAllAvailableEmbeddedIconKeys()
@@ -68,8 +97,7 @@ namespace EmbyIcons.Helpers
                 if (_embeddedIconKeysCache != null) return _embeddedIconKeysCache;
             }
 
-            var embeddedKeys = new Dictionary<IconType, List<string>>();
-            foreach (IconType type in Enum.GetValues(typeof(IconType))) embeddedKeys[type] = new List<string>();
+            var embeddedKeys = CreateEmptyIconKeyMap();
 
             var assembly = Assembly.GetExecutingAssembly();
             const string resourcePrefix = "EmbyIcons.EmbeddedIcons.";
@@ -95,21 +123,35 @@ namespace EmbyIcons.Helpers
 
         public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
-            if (_iconsFolder != iconsFolder)
+            // Fast path: same folder (case-insensitive) -> no work
+            if (!string.IsNullOrEmpty(_iconsFolder) &&
+                string.Equals(_iconsFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
             {
-                _iconsFolder = iconsFolder;
-                return RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
+                return Task.CompletedTask;
             }
-            return Task.CompletedTask;
+
+            _iconsFolder = iconsFolder;
+
+            // When folder changes, clear in-memory caches so next call repopulates
+            return RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
         }
 
         public Task RefreshCacheOnDemandAsync(string iconsFolder, CancellationToken cancellationToken, bool force = false)
         {
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
+
             ClearImageCache(_iconImageCache);
             foreach (var icon in _embeddedIconCache.Values) icon.Dispose();
             _embeddedIconCache.Clear();
+
+            // Invalidate custom key cache too
+            lock (_customKeysLock)
+            {
+                _customIconKeys = null;
+                _customKeysFolder = null;
+            }
+
             return Task.CompletedTask;
         }
 
@@ -140,6 +182,7 @@ namespace EmbyIcons.Helpers
         private async Task<SKImage?> LoadCustomIconAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
+
             if (_iconImageCache.TryGetValue(baseFileName, out var cached))
             {
                 try
@@ -147,13 +190,18 @@ namespace EmbyIcons.Helpers
                     if (File.GetLastWriteTimeUtc(cached.FullPath) == cached.FileWriteTimeUtc) return cached.Image;
                     if (_iconImageCache.TryRemove(baseFileName, out var oldCached)) oldCached.Image?.Dispose();
                 }
-                catch (Exception) { if (_iconImageCache.TryRemove(baseFileName, out var oldCached)) oldCached.Image?.Dispose(); }
+                catch (Exception)
+                {
+                    if (_iconImageCache.TryRemove(baseFileName, out var oldCached)) oldCached.Image?.Dispose();
+                }
             }
+
             foreach (var ext in SupportedCustomIconExtensions)
             {
                 var fullPath = Path.Combine(iconsFolder, baseFileName + ext);
                 if (File.Exists(fullPath)) return await TryLoadAndCacheIconAsync(fullPath, baseFileName, cancellationToken);
             }
+
             return null;
         }
 
@@ -198,6 +246,12 @@ namespace EmbyIcons.Helpers
             ClearImageCache(_iconImageCache);
             foreach (var icon in _embeddedIconCache.Values) icon.Dispose();
             _embeddedIconCache.Clear();
+
+            lock (_customKeysLock)
+            {
+                _customIconKeys = null;
+                _customKeysFolder = null;
+            }
         }
 
         private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
@@ -206,12 +260,24 @@ namespace EmbyIcons.Helpers
             cache.Clear();
         }
 
+        private static Dictionary<IconType, List<string>> CreateEmptyIconKeyMap()
+        {
+            var dict = new Dictionary<IconType, List<string>>();
+            foreach (IconType type in Enum.GetValues(typeof(IconType))) dict[type] = new List<string>();
+            return dict;
+        }
+
         private sealed class CachedIcon
         {
             public SKImage? Image { get; }
             public DateTime FileWriteTimeUtc { get; }
             public string FullPath { get; }
-            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc, string fullPath) { Image = image; FileWriteTimeUtc = fileWriteTimeUtc; FullPath = fullPath; }
+            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc, string fullPath)
+            {
+                Image = image;
+                FileWriteTimeUtc = fileWriteTimeUtc;
+                FullPath = fullPath;
+            }
         }
     }
 }

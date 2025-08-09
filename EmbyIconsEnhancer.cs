@@ -15,7 +15,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -27,7 +26,8 @@ namespace EmbyIcons
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
 
-        private static readonly SemaphoreSlim _globalConcurrencyLock = new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
+        private static readonly SemaphoreSlim _globalConcurrencyLock =
+            new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
 
         internal readonly IconCacheManager _iconCacheManager;
         internal static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
@@ -53,7 +53,6 @@ namespace EmbyIcons
             _logger.Info("[EmbyIcons] Session started.");
 
             _iconCacheManager = new IconCacheManager(_logger);
-
             _overlayDataService = new OverlayDataService(this);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
         }
@@ -105,14 +104,16 @@ namespace EmbyIcons
                     if (_seriesAggregationCache.TryRemove(kvp.Key, out _)) removed++;
                 }
             }
-            if (removed > 0 && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)) _logger.Debug($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
+            if (removed > 0 && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false))
+                _logger.Debug($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
         }
 
         public void ClearSeriesAggregationCache(Guid seriesId)
         {
             if (seriesId != Guid.Empty && _seriesAggregationCache.TryRemove(seriesId, out _))
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
             }
         }
 
@@ -155,6 +156,34 @@ namespace EmbyIcons
                    options.ParentalRatingIconAlignment != IconAlignment.Disabled;
         }
 
+        private static string SanitizeTagForKey(string tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
+            Span<char> buf = stackalloc char[tag.Length];
+            int j = 0;
+            bool lastDash = false;
+            for (int i = 0; i < tag.Length; i++)
+            {
+                char c = char.ToLowerInvariant(tag[i]);
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!lastDash && j > 0)
+                    {
+                        buf[j++] = '-';
+                        lastDash = true;
+                    }
+                    continue;
+                }
+                lastDash = false;
+                buf[j++] = c;
+            }
+            int start = 0;
+            while (start < j && buf[start] == '-') start++;
+            int end = j - 1;
+            while (end >= start && buf[end] == '-') end--;
+            return (start > end) ? string.Empty : new string(buf.Slice(start, end - start + 1));
+        }
+
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
             var plugin = Plugin.Instance;
@@ -163,10 +192,11 @@ namespace EmbyIcons
             var profile = plugin.GetProfileForItem(item);
             if (profile == null) return "";
 
+            var globalOptions = plugin.GetConfiguredOptions();
             var options = profile.Settings;
             var sb = new StringBuilder(512);
 
-            sb.Append("ei6_") 
+            sb.Append("ei6_")
               .Append(item.Id.ToString("N")).Append('_').Append((int)imageType)
               .Append("_v").Append(plugin.ConfigurationVersion)
               .Append("_p").Append(profile.Id.ToString("N"));
@@ -182,7 +212,12 @@ namespace EmbyIcons
             sb.Append('_').Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 't' : 'f').Append(options.CommunityScoreIconPriority);
             sb.Append('_').Append((int)options.AspectRatioIconAlignment).Append(options.AspectRatioOverlayHorizontal ? 't' : 'f').Append(options.AspectRatioIconPriority);
             sb.Append('_').Append((int)options.ParentalRatingIconAlignment).Append(options.ParentalRatingOverlayHorizontal ? 't' : 'f').Append(options.ParentalRatingIconPriority);
-            sb.Append('_').Append(options.IconSize).Append(options.JpegQuality).Append(options.EnableImageSmoothing ? 't' : 'f');
+
+            sb.Append('_').Append(options.IconSize)
+              .Append(globalOptions.JpegQuality)
+              .Append(globalOptions.EnableImageSmoothing ? 't' : 'f')
+              .Append((int)globalOptions.OutputFormat);
+
             sb.Append('_').Append((int)options.CommunityScoreBackgroundShape).Append(options.CommunityScoreBackgroundColor).Append(options.CommunityScoreBackgroundOpacity);
             sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
             sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
@@ -190,24 +225,27 @@ namespace EmbyIcons
             if (item is Series series)
             {
                 var fullSeries = GetFullItem(series) as Series ?? series;
-                var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, plugin.GetConfiguredOptions());
+                var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, globalOptions);
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else if (item is BoxSet collection)
             {
                 var fullCollection = GetFullItem(collection) as BoxSet ?? collection;
-                var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, plugin.GetConfiguredOptions());
+                var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, globalOptions);
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else
             {
-                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHash(item, item.GetMediaStreams() ?? new List<MediaStream>()));
+                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHashV2(item, item.GetMediaStreams() ?? new List<MediaStream>()));
             }
 
             if (item.Tags != null && item.Tags.Length > 0)
             {
-                var sortedTags = string.Join(",", item.Tags.OrderBy(t => t));
-                sb.Append("_t").Append(sortedTags);
+                var normalizedTags = item.Tags
+                    .Select(SanitizeTagForKey)
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .OrderBy(t => t);
+                sb.Append("_t").Append(string.Join(",", normalizedTags));
             }
 
             sb.Append("_r").Append(item.CommunityRating?.ToString("F1") ?? "N");
@@ -251,7 +289,11 @@ namespace EmbyIcons
                         return;
                     }
 
-                    using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(sourceBitmap, overlayData, profileOptions, globalOptions, cancellationToken);
+                    // Detect PNG input for Auto output format
+                    bool sourceWasPng = string.Equals(Path.GetExtension(inputFile), ".png", StringComparison.OrdinalIgnoreCase);
+
+                    using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(
+                        sourceBitmap, overlayData, profileOptions, globalOptions, cancellationToken, null, sourceWasPng);
 
                     string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                     await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
@@ -259,29 +301,39 @@ namespace EmbyIcons
                         await outputStream.CopyToAsync(fsOut, cancellationToken);
                     }
 
-                    if (File.Exists(outputFile))
+                    try
                     {
-                        File.Replace(tempOutput, outputFile, null);
+                        if (File.Exists(outputFile))
+                        {
+                            File.Replace(tempOutput, outputFile, null);
+                        }
+                        else
+                        {
+                            File.Move(tempOutput, outputFile);
+                        }
                     }
-                    else
+                    catch (IOException ioEx) when (ioEx.Message.Contains("volume", StringComparison.OrdinalIgnoreCase))
                     {
-                        File.Move(tempOutput, outputFile);
+                        File.Copy(tempOutput, outputFile, overwrite: true);
+                        File.Delete(tempOutput);
                     }
                 }
                 finally
                 {
                     sem.Release();
+                    _locks.TryRemove(item.Id.ToString(), out _);
                 }
             }
             catch (OperationCanceledException)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Image enhancement task cancelled for item: {item?.Name}.");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug($"[EmbyIcons] Image enhancement task cancelled for item: {item?.Name}.");
             }
             catch (Exception ex)
             {
                 _logger.ErrorException($"[EmbyIcons] Critical error during enhancement for {item?.Name}. Copying original.", ex);
                 try { await FileUtils.SafeCopyAsync(inputFile, outputFile, CancellationToken.None); }
-                catch { /* Ignore fallback copy exception */ }
+                catch { }
             }
             finally
             {
@@ -297,9 +349,7 @@ namespace EmbyIcons
         public void Dispose()
         {
             foreach (var sem in _locks.Values)
-            {
                 sem.Dispose();
-            }
             _locks.Clear();
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();

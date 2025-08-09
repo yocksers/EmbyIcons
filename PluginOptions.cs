@@ -12,6 +12,13 @@ namespace EmbyIcons
         public Guid ProfileId { get; set; }
     }
 
+    public enum OutputFormat
+    {
+        Jpeg,
+        Png,
+        Auto
+    }
+
     public class PluginOptions : BasePluginConfiguration
     {
         public string PersistedVersion { get; set; } = "1.0.0";
@@ -27,6 +34,13 @@ namespace EmbyIcons
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
+
+        // NEW: output format for generated images
+        public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
+
+        // MOVED from ProfileSettings, now global
+        public int JpegQuality { get; set; } = 75;
+        public bool EnableImageSmoothing { get; set; } = false;
 
         public List<IconProfile> Profiles { get; set; } = new List<IconProfile>();
         public List<LibraryMapping> LibraryProfileMappings { get; set; } = new List<LibraryMapping>();
@@ -107,10 +121,6 @@ namespace EmbyIcons
         [Obsolete]
         public int IconSize { get; set; } = 10;
         [Obsolete]
-        public int JpegQuality { get; set; } = 75;
-        [Obsolete]
-        public bool EnableImageSmoothing { get; set; } = false;
-        [Obsolete]
         public bool UseSeriesLiteMode { get; set; } = true;
         #endregion
     }
@@ -189,11 +199,8 @@ namespace EmbyIcons
         public int CommunityScoreBackgroundOpacity { get; set; } = 80;
 
         public int IconSize { get; set; } = 10;
-        public int JpegQuality { get; set; } = 75;
-        public bool EnableImageSmoothing { get; set; } = false;
         public bool UseSeriesLiteMode { get; set; } = true;
     }
-
 
     public enum IconLoadingMode
     {

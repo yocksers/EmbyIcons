@@ -111,7 +111,8 @@ namespace EmbyIcons
                 }
             }
 
-            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons);
+            // Our preview background is a PNG resource, so mark sourceWasPng = true
+            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons, sourceWasPng: true);
             return resultStream;
         }
     }

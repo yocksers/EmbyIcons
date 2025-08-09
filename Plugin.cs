@@ -118,8 +118,6 @@ namespace EmbyIcons
                     CommunityScoreBackgroundColor = Configuration.CommunityScoreBackgroundColor,
                     CommunityScoreBackgroundOpacity = Configuration.CommunityScoreBackgroundOpacity,
                     IconSize = Configuration.IconSize,
-                    JpegQuality = Configuration.JpegQuality,
-                    EnableImageSmoothing = Configuration.EnableImageSmoothing,
                     UseSeriesLiteMode = Configuration.UseSeriesLiteMode
                 };
 
@@ -269,6 +267,7 @@ namespace EmbyIcons
 
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();
+            _profileManager = null;
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{options.PersistedVersion}'. Images will refresh as they are viewed.");
 

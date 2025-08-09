@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -17,6 +17,14 @@ namespace EmbyIcons.Services
             _enhancer = enhancer;
         }
 
+        private static string NormalizeTag(string tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
+            var t = tag.Trim().ToLowerInvariant();
+            t = System.Text.RegularExpressions.Regex.Replace(t, "\\s+", "-");
+            return t;
+        }
+
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -24,7 +32,8 @@ namespace EmbyIcons.Services
             {
                 foreach (var tag in item.Tags)
                 {
-                    tags.Add(string.Intern(tag));
+                    var nt = NormalizeTag(tag);
+                    if (!string.IsNullOrEmpty(nt)) tags.Add(nt);
                 }
             }
 
@@ -118,6 +127,17 @@ namespace EmbyIcons.Services
                 CommunityRating = item.CommunityRating,
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
+
+            // Capture normalized tags for non-series too
+            if (item.Tags != null && item.Tags.Length > 0)
+            {
+                foreach (var tag in item.Tags)
+                {
+                    var nt = NormalizeTag(tag);
+                    if (!string.IsNullOrEmpty(nt)) data.Tags.Add(nt);
+                }
+            }
+
             var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
 
             MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
@@ -150,13 +170,6 @@ namespace EmbyIcons.Services
             data.ResolutionIconName = primaryVideoStream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>()) : null;
             data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream);
 
-            if (item.Tags != null && item.Tags.Length > 0)
-            {
-                foreach (var tag in item.Tags)
-                {
-                    data.Tags.Add(string.Intern(tag));
-                }
-            }
             return data;
         }
     }

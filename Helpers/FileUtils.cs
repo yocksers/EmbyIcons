@@ -1,57 +1,51 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.IO;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Helpers
 {
     internal static class FileUtils
     {
-        public static async Task SafeCopyAsync(string source, string dest, CancellationToken cancellationToken)
+        public static async Task SafeCopyAsync(string inputFile, string outputFile, CancellationToken cancellationToken)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? ".");
+
+            var tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                if (string.IsNullOrEmpty(source) || !File.Exists(source))
+                await using (var fsIn = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read, 262144, useAsync: true))
+                await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                 {
-                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Source file for SafeCopyAsync does not exist: '{source}'.");
-                    return;
+                    await fsIn.CopyToAsync(fsOut, 262144, cancellationToken);
                 }
 
-                const int bufferSize = 262144;
-
-                var destDir = Path.GetDirectoryName(dest);
-                if (string.IsNullOrEmpty(destDir))
+                if (File.Exists(outputFile))
                 {
-                    throw new ArgumentException("Invalid destination path for file copy.");
-                }
-
-                Directory.CreateDirectory(destDir);
-
-                string tempDest = Path.Combine(destDir, Path.GetFileName(dest) + "." + Guid.NewGuid().ToString("N") + ".tmp");
-
-                using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true))
-                using (var tempDestStream = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, useAsync: true))
-                {
-                    await sourceStream.CopyToAsync(tempDestStream, cancellationToken);
-                    await tempDestStream.FlushAsync(cancellationToken);
-                }
-
-                if (File.Exists(dest))
-                {
-                    File.Replace(tempDest, dest, null);
+                    try { File.Replace(tempOutput, outputFile, null); }
+                    catch (System.IO.IOException)
+                    {
+                        try
+                        {
+                            if (File.Exists(outputFile)) File.Copy(tempOutput, outputFile, overwrite: true);
+                            else File.Move(tempOutput, outputFile);
+                            if (File.Exists(tempOutput)) File.Delete(tempOutput);
+                        }
+                        catch
+                        {
+                            throw;
+                        }
+                    }
                 }
                 else
                 {
-                    File.Move(tempDest, dest);
+                    File.Move(tempOutput, outputFile);
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Plugin.Instance?.Logger?.ErrorException($"[EmbyIcons] SafeCopyAsync failed to copy '{source}' to '{dest}'. Error: {ex.Message}", ex);
+                try { if (File.Exists(tempOutput)) File.Delete(tempOutput); } catch { }
                 throw;
             }
         }
