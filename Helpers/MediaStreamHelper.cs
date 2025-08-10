@@ -101,17 +101,9 @@ namespace EmbyIcons.Helpers
         {
             if (videoStream == null) return null;
 
-            if (videoStream.Height.HasValue)
-            {
-                var h = videoStream.Height.Value;
-                if (h >= 2000) return knownKeys.FirstOrDefault(k => k.Equals("4k", StringComparison.OrdinalIgnoreCase) || k.Equals("2160p", StringComparison.OrdinalIgnoreCase)) ?? "4k";
-                if (h >= 1000) return knownKeys.FirstOrDefault(k => k.Equals("1080p", StringComparison.OrdinalIgnoreCase) || k.Equals("1080i", StringComparison.OrdinalIgnoreCase)) ?? "1080p";
-                if (h >= 700) return knownKeys.FirstOrDefault(k => k.Equals("720p", StringComparison.OrdinalIgnoreCase)) ?? "720p";
-                if (h >= 500) return knownKeys.FirstOrDefault(k => k.Equals("576p", StringComparison.OrdinalIgnoreCase)) ?? "576p";
-                if (h >= 400) return knownKeys.FirstOrDefault(k => k.Equals("480p", StringComparison.OrdinalIgnoreCase)) ?? "480p";
-            }
-
             var title = (videoStream.DisplayTitle ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(title)) return null;
+
             foreach (var key in knownKeys)
             {
                 if (string.IsNullOrWhiteSpace(key)) continue;

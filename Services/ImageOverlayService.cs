@@ -415,7 +415,7 @@ namespace EmbyIcons.Services
                 return null;
             }
 
-            var ratingIcon = await _iconCache.GetCachedIconAsync("score", IconCacheManager.IconType.CommunityRating, options, cancellationToken);
+            var ratingIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, options, cancellationToken);
             return new RatingOverlayInfo(profileOptions.CommunityScoreIconAlignment, profileOptions.CommunityScoreIconPriority, profileOptions.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, ratingIcon);
         }
     }
