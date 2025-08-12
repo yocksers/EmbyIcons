@@ -4,25 +4,22 @@
 
 # EmbyIcons Plugin
 
-EmbyIcons is a powerful plugin for Emby Server that enhances your media library by overlaying dynamic, informational icons directly onto your posters. It provides an at-a-glance summary of your media's technical specifications for movies, TV shows, seasons, and even individual episodes. With deep, profile-based customization, you can tailor the look and feel to perfectly match your library's needs.
+[![Made for Emby](https://img.shields.io/badge/made%20for-emby-00a4dc.svg)](https://emby.media/)
+[![BuyMeACoffee](https://img.shields.io/badge/support-buy%20me%20a%20coffee-yellow.svg)](https://buymeacoffee.com/yockser)
+
+EmbyIcons is a powerful plugin for Emby Server that enhances your media library by overlaying dynamic, informational icons directly onto your posters. It provides an at-a-glance summary of your media's technical specifications for movies, TV shows, and collections. With deep, profile-based customization, you can tailor the look and feel to perfectly match your library's needs.
 
 ---
 
 ## Table of Contents
 - [Features](#features)
 - [Installation](#installation)
-- [Configuration and Icon Naming](#configuration-and-icon-naming)
-  - [Icon Naming Convention](#icon-naming-convention)
+- [Icon Naming Convention](#icon-naming-convention)
 - [Configuration Guide](#configuration-guide)
   - [Tabs Overview](#tabs-overview)
-  - [General Settings](#general-settings)
-  - [Icon Profiles](#icon-profiles)
-  - [Profile Settings](#profile-settings)
-    - [Assign to Libraries](#assign-to-libraries)
-    - [TV Show Settings](#tv-show-settings)
-    - [Alignment, Layout & Priority](#alignment-layout--priority)
-    - [Advanced Profile Settings](#advanced-profile-settings)
-  - [Icon Manager](#icon-manager)
+  - [Settings Tab](#settings-tab)
+  - [Icon Manager Tab](#icon-manager-tab)
+  - [Troubleshooter Tab](#troubleshooter-tab)
 - [Troubleshooting](#troubleshooting)
 - [Acknowledgements](#acknowledgements)
 
@@ -31,32 +28,34 @@ EmbyIcons is a powerful plugin for Emby Server that enhances your media library 
 ## Features
 *   **Extensive Icon Support**: Displays overlays for a wide range of media properties:
     *   Audio & Subtitle Languages
-    *   Audio Channels (e.g., 5.1, 7.1)
-    *   Audio & Video Codecs (e.g., DTS, HEVC, AV1)
+    *   Audio Channels (e.g., 5.1, 7.1, Stereo)
+    *   Audio & Video Codecs (e.g., DTS, EAC3, HEVC, AV1)
     *   Video Format (e.g., HDR, Dolby Vision)
-    *   Video Resolution (e.g., 4K, 1080p)
-    *   Aspect Ratio (e.g., 16:9)
-    *   Custom Media Tags (e.g., 3D)
-    *   Community Rating (e.g., IMDB)
+    *   Video Resolution (e.g., 4K, 1080p, SD)
+    *   Aspect Ratio (e.g., 16:9, 2.39:1)
+    *   Parental & Community Ratings (e.g., PG-13, IMDB)
+    *   Custom Media Tags (e.g., 3D, Director's Cut)
 *   **Powerful Profile System**:
-    *   Create multiple configuration profiles for different types of content.
-    *   Assign specific profiles to one or more libraries.
-    *   Clone, rename, and manage profiles with ease.
+    *   Create multiple, distinct configuration profiles.
+    *   Assign profiles to one or more libraries to customize the appearance of different content.
+    *   Easily add, rename, or delete profiles.
 *   **Complete Layout Control**:
-    *   Independently set the on-screen corner alignment for each icon category.
-    *   Control the display **Priority** to define the drawing order of icons within a corner.
-    *   Choose between horizontal or vertical stacking for icons.
+    *   Independently set the on-screen corner for each icon category.
+    *   Control the display **Priority** to define the precise drawing order of icons within a corner.
+    *   Choose between horizontal or vertical stacking for each icon group.
     *   Customize the Community Rating icon's background shape, color, and opacity.
-*   **Smart TV Show Handling**:
-    *   Optionally show overlays on episode images.
-    *   Display icons on Series/Seasons only if all child episodes share the same property.
-    *   "Lite Mode" for faster series scans by checking only the first episode.
+*   **Smart Aggregation for Series & Collections**:
+    *   Display icons on Series or Collection posters based on the properties of their children.
+    *   "Lite Mode" for faster scans by checking only the first item.
+    *   Option to exclude the 'Specials' season from TV Show calculations.
 *   **Icon Manager Tool**:
-    *   Scan your library and icon folder to find out which icons are used, unused, or missing.
-    *   A perfect tool for maintaining your custom icon set.
-*   **Live Preview & Cache Control**:
-    *   See layout changes in real-time with a built-in preview.
-    *   A one-click button to clear the icon cache after changing icon files.
+    *   Scan your library and icon folder to find out which icons are used, unused, or missing. A perfect utility for maintaining your custom icon set.
+*   **Series Troubleshooter Tool**:
+    *   Diagnose why an icon may not be appearing on a TV show by finding episodes with inconsistent properties (e.g., one episode is 1080p while the rest are 4K).
+*   **Live Preview & Utilities**:
+    *   See layout changes in real-time with a built-in settings preview.
+    *   An Aspect Ratio Calculator to help you name your custom `ar` icons correctly.
+    *   One-click cache clearing to apply changes to your icon files instantly.
     *   Hybrid icon loading mode uses bundled icons as a fallback for a great default experience.
 
 ---
@@ -65,111 +64,138 @@ EmbyIcons is a powerful plugin for Emby Server that enhances your media library 
 1.  Ensure you are running a modern, stable version of Emby Server.
 2.  Place the `EmbyIcons.dll` file into your Emby Server's `/plugins` directory.
 3.  Restart Emby Server to load the plugin.
-4.  Open the Emby Server dashboard, navigate to **Plugins** on the left menu, find **EmbyIcons** in the list, and click on it to open the configuration page.
+4.  Open the Emby Server dashboard, navigate to **Plugins** on the left menu, find **EmbyIcons**, and click on it to open the configuration page.
 
 ---
 
-## Configuration and Icon Naming
+## Icon Naming Convention
+You must supply your own icon images and place them in a single folder on your server. A size of ~100x100 pixels in `.png` format with a transparent background is recommended, but `.jpg`, `.webp`, `.gif`, and `.bmp` are also supported.
 
-You must supply your own icon images and place them in a single folder on your server. A size of 100x100 pixels in `.png` format with a transparent background is recommended, but other formats like `.jpg` or `.webp` will also work.
+Icons are identified using a strict prefix-based naming scheme: `` `prefix.name.png` ``. The prefix tells the plugin what type of icon it is, and the name is matched against media properties. Filenames are case-insensitive. Any files that do not follow this convention will be ignored.
 
-### Icon Naming Convention
-Icons are identified using a strict prefix-based naming scheme: `prefix.name.png`. The prefix tells the plugin what type of icon it is, and the name is matched against media properties. Filenames are case-insensitive. Any files that do not follow this convention will be ignored.
-
-| Icon Type | Prefix | Filename Format | Examples |
+| Icon Type | Prefix | Filename Format | Notes & Examples |
 | :--- | :--- | :--- | :--- |
-| Audio Language | `lang` | `lang.{language}.png` | `lang.english.png`, `lang.french.png` |
-| Subtitle Language | `sub` | `sub.{language}.png` | `sub.english.png`, `sub.german.png` |
-| Audio Channels | `ch` | `ch.{layout}.png` | `ch.5.1.png`, `ch.7.1.png`, `ch.stereo.png` |
-| Audio Codec | `ac` | `ac.{codec}.png` | `ac.dts.png`, `ac.truehd.png`, `ac.eac3.png` |
-| Video Codec | `vc` | `vc.{codec}.png` | `vc.hevc.png`, `vc.av1.png`, `vc.h264.png` |
-| Video Format | `hdr` | `hdr.{format}.png` | `hdr.hdr.png`, `hdr.hdr10plus.png`, `hdr.dv.png` |
-| Resolution | `res` | `res.{resolution}.png` | `res.4k.png`, `res.1080p.png`, `res.sd.png` |
-| Aspect Ratio | `ar` | `ar.{ratio}.png` | `ar.16x9.png`, `ar.4x3.png` |
-| Custom Tag | `tag` | `tag.{tag_name}.png` | `tag.3d.png`, `tag.directors cut.png` |
-| Community Rating | `rating`| `rating.{name}.png` | `rating.imdb.png` |
+| Audio Language | `lang` | `lang.{language}.png` | `{language}` is the full display name, lowercased. Ex: `lang.english.png` |
+| Subtitle Language | `sub` | `sub.{language}.png` | `{language}` is the full display name, lowercased. Ex: `sub.german.png` |
+| Audio Channels | `ch` | `ch.{layout}.png` | Detected layouts include `5.1`, `7.1`, `stereo`, `mono`. Ex: `ch.7.1.png` |
+| Audio Codec | `ac` | `ac.{codec}.png` | Detected from stream metadata. Ex: `ac.dts.png`, `ac.eac3.png`, `ac.dts-hdma.png` |
+| Video Codec | `vc` | `vc.{codec}.png` | Detected from stream metadata. Ex: `vc.hevc.png`, `vc.av1.png`, `vc.h264.png` |
+| Video Format (HDR) | `hdr` | `hdr.{format}.png` | Detects `hdr`, `dv` (Dolby Vision), `hdr10plus`. Ex: `hdr.dv.png`, `hdr.hdr.png` |
+| Resolution | `res` | `res.{resolution}.png` | Matches keys like `4k`, `1080p`, `720p`, `sd`. Ex: `res.4k.png`, `res.1080p.png` |
+| Aspect Ratio | `ar` | `ar.{ratio}.png` | Colon is replaced with 'x'. Ex: `ar.16x9.png`, `ar.2.39x1.png` |
+| Parental Rating | `pr` | `pr.{rating}.png` | Lowercased rating from Emby. Slashes are replaced with hyphens. Ex: `pr.pg-13.png`, `pr.tv-ma.png` |
+| Custom Tag | `tag` | `tag.{tag-name}.png` | Matches against media tags. The tag is lowercased and spaces are replaced with hyphens. Ex: `tag.3d.png`, `tag.directors-cut.png`|
+| Community Rating | `rating`| `rating.{name}.png` | A static icon shown next to the community score. Ex: `rating.imdb.png` |
 
 ---
 ## Configuration Guide
 
 ### Tabs Overview
-The configuration page is organized into three main tabs:
+The configuration page is organized into four main tabs:
 *   **Settings**: Configure global settings, manage icon profiles, and adjust all visual options.
 *   **Icon Manager**: A utility to help you manage your custom icon files.
-*   **Readme**: An offline copy of the plugin's naming conventions and guide.
+*   **Troubleshooter**: Tools to diagnose issues with TV show icons and calculate aspect ratios.
+*   **Readme**: An offline copy of this guide.
 
-### General Settings
-This section contains settings that apply globally, regardless of the active profile.
+### Settings Tab
+
+This tab contains all the core options for the plugin. Settings are divided into logical sections.
+
+#### Global Settings
+These settings apply to all profiles and libraries.
 
 | Setting | Description |
 | :--- | :--- |
-| **Icon Loading Mode** | Choose how icons are loaded. **Hybrid** is recommended, as it uses your custom icons but falls back to the plugin's built-in icons if a custom one isn't found. |
-| **Custom Icons Folder** | The full directory path to the folder containing your named icon images. |
+| **Icon Loading Mode** | **Hybrid** is recommended, as it uses your custom icons but falls back to the plugin's built-in icons if a custom one isn't found. |
+| **Custom Icons Folder** | The full directory path to the folder containing your named icon images. A warning icon will appear if the path is invalid or empty. |
+| **Image Output Format**| **Auto** is recommended. It preserves transparency by outputting a PNG if the source poster was a PNG, otherwise uses JPEG. |
+| **Image Quality (10-100)** | Sets the compression quality for JPEG output. Higher is better. |
+| **Enable image smoothing** | Applies anti-aliasing for smoother icons. Recommended for improving quality, especially on scaled images. |
+| **Enable detailed debug logging** | Writes verbose logs to the main Emby server log, which is useful for diagnosing issues. |
 
-### Icon Profiles
-Profiles are the core of the configuration. You can create different sets of rules and apply them to different libraries. For example, you could have one profile for Movies and another for Kids' TV shows.
+#### Icon Profiles
+Profiles are the core of the configuration. You can create different sets of rules and apply them to different libraries.
 
 *   **Editing Profile**: Use this dropdown to switch between profiles you want to edit.
-*   **Add Profile (`+`)**: Creates a new profile, inheriting the settings from the currently selected profile.
-*   **Rename Profile**: Renames the currently selected profile.
-*   **Delete Profile (``)**: Deletes the currently selected profile. You cannot delete the last profile.
+*   **Add (`+`)**: Creates a new profile with default settings.
+*   **Rename**: Renames the currently selected profile.
+*   **Delete (``)**: Deletes the currently selected profile. You cannot delete the last one.
 
-### Profile Settings
-All settings below this point are **specific to the currently selected profile.**
+All settings below this point are **specific to the profile selected in the "Editing Profile" dropdown.**
 
-#### Assign to Libraries
-In this section, check the box next to each library you want this profile's settings to apply to. An unassigned library will not have any icons.
+#### Profile Settings
+*   **Assign this profile to libraries**: Check the box next to each library you want this profile to apply to. An unassigned library will not have any icons.
+*   **Image Type Settings**: Select which image types (Posters, Thumbs, Banners) should have icons overlaid for this profile.
 
-#### TV Show Settings
+##### TV Show & Collection Settings
+These settings control how icons are aggregated from child items to the parent Series or Collection poster.
+
 | Setting | Description |
 | :--- | :--- |
 | **Show overlays on episode images** | When disabled, overlays will only appear on movies, series, and seasons. |
-| **Show icons on series/seasons** | Icons will only appear on a series/season poster if all child episodes share the same property. |
-| **Use Lite Mode for series scans** | Faster, but less accurate. Only checks the first episode to determine icons for the entire series. |
+| **Show icons on TV show/collection posters**| Icons appear only if all child items share the same property. Language icons require a perfect match of the display language. |
+| **Exclude 'Specials' season...** | When enabled, episodes in the 'Specials' season won't affect the icons shown on the main series poster. |
+| **Use Lite Mode...** | A faster, but less accurate scan. Only checks the first episode/item to determine icons for the entire series/collection. |
 
-#### Alignment, Layout & Priority
-This is where you control the visual placement of the icons. For each icon category, you can independently configure:
-*   **Alignment**: Set the corner for the icons to appear (Top Left, Top Right, Bottom Left, Bottom Right). Set to **Disabled** to hide this icon type for this profile.
-*   **Priority**: Set the drawing order for icons in the same corner. A lower number (like 1) will be drawn first (top-most or left-most). A higher number (like 10) will be drawn after.
+##### Alignment, Layout & Priority
+This grid gives you precise control over the visual placement of icons. For each icon category, you can independently configure:
+*   **Alignment**: Sets the corner for the icons (e.g., Top Left, Bottom Right). `Disabled` hides this icon type.
+*   **Priority**: Sets the drawing order for all icon groups assigned to the **same corner**. A lower number (like 1) is drawn first (top-most or left-most). A higher number (like 12) is drawn after. This allows you to fine-tune the stacking order.
 *   **Layout Horizontally**: Check this to stack multiple icons of the same type side-by-side. Uncheck to stack them vertically.
 
-You can also customize the appearance of the community rating score:
-*   **Rating Background Shape**: Choose between None, a Circle, or a Square behind the score text.
-*   **Background Color & Opacity**: Select the color and transparency of the background shape.
+You can also customize the appearance of the community rating score's background shape, color, and opacity.
 
-#### Advanced Profile Settings
-| Setting | Description |
-| :--- | :--- |
-| **Icon Size (%)** | Size of icons relative to the poster's height (1-100). |
-| **Image Quality (10-100)** | Set the output JPEG quality for the final image. |
-| **Enable image smoothing** | Enable anti-aliasing for smoother icons. Can improve quality, especially on scaled images. |
+##### Advanced Profile Settings
+*   **Icon Size (% of poster height)**: Adjust the general size of all icons for this profile.
 
-Below these sections, you can also find options for global debug logging and a button to **Clear Icon Cache**. If you have added, removed,or changed any icon files, click this to apply the changes.
+---
 
-### Icon Manager
-This tool scans your media library and your custom icons folder to help you identify which icons are **Missing** (needed by your library but not found in your folder), **Found** (correctly used), or **Unused** (exist in your folder but are not needed by any media).
-1. Click the **Scan Library & Icons** button.
-2. The scan may take several minutes on large libraries. The results are cached until the next server restart.
-3. Review the collapsible sections to see which icon files you may need to add or can safely remove.
+### Icon Manager Tab
+This tool scans your media library and your custom icons folder to help you identify which icons are:
+*   **Missing**: Needed by your library but not found in your folder.
+*   **Found**: Correctly named and used by your library.
+*   **Unused**: Exist in your folder but are not needed by any media.
+
+Simply click the **Scan Library & Icons** button. The scan may take several minutes on large libraries, but results are cached.
+
+### Troubleshooter Tab
+This page contains two powerful utilities for diagnosing common issues.
+
+#### Series Troubleshooter
+Many icons (like Audio Language or Resolution) will only appear on a TV Show's poster if **all** of its episodes share that same property. This tool helps you find the inconsistencies.
+1.  **Select Checks**: Uncheck any properties you don't care about to speed up the scan.
+2.  **Scan a Show**: Search for a specific TV show and click "Scan Selected Show".
+3.  **Scan All Shows**: Click "Scan All TV Shows for Inconsistencies" to run a full library report.
+4.  The report will list any shows that have mismatches and show you exactly which episodes are different.
+
+#### Aspect Ratio Calculator
+If you are creating a custom aspect ratio icon and the "Snap to nearest" setting isn't working for your video's unique resolution, this tool can help.
+1.  Enter your video's width and height in pixels.
+2.  Click **Calculate**.
+3.  The tool will provide the exact icon name to use for precise matching (e.g., `` `ar.32x9.png` ``).
 
 ---
 
 ## Troubleshooting
 *   **Icons Not Appearing:**
-    1.  **Check Profile Assignment**: Ensure the library you are viewing has been assigned a profile on the configuration page.
-    2.  **Check Alignment**: In the active profile for that library, make sure the icon type you want to see is **not** set to `Disabled`.
-    3.  **Check Folder & Permissions**: Double-check that the **Custom Icons Folder** path is correct and that the Emby Server process has permission to read it.
-    4.  **Check Naming Convention**: Ensure your icon files are named *exactly* according to the `prefix.name.png` convention. Use the **Icon Manager** to see what names the plugin is looking for.
-    5.  **Check Metadata**: For a language icon to show, the audio or subtitle track must be correctly identified by Emby. Verify the metadata for the item in question.
-*   **Icons Not Updating:** If you change an icon file, modify plugin settings, or update media tags, Emby's image cache may still show the old poster.
-    1.  Go to the plugin settings page and click the **Clear Icon Cache** button. Your posters will update as you browse your library.
-    2.  If that doesn't work, force a full refresh. In the Emby Dashboard, go to **Scheduled Tasks -> Refresh Metadata**. Run the task for the specific library and ensure "Replace existing images" is checked.
-*   **TV Show Icons:** Remember that with the "Show icons on series/seasons" setting enabled (and Lite Mode disabled), an icon will only appear on a series poster if **every single episode** has that property. If a series has 10 episodes in 4K and one in 1080p, the `res.4k.png` icon will not be shown on the series poster.
+    1.  **Profile & Alignment**: Ensure the library is assigned to a profile and the icon type you want to see is **not** set to `Disabled` in that profile's alignment settings.
+    2.  **Folder & Naming**: Double-check the **Custom Icons Folder** path and verify your icon files are named *exactly* according to the convention. Use the **Icon Manager** to see the names the plugin expects.
+    3.  **Metadata**: For language, codec, or resolution icons to show, the media file must have that information correctly identified by Emby. Verify the item's metadata in the web UI.
+*   **TV Show Icons Are Missing:**
+    *   This is the most common issue. By default, an icon (e.g., `` `res.4k.png` ``) will **only** appear on a series poster if **every single episode** is 4K. If even one episode is 1080p, the icon will not show.
+    *   Use the **Series Troubleshooter** tab to find these inconsistencies.
+    *   Alternatively, enable **Use Lite Mode for TV show scans**, which will base the icons on only the first episode, though this is less accurate.
+*   **Icons Not Updating After Changes:**
+    *   If you've changed settings or updated your icon files, you may need to clear Emby's caches.
+    *   First, go to the plugin's **Settings** tab and click the **Clear Icon Cache** button at the bottom. Browse to a poster to see if it updates.
+    *   If that doesn't work, perform a full image refresh. In the Emby Dashboard, go to **Scheduled Tasks -> Refresh People/Library Metadata**. Run the task for the specific library and ensure "Replace existing images" is checked.
 
 ---
 ## Acknowledgements
--   Many thanks to Neminem, keitaro26, and Bakes82 in the Emby Forums for the help with this plugin!
--   A shoutout to Craggles for the awesome icons!
--   Special thanks to Alexander Hürter for supporting the project
+-   Many thanks to **Neminem**, **keitaro26**, and **Bakes82** from the Emby Community for their help and testing.
+-   A shoutout to **Craggles** for the awesome default icons!
+-   Special thanks to **Alexander Hürter** for supporting the project.
 
-If you like the plugin and want to [Buy me a coffee](https://buymeacoffee.com/yockser)
+If you enjoy this plugin and wish to show your appreciation, you can...
+
+<a href="https://buymeacoffee.com/yockser" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
