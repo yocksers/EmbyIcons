@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -23,6 +23,8 @@ namespace EmbyIcons
     public partial class EmbyIconsEnhancer : IImageEnhancer, IDisposable
     {
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+        private const int MaxConcurrencyLocks = 500;
+
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
 
@@ -30,12 +32,8 @@ namespace EmbyIcons
             new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
 
         internal readonly IconCacheManager _iconCacheManager;
-        internal static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
-
         private readonly OverlayDataService _overlayDataService;
         private readonly ImageOverlayService _imageOverlayService;
-
-        private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
 
         internal static readonly SKPaint ResamplingPaint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
         internal static readonly SKPaint AliasedPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None };
@@ -45,7 +43,7 @@ namespace EmbyIcons
 
         public ILogger Logger => _logger;
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager, IUserViewManager userViewManager, ILogManager logManager)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
@@ -60,61 +58,24 @@ namespace EmbyIcons
         public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
-            ClearAllItemDataCaches();
             await _iconCacheManager.RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
-        }
-
-        public void ClearAllItemDataCaches()
-        {
-            _seriesAggregationCache.Clear();
-            _episodeIconCache.Clear();
-            _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
-        }
-
-        public void ForceSeriesRefresh(Guid seriesId)
-        {
-            ClearSeriesAggregationCache(seriesId);
-            var episodesToClear = _episodeIconCache.Where(kvp =>
-                _libraryManager.GetItemById(kvp.Key) is Episode ep &&
-                ep.Series?.Id == seriesId).ToList();
-            foreach (var episode in episodesToClear)
-            {
-                _episodeIconCache.TryRemove(episode.Key, out _);
-            }
         }
 
         private BaseItem GetFullItem(BaseItem item)
         {
-            if ((item is Series || item is BoxSet) && item.Id == Guid.Empty && item.InternalId > 0)
-            {
-                var fullItem = _libraryManager.GetItemById(item.InternalId);
-                return fullItem ?? item;
-            }
-            return item;
-        }
+            BaseItem? fullItem = null;
 
-        public void PruneSeriesAggregationCache()
-        {
-            var now = DateTime.UtcNow;
-            int removed = 0;
-            foreach (var kvp in _seriesAggregationCache.ToList())
+            if (item.Id != Guid.Empty)
             {
-                if (now - kvp.Value.Timestamp > SeriesAggregationPruneInterval)
-                {
-                    if (_seriesAggregationCache.TryRemove(kvp.Key, out _)) removed++;
-                }
+                fullItem = _libraryManager.GetItemById(item.Id);
             }
-            if (removed > 0 && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false))
-                _logger.Debug($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
-        }
 
-        public void ClearSeriesAggregationCache(Guid seriesId)
-        {
-            if (seriesId != Guid.Empty && _seriesAggregationCache.TryRemove(seriesId, out _))
+            if (fullItem == null && item.InternalId > 0)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                    _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
+                fullItem = _libraryManager.GetItemById(item.InternalId);
             }
+
+            return fullItem ?? item;
         }
 
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
@@ -123,7 +84,9 @@ namespace EmbyIcons
         {
             if (item == null) return false;
 
-            var profile = Plugin.Instance?.GetProfileForItem(item);
+            var fullItem = GetFullItem(item);
+
+            var profile = Plugin.Instance?.GetProfileForItem(fullItem);
             if (profile == null) return false;
 
             var options = profile.Settings;
@@ -138,10 +101,12 @@ namespace EmbyIcons
 
             if (!isTypeSupported) return false;
 
-            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo || item is BoxSet;
+            bool isSupportedType = fullItem is Video || fullItem is Series || fullItem is Season || fullItem is Photo || fullItem is BoxSet;
             if (!isSupportedType) return false;
 
-            if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
+            if (fullItem is Episode && !options.ShowOverlaysForEpisodes) return false;
+            if (fullItem is Series && !options.ShowSeriesIconsIfAllEpisodesHaveLanguage) return false;
+            if (fullItem is BoxSet && !options.ShowCollectionIconsIfAllChildrenHaveLanguage) return false;
 
             return options.AudioIconAlignment != IconAlignment.Disabled ||
                    options.SubtitleIconAlignment != IconAlignment.Disabled ||
@@ -159,29 +124,44 @@ namespace EmbyIcons
         private static string SanitizeTagForKey(string tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
+
             Span<char> buf = stackalloc char[tag.Length];
-            int j = 0;
-            bool lastDash = false;
-            for (int i = 0; i < tag.Length; i++)
+            int writeIndex = 0;
+            bool lastWasWhitespace = true;
+
+            foreach (char c in tag)
             {
-                char c = char.ToLowerInvariant(tag[i]);
                 if (char.IsWhiteSpace(c))
                 {
-                    if (!lastDash && j > 0)
+                    if (!lastWasWhitespace)
                     {
-                        buf[j++] = '-';
-                        lastDash = true;
+                        buf[writeIndex++] = '-';
+                        lastWasWhitespace = true;
                     }
-                    continue;
                 }
-                lastDash = false;
-                buf[j++] = c;
+                else
+                {
+                    buf[writeIndex++] = char.ToLowerInvariant(c);
+                    lastWasWhitespace = false;
+                }
             }
-            int start = 0;
-            while (start < j && buf[start] == '-') start++;
-            int end = j - 1;
-            while (end >= start && buf[end] == '-') end--;
-            return (start > end) ? string.Empty : new string(buf.Slice(start, end - start + 1));
+
+            if (writeIndex > 0 && buf[writeIndex - 1] == '-')
+            {
+                writeIndex--;
+            }
+
+            return (writeIndex == 0) ? string.Empty : new string(buf.Slice(0, writeIndex));
+        }
+
+        private static string? GetTagsCacheKey(IReadOnlyList<string> tags)
+        {
+            if (tags == null || tags.Count == 0)
+            {
+                return null;
+            }
+
+            return string.Join(",", tags.Select(SanitizeTagForKey).Where(t => !string.IsNullOrEmpty(t)).OrderBy(t => t, StringComparer.Ordinal));
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
@@ -189,15 +169,17 @@ namespace EmbyIcons
             var plugin = Plugin.Instance;
             if (plugin == null) return "";
 
-            var profile = plugin.GetProfileForItem(item);
+            var fullItem = GetFullItem(item);
+
+            var profile = plugin.GetProfileForItem(fullItem);
             if (profile == null) return "";
 
             var globalOptions = plugin.GetConfiguredOptions();
             var options = profile.Settings;
             var sb = new StringBuilder(512);
 
-            sb.Append("ei6_")
-              .Append(item.Id.ToString("N")).Append('_').Append((int)imageType)
+            sb.Append("ei7_")
+              .Append(fullItem.Id.ToString("N")).Append('_').Append((int)imageType)
               .Append("_v").Append(plugin.ConfigurationVersion)
               .Append("_p").Append(profile.Id.ToString("N"));
 
@@ -222,34 +204,29 @@ namespace EmbyIcons
             sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
             sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
 
-            if (item is Series series)
+            if (fullItem is Series series)
             {
-                var fullSeries = GetFullItem(series) as Series ?? series;
-                var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, globalOptions);
+                var aggResult = GetOrBuildAggregatedDataForParent(series, profile, options, globalOptions);
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
-            else if (item is BoxSet collection)
+            else if (fullItem is BoxSet collection)
             {
-                var fullCollection = GetFullItem(collection) as BoxSet ?? collection;
-                var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, globalOptions);
+                var aggResult = GetOrBuildAggregatedDataForParent(collection, profile, options, globalOptions);
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else
             {
-                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHashV2(item, item.GetMediaStreams() ?? new List<MediaStream>()));
+                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHashV2(fullItem, fullItem.GetMediaStreams() ?? new List<MediaStream>()));
             }
 
-            if (item.Tags != null && item.Tags.Length > 0)
+            var tagsKey = GetTagsCacheKey(fullItem.Tags);
+            if (tagsKey != null)
             {
-                var normalizedTags = item.Tags
-                    .Select(SanitizeTagForKey)
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .OrderBy(t => t);
-                sb.Append("_t").Append(string.Join(",", normalizedTags));
+                sb.Append("_t").Append(tagsKey);
             }
 
-            sb.Append("_r").Append(item.CommunityRating?.ToString("F1") ?? "N");
-            sb.Append("_d").Append(item.DateModified.Ticks);
+            sb.Append("_r").Append(fullItem.CommunityRating?.ToString("F1") ?? "N");
+            sb.Append("_d").Append(fullItem.DateModified.Ticks);
             return sb.ToString();
         }
 
@@ -262,7 +239,9 @@ namespace EmbyIcons
             var plugin = Plugin.Instance;
             if (plugin == null) return;
 
-            var profile = plugin.GetProfileForItem(item);
+            var fullItem = GetFullItem(item);
+
+            var profile = plugin.GetProfileForItem(fullItem);
             if (profile == null)
             {
                 await FileUtils.SafeCopyAsync(inputFile, outputFile, cancellationToken);
@@ -275,12 +254,11 @@ namespace EmbyIcons
             await _globalConcurrencyLock.WaitAsync(cancellationToken);
             try
             {
-                var sem = _locks.GetOrAdd(item.Id.ToString(), _ => new SemaphoreSlim(1, 1));
+                var sem = _locks.GetOrAdd(fullItem.Id.ToString(), _ => new SemaphoreSlim(1, 1));
                 await sem.WaitAsync(cancellationToken);
                 try
                 {
-                    item = GetFullItem(item);
-                    var overlayData = _overlayDataService.GetOverlayData(item, profileOptions, globalOptions);
+                    var overlayData = _overlayDataService.GetOverlayData(fullItem, profile, profileOptions, globalOptions);
 
                     using var sourceBitmap = SKBitmap.Decode(inputFile);
                     if (sourceBitmap == null)
@@ -302,25 +280,22 @@ namespace EmbyIcons
 
                     try
                     {
-                        if (File.Exists(outputFile))
-                        {
-                            File.Replace(tempOutput, outputFile, null);
-                        }
-                        else
-                        {
-                            File.Move(tempOutput, outputFile);
-                        }
+                        File.Move(tempOutput, outputFile, true);
                     }
-                    catch (IOException ioEx) when (ioEx.Message.Contains("volume", StringComparison.OrdinalIgnoreCase))
+                    catch (IOException)
                     {
-                        File.Copy(tempOutput, outputFile, overwrite: true);
+                        File.Copy(tempOutput, outputFile, true);
                         File.Delete(tempOutput);
                     }
                 }
                 finally
                 {
                     sem.Release();
-                    _locks.TryRemove(item.Id.ToString(), out _);
+
+                    if (_locks.TryRemove(fullItem.Id.ToString(), out var removedSem))
+                    {
+                        removedSem.Dispose();
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -337,6 +312,15 @@ namespace EmbyIcons
             finally
             {
                 _globalConcurrencyLock.Release();
+
+                if (_locks.Count > MaxConcurrencyLocks)
+                {
+                    var keyToRemove = _locks.Keys.FirstOrDefault();
+                    if (keyToRemove != null && _locks.TryRemove(keyToRemove, out var semToDispose))
+                    {
+                        semToDispose.Dispose();
+                    }
+                }
             }
         }
 
@@ -350,8 +334,11 @@ namespace EmbyIcons
             foreach (var sem in _locks.Values)
                 sem.Dispose();
             _locks.Clear();
+
+            (_imageOverlayService as IDisposable)?.Dispose();
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();
+
             ResamplingPaint.Dispose();
             AliasedPaint.Dispose();
             TextPaint.Dispose();

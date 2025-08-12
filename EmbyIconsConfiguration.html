@@ -124,6 +124,10 @@
                             <div class="fieldDescription checkboxFieldDescription">Language icons require all child episodes share the same language (matched by the display language name).</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="ExcludeSpecialsFromSeriesAggregation" /><span>Exclude 'Specials' season from series icon calculations</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">When enabled, episodes in the 'Specials' season won't affect the icons shown on the main series poster.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for TV show scans</span></label>
                             <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
                         </div>
@@ -207,6 +211,13 @@
                                         <select is="emby-select" label="Priority" data-profile-key="AspectRatioIconPriority" data-corner-group="BottomRight"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="AspectRatioOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 1em;">
+                                        <label>
+                                            <input is="emby-checkbox" type="checkbox" data-profile-key="SnapAspectRatioToCommon" />
+                                            <span>Snap to nearest common ratio</span>
+                                        </label>
+                                        <div class="fieldDescription checkboxFieldDescription">When enabled, snaps calculated ratios to the closest common standard (e.g. 16:9, 2.39:1). When disabled, it uses the precise ratio from the file's metadata.</div>
+                                    </div>
                                 </div>
                                 <div>
                                     <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
@@ -339,6 +350,42 @@
 
                     <div id="seriesReportContainer" style="margin-top: 2em;">
                         <!-- Report will be injected here by JavaScript -->
+                    </div>
+
+                    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>
+                    <p class="fieldDescription">
+                        Enter your video's resolution to find the correct icon name for its aspect ratio.
+                    </p>
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1.5em; align-items: flex-end;">
+                            <div class="inputContainer" style="margin: 0;">
+                                <input is="emby-input" type="number" id="txtAspectRatioWidth" label="Video Width (pixels):" min="1" />
+                            </div>
+                            <div class="inputContainer" style="margin: 0;">
+                                <input is="emby-input" type="number" id="txtAspectRatioHeight" label="Video Height (pixels):" min="1" />
+                            </div>
+                            <button is="emby-button" type="button" class="raised button-submit" id="btnCalculateAspectRatio" style="margin-bottom: 0.5em;">
+                                <span>Calculate</span>
+                            </button>
+                        </div>
+                        <div id="aspectRatioResultContainer" style="margin-top: 2em; display: none;">
+                            <h3 style="margin-top:0;">Results</h3>
+                            <p class="fieldDescription">
+                                <strong>Decimal Ratio:</strong> <span id="aspectDecimalValue"></span>
+                            </p>
+                            <div style="background-color: rgba(128,128,128,0.1); padding: 0.5em 1em; border-radius: 4px; margin-top: 1em;">
+                                <p class="fieldDescription" style="margin-bottom: 0.5em;">
+                                    For 'Snap to nearest' enabled:
+                                </p>
+                                <code>ar.<span id="aspectSnappedIconName"></span>.png</code>
+                            </div>
+                            <div style="background-color: rgba(128,128,128,0.1); padding: 0.5em 1em; border-radius: 4px; margin-top: 1em;">
+                                <p class="fieldDescription" style="margin-bottom: 0.5em;">
+                                    For precise matching ('Snap to nearest' disabled):
+                                </p>
+                                <code>ar.<span id="aspectPreciseIconName"></span>.png</code>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

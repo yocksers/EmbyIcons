@@ -4,8 +4,10 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Querying;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -17,6 +19,9 @@ namespace EmbyIcons.Services
 
         private static List<(string Path, string Name, string Id)>? _libraryPathCache;
         private static readonly object _libraryPathCacheLock = new object();
+
+        private static readonly ConcurrentDictionary<Guid, Guid> _itemToProfileIdCache = new();
+        private const int MaxItemToProfileCacheSize = 20000;
 
         public ProfileManagerService(ILibraryManager libraryManager, ILogger logger, PluginOptions configuration)
         {
@@ -30,7 +35,8 @@ namespace EmbyIcons.Services
             lock (_libraryPathCacheLock)
             {
                 _libraryPathCache = null;
-                _logger.Info("[EmbyIcons] Library path cache has been invalidated.");
+                _itemToProfileIdCache.Clear();
+                _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
             }
         }
 
@@ -103,6 +109,14 @@ namespace EmbyIcons.Services
 
         public IconProfile? GetProfileForItem(BaseItem item)
         {
+            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out var cachedProfileId))
+            {
+                if (cachedProfileId == Guid.Empty) return null; // A cached result of "no profile"
+                return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
+            }
+
+            IconProfile? foundProfile;
+
             if (item is BoxSet boxSet)
             {
                 var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
@@ -115,14 +129,32 @@ namespace EmbyIcons.Services
 
                 if (firstChild != null)
                 {
-                    return GetProfileForPath(firstChild.Path);
+                    foundProfile = GetProfileForPath(firstChild.Path);
                 }
-
-                _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
-                return null;
+                else
+                {
+                    _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
+                    foundProfile = null;
+                }
+            }
+            else
+            {
+                foundProfile = GetProfileForPath(item.Path);
             }
 
-            return GetProfileForPath(item.Path);
+            if (item.Id != Guid.Empty)
+            {
+                var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
+                _itemToProfileIdCache[item.Id] = profileIdToCache;
+
+                if (_itemToProfileIdCache.Count > MaxItemToProfileCacheSize)
+                {
+                    var keyToRemove = _itemToProfileIdCache.Keys.FirstOrDefault();
+                    _itemToProfileIdCache.TryRemove(keyToRemove, out _);
+                }
+            }
+
+            return foundProfile;
         }
     }
 }

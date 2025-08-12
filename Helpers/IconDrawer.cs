@@ -1,4 +1,4 @@
-﻿﻿using MediaBrowser.Controller.Entities;
+﻿using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
 using SkiaSharp;
 using System.Collections.Generic;
@@ -68,17 +68,6 @@ namespace EmbyIcons.Helpers
                     currentY += iconHeight + interIconPadding;
                 }
             }
-        }
-
-        public static bool ShouldDrawAnyOverlays(BaseItem item, PluginOptions options)
-        {
-            if (item == null || options == null)
-                return false;
-
-            if (!options.ShowAudioIcons && !options.ShowSubtitleIcons && !options.ShowAudioChannelIcons && !options.ShowVideoFormatIcons)
-                return false;
-
-            return true;
         }
     }
 }

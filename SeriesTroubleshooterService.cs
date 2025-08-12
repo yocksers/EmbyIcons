@@ -94,7 +94,7 @@ namespace EmbyIcons.Services
 
             var allSeries = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Series" }, Recursive = true })
                                            .OfType<Series>()
-                                           .ToDictionary(s => s.InternalId); 
+                                           .ToDictionary(s => s.InternalId);
 
             var allEpisodes = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Recursive = true })
                                              .OfType<Episode>();
@@ -169,7 +169,7 @@ namespace EmbyIcons.Services
             if (runAllChecks || requestedChecks.Contains(CheckNames.AspectRatio))
                 report.Checks.Add(CheckProperty(baseItems, "Aspect Ratio", ep => {
                     var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
-                    var arName = stream != null ? MediaStreamHelper.GetAspectRatioIconName(stream) : null;
+                    var arName = stream != null ? MediaStreamHelper.GetAspectRatioIconName(stream, true) : null;
                     return arName != null ? new List<string> { arName } : new List<string>();
                 }));
 

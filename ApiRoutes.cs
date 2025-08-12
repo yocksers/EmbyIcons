@@ -8,5 +8,6 @@
         public const string Preview = "/EmbyIcons/Preview";
         public const string ValidatePath = "/EmbyIcons/ValidatePath";
         public const string SeriesTroubleshooter = "/EmbyIcons/SeriesTroubleshooter";
+        public const string AspectRatio = "/EmbyIcons/AspectRatio";
     }
 }

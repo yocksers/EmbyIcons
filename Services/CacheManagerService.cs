@@ -18,10 +18,11 @@ namespace EmbyIcons.Services
         private readonly ILogger _logger;
         private readonly EmbyIconsEnhancer _enhancer;
 
-        public CacheManagerService(ILogManager logManager)
+        public CacheManagerService()
         {
-            _logger = logManager.GetLogger(nameof(CacheManagerService));
-            _enhancer = Plugin.Instance?.Enhancer ?? throw new InvalidOperationException("Enhancer is not available.");
+            var pluginInstance = Plugin.Instance ?? throw new InvalidOperationException("Plugin instance is not available.");
+            _logger = pluginInstance.Logger;
+            _enhancer = pluginInstance.Enhancer;
         }
 
         public async Task Post(RefreshCacheRequest request)
@@ -32,7 +33,7 @@ namespace EmbyIcons.Services
             var plugin = Plugin.Instance;
             if (plugin == null)
             {
-                _logger.Warn("[EmbyIcons] Plugin instance not available.");
+                _logger.Warn("[EmbyIcons] Plugin instance not available during cache refresh.");
                 return;
             }
 

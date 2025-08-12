@@ -34,8 +34,9 @@ namespace EmbyIcons.Services
         private readonly ILibraryManager _libraryManager;
         private readonly IconCacheManager _iconCacheManager;
 
-        private static IconManagerReport? _cachedReport;
+        private static (DateTime Timestamp, IconManagerReport Report)? _cachedReport;
         private static readonly object _cacheLock = new object();
+        private static readonly TimeSpan _cacheDuration = TimeSpan.FromHours(12);
 
         public IconManagerService(ILibraryManager libraryManager)
         {
@@ -47,16 +48,18 @@ namespace EmbyIcons.Services
         {
             lock (_cacheLock)
             {
-                if (_cachedReport != null)
+                if (_cachedReport.HasValue && (DateTime.UtcNow - _cachedReport.Value.Timestamp) < _cacheDuration)
                 {
-                    return _cachedReport;
+                    Plugin.Instance?.Logger.Info("[EmbyIcons] Serving cached Icon Manager report.");
+                    return _cachedReport.Value.Report;
                 }
             }
 
             var report = GenerateReport();
+
             lock (_cacheLock)
             {
-                _cachedReport = report;
+                _cachedReport = (DateTime.UtcNow, report);
             }
 
             return report;
@@ -152,7 +155,7 @@ namespace EmbyIcons.Services
                                 if (videoCodec != null) localReport.VideoCodecs.Add(videoCodec);
                                 var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
                                 if (res != null) localReport.Resolutions.Add(res);
-                                var ar = MediaStreamHelper.GetAspectRatioIconName(stream);
+                                var ar = MediaStreamHelper.GetAspectRatioIconName(stream, true);
                                 if (ar != null) localReport.AspectRatios.Add(ar);
                                 break;
                         }
@@ -175,7 +178,6 @@ namespace EmbyIcons.Services
                         threadReport.ParentalRatings.UnionWith(itemReport.ParentalRatings);
                         return threadReport;
                     },
-                    // 3. Combine Accumulators: Merges the results from two parallel threads.
                     combineAccumulatorsFunc: (mainReport, threadReport) =>
                     {
                         mainReport.Languages.UnionWith(threadReport.Languages);

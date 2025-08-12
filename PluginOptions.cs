@@ -145,6 +145,7 @@ namespace EmbyIcons
 
         public bool ShowOverlaysForEpisodes { get; set; } = true;
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; } = true;
+        public bool ExcludeSpecialsFromSeriesAggregation { get; set; } = false;
         public bool ShowCollectionIconsIfAllChildrenHaveLanguage { get; set; } = true;
         public bool UseCollectionLiteMode { get; set; } = true;
 
@@ -187,6 +188,7 @@ namespace EmbyIcons
         public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool AspectRatioOverlayHorizontal { get; set; } = true;
         public int AspectRatioIconPriority { get; set; } = 10;
+        public bool SnapAspectRatioToCommon { get; set; } = true;
 
         public IconAlignment ParentalRatingIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool ParentalRatingOverlayHorizontal { get; set; } = true;

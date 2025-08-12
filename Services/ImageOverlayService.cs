@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Model.Logging;
 using SkiaSharp;
@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    internal class ImageOverlayService
+    internal class ImageOverlayService : IDisposable
     {
         private readonly ILogger _logger;
         private readonly IconCacheManager _iconCache;
@@ -417,6 +417,11 @@ namespace EmbyIcons.Services
 
             var ratingIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, options, cancellationToken);
             return new RatingOverlayInfo(profileOptions.CommunityScoreIconAlignment, profileOptions.CommunityScoreIconPriority, profileOptions.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, ratingIcon);
+        }
+
+        public void Dispose()
+        {
+            _backgroundPaint.Dispose();
         }
     }
 }

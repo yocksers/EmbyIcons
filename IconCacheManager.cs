@@ -17,6 +17,9 @@ namespace EmbyIcons.Helpers
         private readonly ConcurrentDictionary<string, CachedIcon> _iconImageCache = new();
         private readonly ConcurrentDictionary<string, SKImage> _embeddedIconCache = new();
 
+        private const int MaxCustomIconCacheSize = 250;
+        private const int MaxEmbeddedIconCacheSize = 250;
+
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
         private static readonly object _embeddedCacheLock = new object();
         private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
@@ -206,7 +209,20 @@ namespace EmbyIcons.Helpers
             if (stream == null) return Task.FromResult<SKImage?>(null);
             using var data = SKData.Create(stream);
             var img = SKImage.FromEncodedData(data);
-            if (img != null) _embeddedIconCache.TryAdd(baseFileName, img);
+            if (img != null)
+            {
+                _embeddedIconCache.TryAdd(baseFileName, img);
+
+                // *** MEMORY USAGE IMPROVEMENT: Prune the embedded icon cache. ***
+                if (_embeddedIconCache.Count > MaxEmbeddedIconCacheSize)
+                {
+                    var keyToRemove = _embeddedIconCache.Keys.FirstOrDefault();
+                    if (keyToRemove != null && _embeddedIconCache.TryRemove(keyToRemove, out var imageToDispose))
+                    {
+                        imageToDispose.Dispose();
+                    }
+                }
+            }
             return Task.FromResult(img);
         }
 
@@ -224,7 +240,19 @@ namespace EmbyIcons.Helpers
                 using var data = SKData.Create(memoryStream);
                 var img = SKImage.FromEncodedData(data);
                 if (img == null) return null;
+
                 _iconImageCache[cacheKey] = new CachedIcon(img, File.GetLastWriteTimeUtc(iconPath), iconPath);
+
+                // *** MEMORY USAGE IMPROVEMENT: Prune the custom icon cache. ***
+                if (_iconImageCache.Count > MaxCustomIconCacheSize)
+                {
+                    var keyToRemove = _iconImageCache.Keys.FirstOrDefault();
+                    if (keyToRemove != null && _iconImageCache.TryRemove(keyToRemove, out var iconToDispose))
+                    {
+                        iconToDispose.Image?.Dispose();
+                    }
+                }
+
                 return img;
             }
             catch (Exception ex)

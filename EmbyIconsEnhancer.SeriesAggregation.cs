@@ -5,18 +5,28 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        private const int MaxSeriesCacheSize = 500;
+        private static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _aggregationCache = new();
+        private const int MaxAggregationCacheSize = 1000;
+
+        public void InvalidateAggregationCache(Guid parentId)
+        {
+            if (parentId != Guid.Empty && _aggregationCache.TryRemove(parentId, out _))
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug($"[EmbyIcons] Invalidated aggregation cache for item ID: {parentId}");
+            }
+        }
 
         internal record AggregatedSeriesResult
         {
@@ -32,19 +42,7 @@ namespace EmbyIcons
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
         }
 
-        private void PruneSeriesAggregationCacheWithLimit()
-        {
-            if (_seriesAggregationCache.Count > MaxSeriesCacheSize)
-            {
-                var toRemove = _seriesAggregationCache.Count - MaxSeriesCacheSize;
-                if (toRemove <= 0) return;
-                var oldest = _seriesAggregationCache.ToArray().OrderBy(kvp => kvp.Value.Timestamp).Take(toRemove);
-                foreach (var item in oldest) _seriesAggregationCache.TryRemove(item.Key, out _);
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Pruned {toRemove} items from the series aggregation cache.");
-            }
-        }
-
-        internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
+        internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, IconProfile profile, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
             if (parent.Id == Guid.Empty)
             {
@@ -52,9 +50,10 @@ namespace EmbyIcons
                 return new AggregatedSeriesResult();
             }
 
-            if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult))
+            if (_aggregationCache.TryGetValue(parent.Id, out var cachedResult))
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug($"[EmbyIcons] Using cached aggregation data for '{parent.Name}'.");
                 return cachedResult;
             }
 
@@ -94,17 +93,18 @@ namespace EmbyIcons
                 return new AggregatedSeriesResult();
             }
 
-
-            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No valid cache found. Aggregating data for '{parent.Name}' ({parent.Id}). LiteMode: {useLiteMode}.");
-
             var items = _libraryManager.GetItemList(query);
-            if (!items.Any())
+            var itemList = items.ToList();
+
+            if (parent is Series && profileOptions.ExcludeSpecialsFromSeriesAggregation)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
-                return new AggregatedSeriesResult();
+                itemList = itemList.Where(ep => (ep.Parent as Season)?.IndexNumber != 0).ToList();
             }
 
-            var itemList = items.ToList();
+            if (!itemList.Any())
+            {
+                return new AggregatedSeriesResult();
+            }
 
             var firstItem = itemList[0];
             var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
@@ -123,7 +123,7 @@ namespace EmbyIcons
 
             var primaryAudioStream = firstStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
             var commonChannelType = primaryAudioStream != null ? MediaStreamHelper.GetChannelIconName(primaryAudioStream) : null;
-            var commonAspectRatio = MediaStreamHelper.GetAspectRatioIconName(firstVideoStream);
+            var commonAspectRatio = MediaStreamHelper.GetAspectRatioIconName(firstVideoStream, profileOptions.SnapAspectRatioToCommon);
 
             var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
             var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
@@ -174,7 +174,7 @@ namespace EmbyIcons
                 var currentPrimaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
                 if (commonChannelType != null && commonChannelType != (currentPrimaryAudio != null ? MediaStreamHelper.GetChannelIconName(currentPrimaryAudio) : null)) commonChannelType = null;
 
-                var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream);
+                var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream, profileOptions.SnapAspectRatioToCommon);
                 if (commonAspectRatio != null && commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
 
                 var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
@@ -183,39 +183,23 @@ namespace EmbyIcons
                 itemHashes.Add($"{item.Id}:{MediaStreamHelper.GetItemMediaStreamHash(item, streams)}");
             }
 
-            var finalAudioLangs = (profileOptions.AudioIconAlignment != IconAlignment.Disabled)
-                ? (requireAllItemsToMatchForLanguage ? commonAudioLangs : allAudioLangs)
-                : new HashSet<string>();
-            var finalSubtitleLangs = (profileOptions.SubtitleIconAlignment != IconAlignment.Disabled)
-                ? (requireAllItemsToMatchForLanguage ? commonSubtitleLangs : allSubtitleLangs)
-                : new HashSet<string>();
-
+            var finalAudioLangs = (profileOptions.AudioIconAlignment != IconAlignment.Disabled) ? (requireAllItemsToMatchForLanguage ? commonAudioLangs : allAudioLangs) : new HashSet<string>();
+            var finalSubtitleLangs = (profileOptions.SubtitleIconAlignment != IconAlignment.Disabled) ? (requireAllItemsToMatchForLanguage ? commonSubtitleLangs : allSubtitleLangs) : new HashSet<string>();
             var finalAudioCodecs = (profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled) ? commonAudioCodecs : new HashSet<string>();
             var finalVideoCodecs = (profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled) ? commonVideoCodecs : new HashSet<string>();
             var finalChannelTypes = (profileOptions.ChannelIconAlignment != IconAlignment.Disabled && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
             var finalResolutions = (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
             var finalAspectRatios = (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled && commonAspectRatio != null) ? new HashSet<string> { commonAspectRatio } : new HashSet<string>();
-
             var finalVideoFormats = new HashSet<string>();
             if (profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled && itemList.Any())
             {
-                var itemHdrStates = itemList.Select(ep =>
-                {
-                    var streams = ep.GetMediaStreams() ?? new List<MediaStream>();
-                    return MediaStreamHelper.GetVideoFormatIconName(ep, streams);
-                }).ToList();
+                var itemHdrStates = itemList.Select(ep => MediaStreamHelper.GetVideoFormatIconName(ep, ep.GetMediaStreams() ?? new List<MediaStream>())).ToList();
 
                 if (!itemHdrStates.Contains(null))
                 {
-                    var distinctFormats = itemHdrStates.Where(s => s != null).Distinct().ToList();
-                    if (distinctFormats.Count > 1)
-                    {
-                        finalVideoFormats.Add("hdr");
-                    }
-                    else if (distinctFormats.Count == 1)
-                    {
-                        finalVideoFormats.Add(distinctFormats.First()!);
-                    }
+                    var distinctFormats = itemHdrStates.Where(s => s != null).Select(s => s!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (distinctFormats.Count > 1) finalVideoFormats.Add("hdr");
+                    else if (distinctFormats.Count == 1) finalVideoFormats.Add(distinctFormats.First());
                 }
             }
 
@@ -223,7 +207,7 @@ namespace EmbyIcons
             using var md5 = MD5.Create();
             var hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(combinedHashString));
 
-            var result = new AggregatedSeriesResult
+            var finalResult = new AggregatedSeriesResult
             {
                 Timestamp = DateTime.UtcNow,
                 AudioLangs = finalAudioLangs,
@@ -237,9 +221,31 @@ namespace EmbyIcons
                 CombinedEpisodesHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
             };
 
-            _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-            PruneSeriesAggregationCacheWithLimit();
-            return result;
+            _aggregationCache[parent.Id] = finalResult;
+
+            if (_aggregationCache.Count > MaxAggregationCacheSize)
+            {
+                Task.Run(() =>
+                {
+                    var itemsToRemoveCount = _aggregationCache.Count - (MaxAggregationCacheSize - (MaxAggregationCacheSize / 10));
+                    if (itemsToRemoveCount <= 0) return;
+
+                    var oldestKeys = _aggregationCache.ToArray()
+                        .OrderBy(kvp => kvp.Value.Timestamp)
+                        .Take(itemsToRemoveCount)
+                        .Select(kvp => kvp.Key);
+
+                    foreach (var key in oldestKeys)
+                    {
+                        _aggregationCache.TryRemove(key, out _);
+                    }
+                });
+            }
+
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                _logger.Debug($"[EmbyIcons] Stored new aggregation data in cache for '{parent.Name}'.");
+
+            return finalResult;
         }
     }
 }

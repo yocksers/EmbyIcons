@@ -71,29 +71,46 @@ namespace EmbyIcons.Helpers
             }
         }
 
-        public static string? GetAspectRatioIconName(MediaStream? videoStream)
+        public static string? GetAspectRatioIconName(int width, int height, bool snapToCommon)
+        {
+            if (!snapToCommon || height <= 0) return null;
+
+            var ratio = (double)width / height;
+            var pairs = new (double v, string name)[] {
+                (16.0/9.0, "16x9"),
+                (21.0/9.0, "21x9"),
+                (2.35, "2.35x1"),
+                (2.39, "2.39x1"),
+                (2.40, "2.40x1"),
+                (1.85, "1.85x1"),
+                (4.0/3.0, "4x3"),
+            };
+
+            var best = pairs.OrderBy(p => Math.Abs(p.v - ratio)).First();
+
+            if (Math.Abs(best.v - ratio) < 0.1)
+            {
+                return best.name;
+            }
+
+            return null;
+        }
+
+        public static string? GetAspectRatioIconName(MediaStream? videoStream, bool snapToCommon)
         {
             if (videoStream == null) return null;
 
-            if (!string.IsNullOrWhiteSpace(videoStream.AspectRatio))
+            if (snapToCommon && videoStream.Width.HasValue && videoStream.Height.HasValue)
             {
-                var ar = videoStream.AspectRatio.Trim().ToLowerInvariant();
-                ar = ar.Replace(':', 'x');
-                return ar;
+                var snappedName = GetAspectRatioIconName(videoStream.Width.Value, videoStream.Height.Value, true);
+                if (snappedName != null) return snappedName;
             }
 
-            if (videoStream.Width.HasValue && videoStream.Height.HasValue && videoStream.Height.Value != 0)
+            if (!string.IsNullOrWhiteSpace(videoStream.AspectRatio))
             {
-                var ratio = (double)videoStream.Width.Value / videoStream.Height.Value;
-                // Snap to common ratios
-                var pairs = new (double v, string name)[] {
-                    (16.0/9.0, "16x9"),
-                    (4.0/3.0, "4x3"),
-                    (21.0/9.0, "21x9"),
-                };
-                var best = pairs.OrderBy(p => Math.Abs(p.v - ratio)).First();
-                if (Math.Abs(best.v - ratio) < 0.03) return best.name;
+                return videoStream.AspectRatio.Trim().ToLowerInvariant().Replace(':', 'x');
             }
+
             return null;
         }
 
@@ -125,36 +142,16 @@ namespace EmbyIcons.Helpers
             {
                 var videoRange = videoStream.VideoRange.ToLowerInvariant();
 
-                if (videoRange.Contains("dolby") || videoRange.Contains("dv"))
-                {
-                    hasDV = true;
-                }
-                if (videoRange.Contains("hdr10+"))
-                {
-                    hasHDR10Plus = true;
-                }
-                if (videoRange.Contains("hdr"))
-                {
-                    hasHDR = true;
-                }
+                if (videoRange.Contains("dolby") || videoRange.Contains("dv")) hasDV = true;
+                if (videoRange.Contains("hdr10+")) hasHDR10Plus = true;
+                if (videoRange.Contains("hdr")) hasHDR = true;
             }
 
             var title = ((item.Path ?? "") + " " + (item.Name ?? "")).ToLowerInvariant();
 
-            if (title.Contains("dolby vision") || title.Contains("dolbyvision"))
-            {
-                hasDV = true;
-            }
-
-            if (title.Contains("hdr10+") || title.Contains("hdr10plus"))
-            {
-                hasHDR10Plus = true;
-            }
-
-            if (hasHDR10Plus || title.Contains("hdr"))
-            {
-                hasHDR = true;
-            }
+            if (title.Contains("dolby vision") || title.Contains("dolbyvision")) hasDV = true;
+            if (title.Contains("hdr10+") || title.Contains("hdr10plus")) hasHDR10Plus = true;
+            if (hasHDR10Plus || title.Contains("hdr")) hasHDR = true;
 
             if (hasDV) return "dv";
             if (hasHDR10Plus) return "hdr10plus";
@@ -183,7 +180,7 @@ namespace EmbyIcons.Helpers
             parts.Add(videoStream != null ? GetVideoCodecIconName(videoStream) ?? "none" : "none");
             var audioStreamForChannels = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
             parts.Add(audioStreamForChannels != null ? GetChannelIconName(audioStreamForChannels) ?? "none" : "none");
-            parts.Add(videoStream != null ? GetAspectRatioIconName(videoStream) ?? "none" : "none");
+            parts.Add(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
             parts.Add(item.DateModified.Ticks.ToString());
 
             using (var md5 = System.Security.Cryptography.MD5.Create())
@@ -222,7 +219,7 @@ namespace EmbyIcons.Helpers
             var audioStreamForChannels = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
             parts.Add(audioStreamForChannels != null ? (GetChannelIconName(audioStreamForChannels) ?? "none") : "none");
 
-            var aspect = videoStream != null ? (GetAspectRatioIconName(videoStream) ?? "none") : "none";
+            var aspect = videoStream != null ? (GetAspectRatioIconName(videoStream, true) ?? "none") : "none";
             parts.Add(aspect);
 
             parts.Add(item.DateModified.Ticks.ToString());

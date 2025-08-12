@@ -2,13 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal static readonly ConcurrentDictionary<Guid, EpisodeIconInfo> _episodeIconCache = new();
-        private const int MaxEpisodeCacheSize = 2000;
+        internal static readonly ConcurrentDictionary<string, EpisodeIconInfo> _episodeIconCache = new();
+        private const int MaxEpisodeCacheSize = 5000;
 
         public record EpisodeIconInfo
         {
@@ -26,14 +27,35 @@ namespace EmbyIcons
             public DateTime DateCached { get; init; }
         }
 
+        public EpisodeIconInfo GetOrAddEpisodeIconInfo(string key, Func<string, EpisodeIconInfo> factory)
+        {
+            if (_episodeIconCache.TryGetValue(key, out var info))
+            {
+                return info;
+            }
+
+            var newInfo = factory(key);
+            _episodeIconCache[key] = newInfo;
+
+            PruneEpisodeCache();
+
+            return newInfo;
+        }
+
+
         /// <param name="episodeId">The ID of the episode to clear from the cache.</param>
         public void ClearEpisodeIconCache(Guid episodeId)
         {
             if (episodeId == Guid.Empty) return;
 
-            if (_episodeIconCache.TryRemove(episodeId, out _))
+            var keysToRemove = _episodeIconCache.Keys.Where(k => k.StartsWith(episodeId.ToString())).ToList();
+            foreach (var key in keysToRemove)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
+                if (_episodeIconCache.TryRemove(key, out _))
+                {
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                        _logger.Debug($"[EmbyIcons] Cleared episode cache for key: {key}");
+                }
             }
         }
 
@@ -41,18 +63,24 @@ namespace EmbyIcons
         {
             if (_episodeIconCache.Count > MaxEpisodeCacheSize)
             {
-                var toRemove = _episodeIconCache.Count - MaxEpisodeCacheSize;
-                if (toRemove <= 0) return;
-
-                var oldest = _episodeIconCache.ToArray()
-                    .OrderBy(kvp => kvp.Value.DateCached)
-                    .Take(toRemove);
-
-                foreach (var item in oldest)
+                Task.Run(() =>
                 {
-                    _episodeIconCache.TryRemove(item.Key, out _);
-                }
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Pruned {toRemove} items from the episode icon cache.");
+                    var itemsToRemoveCount = _episodeIconCache.Count - MaxEpisodeCacheSize;
+                    if (itemsToRemoveCount <= 0) return;
+
+                    var oldestKeys = _episodeIconCache.ToArray()
+                        .OrderBy(kvp => kvp.Value.DateCached)
+                        .Take(itemsToRemoveCount)
+                        .Select(kvp => kvp.Key);
+
+                    foreach (var key in oldestKeys)
+                    {
+                        _episodeIconCache.TryRemove(key, out _);
+                    }
+
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                        _logger.Debug($"[EmbyIcons] Pruned {itemsToRemoveCount} items from the episode icon cache to maintain size limits.");
+                });
             }
         }
     }
