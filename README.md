@@ -85,7 +85,7 @@ Icons are identified using a strict prefix-based naming scheme: `` `prefix.name.
 | Aspect Ratio | `ar` | `ar.{ratio}.png` | Colon is replaced with 'x'. Ex: `ar.16x9.png`, `ar.2.39x1.png` |
 | Parental Rating | `pr` | `pr.{rating}.png` | Lowercased rating from Emby. Slashes are replaced with hyphens. Ex: `pr.pg-13.png`, `pr.tv-ma.png` |
 | Custom Tag | `tag` | `tag.{tag-name}.png` | Matches against media tags. The tag is lowercased and spaces are replaced with hyphens. Ex: `tag.3d.png`, `tag.directors-cut.png`|
-| Community Rating | `rating`| `rating.{name}.png` | A static icon shown next to the community score. Ex: `rating.imdb.png` |
+| Community Rating | `rating`| `rating.imdb.png` | A static icon shown next to the community score.|
 
 ---
 ## Configuration Guide
