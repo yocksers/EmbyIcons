@@ -40,7 +40,7 @@ namespace EmbyIcons
 
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
-        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager);
+        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
         private ProfileManagerService ProfileManager => _profileManager ??= new ProfileManagerService(_libraryManager, _logger, Configuration);
         private ConfigurationMonitor ConfigMonitor => _configMonitor ??= new ConfigurationMonitor(_logger, _libraryManager, _fileSystem);
 
@@ -134,32 +134,18 @@ namespace EmbyIcons
             {
                 enhancer.InvalidateAggregationCache(seriesToUpdate.Id);
                 _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; queueing background re-aggregation for parent series '{seriesToUpdate.Name}' ({seriesToUpdate.Id}).");
-
-                Task.Run(() =>
-                {
-                    try
-                    {
-                        var profile = GetProfileForItem(seriesToUpdate);
-                        if (profile == null) return;
-                        enhancer.GetOrBuildAggregatedDataForParent(seriesToUpdate, profile, profile.Settings, Configuration);
-
-                        if (Configuration.EnableDebugLogging)
-                            _logger.Debug($"[EmbyIcons] Background re-aggregation complete for '{seriesToUpdate.Name}'.");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.ErrorException($"[EmbyIcons] Error during background re-aggregation for series '{seriesToUpdate.Name}'.", ex);
-                    }
-                });
+                enhancer.QueueItemUpdate(seriesToUpdate);
             }
 
             if (e.Item is Episode || e.Item is Movie)
             {
                 if (e.Item.Id != Guid.Empty)
                 {
-                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; invalidating its data caches.");
+                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; invalidating its data caches and queueing for hash update.");
+                    enhancer.InvalidateItemHashCache(e.Item.Id);
                     OverlayDataService.InvalidateCacheForItem(e.Item.Id);
                     enhancer.ClearEpisodeIconCache(e.Item.Id);
+                    enhancer.QueueItemUpdate(e.Item);
                 }
             }
         }

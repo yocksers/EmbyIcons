@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using SkiaSharp;
 using System;
@@ -26,6 +27,7 @@ namespace EmbyIcons
         private const int MaxConcurrencyLocks = 500;
 
         private readonly ILibraryManager _libraryManager;
+        private readonly IFileSystem _fileSystem;
         internal readonly ILogger _logger;
 
         private static readonly SemaphoreSlim _globalConcurrencyLock =
@@ -41,18 +43,114 @@ namespace EmbyIcons
         internal static readonly SKPaint AliasedTextPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None, Color = SKColors.White };
         internal static readonly SKPaint TextStrokePaint = new() { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
 
+        #region Background Worker
+        private static readonly ConcurrentDictionary<Guid, (long Ticks, string Hash)> _itemStreamHashCache = new();
+        private const int MaxItemHashCacheSize = 10000;
+
+        private readonly ConcurrentQueue<BaseItem> _itemProcessingQueue = new();
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private readonly AutoResetEvent _queueSignal = new(false);
+        private Task? _backgroundWorker;
+        #endregion
+
         public ILogger Logger => _logger;
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager, IFileSystem fileSystem)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
+            _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
             _logger.Info("[EmbyIcons] Session started.");
 
             _iconCacheManager = new IconCacheManager(_logger);
             _overlayDataService = new OverlayDataService(this);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
+
+            // Start the background worker
+            _backgroundWorker = Task.Run(() => ProcessItemBackgroundQueue(_cancellationTokenSource.Token));
+        }
+
+        private async Task ProcessItemBackgroundQueue(CancellationToken token)
+        {
+            _logger.Info("[EmbyIcons] Background processing worker started.");
+            while (!token.IsCancellationRequested)
+            {
+                _queueSignal.WaitOne(TimeSpan.FromSeconds(30));
+                if (token.IsCancellationRequested) break;
+
+                while (_itemProcessingQueue.TryDequeue(out var item))
+                {
+                    if (token.IsCancellationRequested) break;
+
+                    bool needsRefresh = false;
+                    try
+                    {
+                        var profile = Plugin.Instance?.GetProfileForItem(item);
+                        if (profile == null) continue;
+
+                        if (item is Series || item is BoxSet)
+                        {
+                            if (_aggregationCache.ContainsKey(item.Id)) continue;
+                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                                _logger.Debug($"[EmbyIcons] Processing background aggregation for '{item.Name}'.");
+
+                            GetOrBuildAggregatedDataForParent(item, profile, profile.Settings, Plugin.Instance!.Configuration);
+                            needsRefresh = true;
+                        }
+                        else if (item is Movie || item is Episode)
+                        {
+                            if (_itemStreamHashCache.TryGetValue(item.Id, out var cached) && cached.Ticks == item.DateModified.Ticks) continue;
+                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                                _logger.Debug($"[EmbyIcons] Processing background stream hash for '{item.Name}'.");
+
+                            var newHash = MediaStreamHelper.GetItemMediaStreamHashV2(item, item.GetMediaStreams() ?? new List<MediaStream>());
+                            _itemStreamHashCache[item.Id] = (item.DateModified.Ticks, newHash);
+
+                            if (_itemStreamHashCache.Count > MaxItemHashCacheSize)
+                            {
+                                var keyToRemove = _itemStreamHashCache.Keys.FirstOrDefault();
+                                if (keyToRemove != default) _itemStreamHashCache.TryRemove(keyToRemove, out _);
+                            }
+                            needsRefresh = true;
+                        }
+
+                        if (needsRefresh)
+                        {
+                            var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                            {
+                                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                                ReplaceAllImages = false
+                            };
+                            _ = item.RefreshMetadata(refreshOptions, CancellationToken.None);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.ErrorException($"[EmbyIcons] Error during background processing for '{item.Name}'.", ex);
+                    }
+                    await Task.Delay(150, token).ConfigureAwait(false);
+                }
+            }
+            _logger.Info("[EmbyIcons] Background processing worker stopped.");
+        }
+
+        public void QueueItemUpdate(BaseItem item)
+        {
+            if (item.Id == Guid.Empty) return;
+            if (_itemProcessingQueue.Any(i => i.Id == item.Id)) return;
+
+            _itemProcessingQueue.Enqueue(item);
+            _queueSignal.Set();
+        }
+
+        public void InvalidateItemHashCache(Guid itemId)
+        {
+            if (itemId != Guid.Empty && _itemStreamHashCache.TryRemove(itemId, out _))
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug($"[EmbyIcons] Invalidated item hash cache for item ID: {itemId}");
+            }
         }
 
         public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -206,17 +304,39 @@ namespace EmbyIcons
 
             if (fullItem is Series series)
             {
-                var aggResult = GetOrBuildAggregatedDataForParent(series, profile, options, globalOptions);
-                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                if (_aggregationCache.TryGetValue(series.Id, out var aggResult))
+                {
+                    sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                }
+                else
+                {
+                    sb.Append("_pending").Append(series.DateModified.Ticks);
+                    QueueItemUpdate(series);
+                }
             }
             else if (fullItem is BoxSet collection)
             {
-                var aggResult = GetOrBuildAggregatedDataForParent(collection, profile, options, globalOptions);
-                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                if (_aggregationCache.TryGetValue(collection.Id, out var aggResult))
+                {
+                    sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                }
+                else
+                {
+                    sb.Append("_pending").Append(collection.DateModified.Ticks);
+                    QueueItemUpdate(collection);
+                }
             }
-            else
+            else if (fullItem is Movie || fullItem is Episode)
             {
-                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHashV2(fullItem, fullItem.GetMediaStreams() ?? new List<MediaStream>()));
+                if (_itemStreamHashCache.TryGetValue(fullItem.Id, out var cachedHash) && cachedHash.Ticks == fullItem.DateModified.Ticks)
+                {
+                    sb.Append("_ih").Append(cachedHash.Hash);
+                }
+                else
+                {
+                    sb.Append("_pending").Append(fullItem.DateModified.Ticks);
+                    QueueItemUpdate(fullItem);
+                }
             }
 
             var tagsKey = GetTagsCacheKey(fullItem.Tags);
@@ -331,6 +451,17 @@ namespace EmbyIcons
 
         public void Dispose()
         {
+            _cancellationTokenSource.Cancel();
+            _queueSignal.Set();
+            try
+            {
+                _backgroundWorker?.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (OperationCanceledException) { }
+
+            _cancellationTokenSource.Dispose();
+            _queueSignal.Dispose();
+
             foreach (var sem in _locks.Values)
                 sem.Dispose();
             _locks.Clear();

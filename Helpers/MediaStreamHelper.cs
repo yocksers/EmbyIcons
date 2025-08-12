@@ -88,6 +88,7 @@ namespace EmbyIcons.Helpers
 
             var best = pairs.OrderBy(p => Math.Abs(p.v - ratio)).First();
 
+            // If the calculated ratio is very close to a common standard, return that standard's name.
             if (Math.Abs(best.v - ratio) < 0.1)
             {
                 return best.name;
@@ -119,12 +120,61 @@ namespace EmbyIcons.Helpers
             if (videoStream == null) return null;
 
             var title = (videoStream.DisplayTitle ?? "").ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(title)) return null;
-
-            foreach (var key in knownKeys)
+            if (!string.IsNullOrWhiteSpace(title))
             {
-                if (string.IsNullOrWhiteSpace(key)) continue;
-                if (title.Contains(key)) return key;
+                foreach (var key in knownKeys)
+                {
+                    if (!string.IsNullOrWhiteSpace(key) && title.Contains(key))
+                    {
+                        return key;
+                    }
+                }
+            }
+
+            if (videoStream.Width.HasValue && videoStream.Height.HasValue)
+            {
+                var width = videoStream.Width.Value;
+                var height = videoStream.Height.Value;
+                var scanType = videoStream.IsInterlaced ? "i" : "p";
+
+                string? resolutionName = null;
+
+                if (width >= 3840 && width <= 4096)
+                {
+                    resolutionName = "4k";
+                }
+                else if (width >= 2560 && width < 3840)
+                {
+                    resolutionName = "1440p";
+                }
+                else if (width >= 1920 && width < 2560)
+                {
+                    resolutionName = "1080" + scanType;
+                }
+                else if (width >= 1280 && width < 1920)
+                {
+                    resolutionName = "720" + scanType;
+                }
+                else if (width < 1280)
+                {
+                    if (height >= 576)
+                    {
+                        resolutionName = "576" + scanType;
+                    }
+                    else if (height >= 480)
+                    {
+                        resolutionName = "480" + scanType;
+                    }
+                    else if (height >= 360)
+                    {
+                        resolutionName = "360" + scanType;
+                    }
+                }
+
+                if (resolutionName != null)
+                {
+                    return resolutionName;
+                }
             }
 
             return null;
