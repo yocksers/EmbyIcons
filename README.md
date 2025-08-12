@@ -192,9 +192,9 @@ If you are creating a custom aspect ratio icon and the "Snap to nearest" setting
 
 ---
 ## Acknowledgements
--   Many thanks to **Neminem**, **keitaro26**, and **Bakes82** from the Emby Community for their help and testing.
+-   Many thanks to **Neminem**, **keitaro26**, and **Bakes82** and everyone else from the Emby Community forum for their help and testing.
 -   A shoutout to **Craggles** for the awesome default icons!
--   Special thanks to **Alexander Hürter** for supporting the project.
+-   Special thanks to **Alexander Hürter** for supporting the project by donating coffee!
 
 If you enjoy this plugin and wish to show your appreciation, you can...
 
