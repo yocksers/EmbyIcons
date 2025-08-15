@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Helpers;
+﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Model.Logging;
 using SkiaSharp;
@@ -92,7 +92,8 @@ namespace EmbyIcons.Services
             {
                 OutputFormat.Png => SKEncodedImageFormat.Png,
                 OutputFormat.Jpeg => SKEncodedImageFormat.Jpeg,
-                _ => sourceWasPng ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg
+                // New "Auto" logic: Use JPEG unless the source image has transparency, in which case use PNG to preserve it.
+                _ => (sourceBitmap.Info.AlphaType == SKAlphaType.Opaque) ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png
             };
 
             int quality = Math.Clamp(globalOptions.JpegQuality, 10, 100);

@@ -1,4 +1,4 @@
-﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
@@ -91,6 +91,7 @@
                     <div id="profileSettingsContainer">
                         <div class="inputContainer" style="margin-top: 2.5em;">
                             <h3 style="margin-bottom: 0.5em;">Assign this profile to libraries</h3>
+                            <p class="fieldDescription" style="margin-top:0;">A library can only be assigned to one profile at a time.</p>
                             <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1em 1.5em;">
                             </div>
                         </div>
@@ -265,19 +266,6 @@
                         </div>
                     </div>
 
-                    <!-- Cache Management -->
-                    <div class="flex align-items-center" style="margin: 3em 0 .5em;">
-                        <h2 style="margin: 0;">Cache Management</h2>
-                    </div>
-                    <div class="fieldDescription" style="margin-bottom: 1em;">
-                        If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse.
-                    </div>
-                    <div>
-                        <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">
-                            <span>Clear Icon Cache</span>
-                        </button>
-                    </div>
-
                     <div style="margin-top: 2em;">
                         <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>Save</span>
@@ -303,7 +291,40 @@
 
             <div id="troubleshooterPage" class="hide" style="margin-top: 2em;">
                 <div style="max-width: 900px; margin: auto;">
-                    <h1 style="margin-bottom: 0.5em;">Series Troubleshooter</h1>
+
+                    <!-- Memory Usage -->
+                    <h1 style="margin-bottom: 0.5em;">Diagnostics & Maintenance</h1>
+                    <div class="paper-card" style="padding: 1.5em;">
+                        <h3 style="margin-top:0;">Memory & Cache Diagnostics</h3>
+                        <p class="fieldDescription" style="margin-top:0;">
+                            The plugin caches icons and media data to improve performance. The numbers below are an estimate of the RAM currently used by the plugin's caches. This is for diagnostic purposes only.
+                        </p>
+                        <div id="memoryReportContainer" style="margin-top: 1.5em;">
+                            <p><strong>Icon Image Cache:</strong> <span id="memIconCache">N/A</span></p>
+                            <p><strong>Series/Collection Aggregation Cache:</strong> <span id="memAggregationCache">N/A</span></p>
+                            <p><strong>Item Data &amp; Info Cache:</strong> <span id="memItemDataCache">N/A</span></p>
+                            <hr style="margin: 1em 0; border-color: rgba(128,128,128,0.2);" />
+                            <p><strong>Total Estimated Usage:</strong> <span id="memTotalCache" style="font-weight: bold;">N/A</span></p>
+                        </div>
+                        <div style="margin-top: 2em;">
+                            <button is="emby-button" type="button" class="raised" id="btnRefreshMemoryStats">
+                                <span>Refresh Stats</span>
+                            </button>
+                        </div>
+
+                        <h3 style="margin-top:2.5em;">Cache Management</h3>
+                        <p class="fieldDescription" style="margin-top:0;">
+                            If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse. This will also clear all data caches shown above.
+                        </p>
+                        <div style="margin-top: 1.5em;">
+                            <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">
+                                <span>Clear All Caches</span>
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Series Troubleshooter</h1>
                     <p class="fieldDescription">
                         Many icons (e.g., audio language, resolution) appear on a TV show poster only if all episodes share the same property. This tool scans a series and reports inconsistencies.
                     </p>
@@ -482,7 +503,7 @@
 
                     <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
                         <div style="display: flex; align-items: center; gap: 1em;">
-                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
                                 <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
                             </svg>
                             <div>

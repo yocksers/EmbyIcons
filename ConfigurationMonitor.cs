@@ -20,9 +20,6 @@ namespace EmbyIcons.Services
         private readonly ILibraryManager _libraryManager;
         private readonly IFileSystem _fileSystem;
 
-        /// <param name="logger">The logger.</param>
-        /// <param name="libraryManager">The library manager.</param>
-        /// <param name="fileSystem">The file system.</param>
         public ConfigurationMonitor(ILogger logger, ILibraryManager libraryManager, IFileSystem fileSystem)
         {
             _logger = logger;
@@ -30,8 +27,6 @@ namespace EmbyIcons.Services
             _fileSystem = fileSystem;
         }
 
-        /// <param name="oldOptions">The plugin options before the change.</param>
-        /// <param name="newOptions">The plugin options after the change.</param>
         public void CheckForChangesAndTriggerRefreshes(PluginOptions oldOptions, PluginOptions newOptions)
         {
             var oldProfileDict = oldOptions.Profiles.ToDictionary(p => p.Id);
@@ -42,9 +37,8 @@ namespace EmbyIcons.Services
 
             var allLibraryIds = oldMappings.Keys.Union(newMappings.Keys).Distinct().ToList();
 
-            var seriesLibsToRefresh = new List<string>();
-            var episodeLibsToRefresh = new List<string>();
-            var collectionLibsToRefresh = new List<string>();
+            var libsForHardRefresh = new List<string>();
+            var libsForSoftRefresh = new List<string>();
 
             foreach (var libId in allLibraryIds)
             {
@@ -57,86 +51,37 @@ namespace EmbyIcons.Services
                 IconProfile? newProfile = null;
                 if (newMap != null) newProfileDict.TryGetValue(newMap.ProfileId, out newProfile);
 
-                if (oldProfile?.Id == newProfile?.Id) continue; // No change in profile assignment or still no profile
+                if (oldProfile?.Id == newProfile?.Id) continue;
 
-                if (IsTypeSupportedByProfile(oldProfile, "Series") && !IsTypeSupportedByProfile(newProfile, "Series"))
+                bool wasSupported = IsAnyIconEnabled(oldProfile);
+                bool isSupported = IsAnyIconEnabled(newProfile);
+
+                if (wasSupported && !isSupported)
                 {
-                    seriesLibsToRefresh.Add(libId);
+                    libsForHardRefresh.Add(libId);
                 }
-                if (IsTypeSupportedByProfile(oldProfile, "Episode") && !IsTypeSupportedByProfile(newProfile, "Episode"))
+                else if (wasSupported != isSupported || (wasSupported && isSupported))
                 {
-                    episodeLibsToRefresh.Add(libId);
-                }
-                if (IsTypeSupportedByProfile(oldProfile, "BoxSet") && !IsTypeSupportedByProfile(newProfile, "BoxSet"))
-                {
-                    collectionLibsToRefresh.Add(libId);
+                    libsForSoftRefresh.Add(libId);
                 }
             }
 
-            var allItemsToRefresh = new List<BaseItem>();
-
-            if (seriesLibsToRefresh.Any())
+            if (libsForHardRefresh.Any())
             {
-                var ancestorIds = seriesLibsToRefresh
-                    .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
-                    .Where(guid => guid != Guid.Empty)
-                    .Select(guid => _libraryManager.GetItemById(guid))
-                    .Where(item => item != null)
-                    .Select(item => item!.InternalId)
-                    .ToArray();
-
-                if (ancestorIds.Any())
-                {
-                    _logger.Info($"[EmbyIcons] Queuing Series in {ancestorIds.Length} libraries for refresh.");
-                    allItemsToRefresh.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { AncestorIds = ancestorIds, IncludeItemTypes = new[] { "Series" }, Recursive = true }));
-                }
+                var items = GetItemsForLibraries(libsForHardRefresh);
+                HardRefreshItems(items);
             }
-            if (episodeLibsToRefresh.Any())
+            if (libsForSoftRefresh.Any())
             {
-                var ancestorIds = episodeLibsToRefresh
-                    .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
-                    .Where(guid => guid != Guid.Empty)
-                    .Select(guid => _libraryManager.GetItemById(guid))
-                    .Where(item => item != null)
-                    .Select(item => item!.InternalId)
-                    .ToArray();
-
-                if (ancestorIds.Any())
-                {
-                    _logger.Info($"[EmbyIcons] Queuing Episodes in {ancestorIds.Length} libraries for refresh.");
-                    allItemsToRefresh.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { AncestorIds = ancestorIds, IncludeItemTypes = new[] { "Episode" }, Recursive = true }));
-                }
+                var items = GetItemsForLibraries(libsForSoftRefresh);
+                SoftRefreshItems(items);
             }
-            if (collectionLibsToRefresh.Any())
-            {
-                var ancestorIds = collectionLibsToRefresh
-                    .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
-                    .Where(guid => guid != Guid.Empty)
-                    .Select(guid => _libraryManager.GetItemById(guid))
-                    .Where(item => item != null)
-                    .Select(item => item!.InternalId)
-                    .ToArray();
-
-                if (ancestorIds.Any())
-                {
-                    _logger.Info($"[EmbyIcons] Queuing BoxSets in {ancestorIds.Length} libraries for refresh.");
-                    allItemsToRefresh.AddRange(_libraryManager.GetItemList(new InternalItemsQuery { AncestorIds = ancestorIds, IncludeItemTypes = new[] { "BoxSet" }, Recursive = true }));
-                }
-            }
-
-            RefreshItems(allItemsToRefresh.DistinctBy(i => i.Id).ToList());
         }
 
-        private bool IsTypeSupportedByProfile(IconProfile? profile, string itemType)
+        private bool IsAnyIconEnabled(IconProfile? profile)
         {
             if (profile == null) return false;
-
             var s = profile.Settings;
-            if (!s.EnableForPosters) return false; // Assuming primary posters for now
-
-            if (itemType == "Episode" && !s.ShowOverlaysForEpisodes) return false;
-            if (itemType == "Series" && !s.ShowSeriesIconsIfAllEpisodesHaveLanguage) return false;
-            if (itemType == "BoxSet" && !s.ShowCollectionIconsIfAllChildrenHaveLanguage) return false;
 
             return s.AudioIconAlignment != IconAlignment.Disabled || s.SubtitleIconAlignment != IconAlignment.Disabled ||
                    s.ChannelIconAlignment != IconAlignment.Disabled || s.VideoFormatIconAlignment != IconAlignment.Disabled ||
@@ -146,11 +91,53 @@ namespace EmbyIcons.Services
                    s.ParentalRatingIconAlignment != IconAlignment.Disabled;
         }
 
-        private void RefreshItems(IReadOnlyList<BaseItem> items)
+        private List<BaseItem> GetItemsForLibraries(List<string> libraryIds)
+        {
+            var ancestorIds = libraryIds
+                .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
+                .Where(guid => guid != Guid.Empty)
+                .Select(guid => _libraryManager.GetItemById(guid))
+                .Where(item => item != null)
+                .Select(item => item!.InternalId)
+                .ToArray();
+
+            if (!ancestorIds.Any()) return new List<BaseItem>();
+
+            return _libraryManager.GetItemList(new InternalItemsQuery { AncestorIds = ancestorIds, Recursive = true })
+                .DistinctBy(i => i.Id)
+                .ToList();
+        }
+
+        private void SoftRefreshItems(IReadOnlyList<BaseItem> items)
         {
             if (!items.Any()) return;
 
-            _logger.Info($"[EmbyIcons] Triggering image refresh for {items.Count} items due to a configuration change. This may take some time.");
+            _logger.Info($"[EmbyIcons] Triggering soft refresh (image-only) for {items.Count} items due to a configuration change.");
+
+            Task.Run(() => {
+                // CORRECTION: This is the correct way to perform a lightweight, image-focused refresh.
+                // We leave MetadataRefreshMode at its default (which is much faster than a full scan)
+                // but explicitly set ImageRefreshMode to FullRefresh. This tells Emby to re-evaluate
+                // the images for each item without triggering a slow, full metadata download.
+                var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ReplaceAllImages = false
+                };
+
+                foreach (var item in items)
+                {
+                    item.RefreshMetadata(refreshOptions, CancellationToken.None);
+                }
+                _logger.Info($"[EmbyIcons] Queued soft refresh for {items.Count} items.");
+            });
+        }
+
+        private void HardRefreshItems(IReadOnlyList<BaseItem> items)
+        {
+            if (!items.Any()) return;
+
+            _logger.Info($"[EmbyIcons] Triggering hard refresh (metadata scan) for {items.Count} items to clean up removed overlays.");
 
             Task.Run(() => {
                 var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
@@ -163,7 +150,7 @@ namespace EmbyIcons.Services
                 {
                     item.RefreshMetadata(refreshOptions, CancellationToken.None);
                 }
-                _logger.Info($"[EmbyIcons] Queued refresh for {items.Count} items.");
+                _logger.Info($"[EmbyIcons] Queued hard refresh for {items.Count} items.");
             });
         }
     }

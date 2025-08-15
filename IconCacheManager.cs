@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -40,6 +40,21 @@ namespace EmbyIcons.Helpers
         public IconCacheManager(ILogger logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public long GetCacheMemoryUsage()
+        {
+            long totalBytes = 0;
+            try
+            {
+                totalBytes += _iconImageCache.Values.Sum(icon => (long)(icon.Image?.Info.BytesSize ?? 0));
+                totalBytes += _embeddedIconCache.Values.Sum(icon => (long)icon.Info.BytesSize);
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error calculating icon cache memory usage", ex);
+            }
+            return totalBytes;
         }
 
         public Dictionary<IconType, List<string>> GetAllAvailableIconKeys(string iconsFolder)
@@ -211,17 +226,8 @@ namespace EmbyIcons.Helpers
             var img = SKImage.FromEncodedData(data);
             if (img != null)
             {
+                PruneImageCache(_embeddedIconCache, MaxEmbeddedIconCacheSize);
                 _embeddedIconCache.TryAdd(baseFileName, img);
-
-                // *** MEMORY USAGE IMPROVEMENT: Prune the embedded icon cache. ***
-                if (_embeddedIconCache.Count > MaxEmbeddedIconCacheSize)
-                {
-                    var keyToRemove = _embeddedIconCache.Keys.FirstOrDefault();
-                    if (keyToRemove != null && _embeddedIconCache.TryRemove(keyToRemove, out var imageToDispose))
-                    {
-                        imageToDispose.Dispose();
-                    }
-                }
             }
             return Task.FromResult(img);
         }
@@ -241,17 +247,8 @@ namespace EmbyIcons.Helpers
                 var img = SKImage.FromEncodedData(data);
                 if (img == null) return null;
 
+                PruneImageCache(_iconImageCache, MaxCustomIconCacheSize);
                 _iconImageCache[cacheKey] = new CachedIcon(img, File.GetLastWriteTimeUtc(iconPath), iconPath);
-
-                // *** MEMORY USAGE IMPROVEMENT: Prune the custom icon cache. ***
-                if (_iconImageCache.Count > MaxCustomIconCacheSize)
-                {
-                    var keyToRemove = _iconImageCache.Keys.FirstOrDefault();
-                    if (keyToRemove != null && _iconImageCache.TryRemove(keyToRemove, out var iconToDispose))
-                    {
-                        iconToDispose.Image?.Dispose();
-                    }
-                }
 
                 return img;
             }
@@ -259,6 +256,22 @@ namespace EmbyIcons.Helpers
             {
                 _logger.ErrorException($"[EmbyIcons] A critical error occurred while loading icon '{iconPath}'.", ex);
                 return null;
+            }
+        }
+
+        private void PruneImageCache<TValue>(ConcurrentDictionary<string, TValue> cache, int maxSize) where TValue : class
+        {
+            if (cache.Count >= maxSize)
+            {
+                int itemsToRemove = cache.Count - (int)(maxSize * 0.9); // Trim to 90% capacity
+                var keysToRemove = cache.Keys.Take(itemsToRemove).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    if (cache.TryRemove(key, out var item) && item is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
             }
         }
 
@@ -288,7 +301,7 @@ namespace EmbyIcons.Helpers
             return dict;
         }
 
-        private sealed class CachedIcon
+        private sealed class CachedIcon : IDisposable
         {
             public SKImage? Image { get; }
             public DateTime FileWriteTimeUtc { get; }
@@ -298,6 +311,11 @@ namespace EmbyIcons.Helpers
                 Image = image;
                 FileWriteTimeUtc = fileWriteTimeUtc;
                 FullPath = fullPath;
+            }
+
+            public void Dispose()
+            {
+                Image?.Dispose();
             }
         }
     }

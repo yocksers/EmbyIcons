@@ -1,4 +1,5 @@
-﻿using MediaBrowser.Controller.Entities;
+﻿using EmbyIcons.Helpers;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Logging;
@@ -7,7 +8,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -17,7 +17,7 @@ namespace EmbyIcons.Services
         private readonly ILogger _logger;
         private readonly PluginOptions _configuration;
 
-        private static List<(string Path, string Name, string Id)>? _libraryPathCache;
+        private static Trie<string>? _libraryPathTrie;
         private static readonly object _libraryPathCacheLock = new object();
 
         private static readonly ConcurrentDictionary<Guid, Guid> _itemToProfileIdCache = new();
@@ -34,7 +34,7 @@ namespace EmbyIcons.Services
         {
             lock (_libraryPathCacheLock)
             {
-                _libraryPathCache = null;
+                _libraryPathTrie = null;
                 _itemToProfileIdCache.Clear();
                 _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
             }
@@ -42,20 +42,20 @@ namespace EmbyIcons.Services
 
         private void PopulateLibraryPathCache()
         {
-            _logger.Debug("[EmbyIcons] Populating library path cache.");
-            var newCache = new List<(string Path, string Name, string Id)>();
+            _logger.Debug("[EmbyIcons] Populating library path cache using Trie.");
+            var newTrie = new Trie<string>();
             try
             {
-                foreach (var lib in _libraryManager.GetVirtualFolders())
+                // The library list is ordered by path length descending to ensure deeper paths are checked first.
+                var libraries = _libraryManager.GetVirtualFolders()
+                    .Where(lib => lib != null && lib.Locations != null)
+                    .SelectMany(lib => lib.Locations!.Select(loc => (Path: loc, lib.Name, lib.Id)))
+                    .Where(libInfo => !string.IsNullOrEmpty(libInfo.Path))
+                    .OrderByDescending(libInfo => libInfo.Path.Length);
+
+                foreach (var libInfo in libraries)
                 {
-                    if (lib?.Locations == null) continue;
-                    foreach (var loc in lib.Locations)
-                    {
-                        if (!string.IsNullOrEmpty(loc))
-                        {
-                            newCache.Add((loc, lib.Name, lib.Id.ToString()));
-                        }
-                    }
+                    newTrie.Insert(libInfo.Path, libInfo.Id.ToString());
                 }
             }
             catch (Exception ex)
@@ -65,11 +65,11 @@ namespace EmbyIcons.Services
 
             lock (_libraryPathCacheLock)
             {
-                _libraryPathCache = newCache.OrderByDescending(i => i.Path.Length).ToList();
+                _libraryPathTrie = newTrie;
             }
         }
 
-        private IconProfile? GetProfileForPath(string path)
+        private IconProfile? GetProfileForPath(string? path)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -78,29 +78,27 @@ namespace EmbyIcons.Services
 
             lock (_libraryPathCacheLock)
             {
-                if (_libraryPathCache == null)
+                if (_libraryPathTrie == null)
                 {
                     PopulateLibraryPathCache();
                 }
             }
 
-            var currentLibraryCache = _libraryPathCache;
-            if (currentLibraryCache == null)
+            var currentLibraryTrie = _libraryPathTrie;
+            if (currentLibraryTrie == null)
             {
-                _logger.Warn("[EmbyIcons] Library path cache is null, cannot check library restrictions.");
+                _logger.Warn("[EmbyIcons] Library path Trie is null, cannot check library restrictions.");
                 return null;
             }
 
-            foreach (var libInfo in currentLibraryCache)
+            var libraryId = currentLibraryTrie.FindLongestPrefix(path);
+
+            if (libraryId != null)
             {
-                if (path.StartsWith(libInfo.Path, StringComparison.OrdinalIgnoreCase))
+                var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libraryId);
+                if (mapping != null)
                 {
-                    var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libInfo.Id);
-                    if (mapping != null)
-                    {
-                        return _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
-                    }
-                    return null;
+                    return _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
                 }
             }
 
@@ -119,22 +117,32 @@ namespace EmbyIcons.Services
 
             if (item is BoxSet boxSet)
             {
-                var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                // Efficiently find the profile by checking the parent library ID, avoiding a slow child item query.
+                var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == boxSet.ParentId.ToString());
+                if (mapping != null)
                 {
-                    CollectionIds = new[] { boxSet.InternalId },
-                    Limit = 1,
-                    Recursive = true,
-                    IncludeItemTypes = new[] { "Movie", "Episode" }
-                }).FirstOrDefault();
-
-                if (firstChild != null)
-                {
-                    foundProfile = GetProfileForPath(firstChild.Path);
+                    foundProfile = _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
                 }
                 else
                 {
-                    _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
-                    foundProfile = null;
+                    // Fallback to the old method if the direct parent isn't a mapped library (e.g., for nested collections)
+                    var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        CollectionIds = new[] { boxSet.InternalId },
+                        Limit = 1,
+                        Recursive = true,
+                        IncludeItemTypes = new[] { "Movie", "Episode" }
+                    }).FirstOrDefault();
+
+                    if (firstChild != null)
+                    {
+                        foundProfile = GetProfileForPath(firstChild.Path);
+                    }
+                    else
+                    {
+                        _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
+                        foundProfile = null;
+                    }
                 }
             }
             else

@@ -44,9 +44,6 @@ namespace EmbyIcons
         internal static readonly SKPaint TextStrokePaint = new() { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
 
         #region Background Worker
-        private static readonly ConcurrentDictionary<Guid, (long Ticks, string Hash)> _itemStreamHashCache = new();
-        private const int MaxItemHashCacheSize = 10000;
-
         private readonly ConcurrentQueue<BaseItem> _itemProcessingQueue = new();
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private readonly AutoResetEvent _queueSignal = new(false);
@@ -83,40 +80,22 @@ namespace EmbyIcons
                 {
                     if (token.IsCancellationRequested) break;
 
-                    bool needsRefresh = false;
                     try
                     {
-                        var profile = Plugin.Instance?.GetProfileForItem(item);
+                        var plugin = Plugin.Instance;
+                        if (plugin == null) continue;
+
+                        var profile = plugin.GetProfileForItem(item);
                         if (profile == null) continue;
 
                         if (item is Series || item is BoxSet)
                         {
-                            if (_aggregationCache.ContainsKey(item.Id)) continue;
-                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                            if (plugin.Configuration.EnableDebugLogging)
                                 _logger.Debug($"[EmbyIcons] Processing background aggregation for '{item.Name}'.");
 
-                            GetOrBuildAggregatedDataForParent(item, profile, profile.Settings, Plugin.Instance!.Configuration);
-                            needsRefresh = true;
-                        }
-                        else if (item is Movie || item is Episode)
-                        {
-                            if (_itemStreamHashCache.TryGetValue(item.Id, out var cached) && cached.Ticks == item.DateModified.Ticks) continue;
-                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                                _logger.Debug($"[EmbyIcons] Processing background stream hash for '{item.Name}'.");
+                            InvalidateAggregationCache(item.Id);
+                            GetOrBuildAggregatedDataForParent(item, profile, profile.Settings, plugin.Configuration);
 
-                            var newHash = MediaStreamHelper.GetItemMediaStreamHashV2(item, item.GetMediaStreams() ?? new List<MediaStream>());
-                            _itemStreamHashCache[item.Id] = (item.DateModified.Ticks, newHash);
-
-                            if (_itemStreamHashCache.Count > MaxItemHashCacheSize)
-                            {
-                                var keyToRemove = _itemStreamHashCache.Keys.FirstOrDefault();
-                                if (keyToRemove != default) _itemStreamHashCache.TryRemove(keyToRemove, out _);
-                            }
-                            needsRefresh = true;
-                        }
-
-                        if (needsRefresh)
-                        {
                             var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                             {
                                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
@@ -142,15 +121,6 @@ namespace EmbyIcons
 
             _itemProcessingQueue.Enqueue(item);
             _queueSignal.Set();
-        }
-
-        public void InvalidateItemHashCache(Guid itemId)
-        {
-            if (itemId != Guid.Empty && _itemStreamHashCache.TryRemove(itemId, out _))
-            {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                    _logger.Debug($"[EmbyIcons] Invalidated item hash cache for item ID: {itemId}");
-            }
         }
 
         public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -181,6 +151,14 @@ namespace EmbyIcons
         public bool Supports(BaseItem? item, ImageType imageType)
         {
             if (item == null) return false;
+
+            // FIRST, exclude top-level items like those on the home screen from processing.
+            // This is the most efficient check and prevents expensive lookups for main screen items.
+            // Series and BoxSets are exceptions as they can be top-level and need icon aggregation.
+            if (item.IsTopParent && item is not Series && item is not BoxSet)
+            {
+                return false;
+            }
 
             var fullItem = GetFullItem(item);
 
@@ -276,7 +254,7 @@ namespace EmbyIcons
             var options = profile.Settings;
             var sb = new StringBuilder(512);
 
-            sb.Append("ei7_")
+            sb.Append("ei8_") // Incremented cache key version
               .Append(fullItem.Id.ToString("N")).Append('_').Append((int)imageType)
               .Append("_v").Append(plugin.ConfigurationVersion)
               .Append("_p").Append(profile.Id.ToString("N"));
@@ -302,41 +280,15 @@ namespace EmbyIcons
             sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
             sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
 
-            if (fullItem is Series series)
+            if ((fullItem is Series || fullItem is BoxSet) && options.RequiresAggregation())
             {
-                if (_aggregationCache.TryGetValue(series.Id, out var aggResult))
-                {
-                    sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
-                }
-                else
-                {
-                    sb.Append("_pending").Append(series.DateModified.Ticks);
-                    QueueItemUpdate(series);
-                }
-            }
-            else if (fullItem is BoxSet collection)
-            {
-                if (_aggregationCache.TryGetValue(collection.Id, out var aggResult))
-                {
-                    sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
-                }
-                else
-                {
-                    sb.Append("_pending").Append(collection.DateModified.Ticks);
-                    QueueItemUpdate(collection);
-                }
+                var aggResult = GetOrBuildAggregatedDataForParent(fullItem, profile, options, globalOptions);
+                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else if (fullItem is Movie || fullItem is Episode)
             {
-                if (_itemStreamHashCache.TryGetValue(fullItem.Id, out var cachedHash) && cachedHash.Ticks == fullItem.DateModified.Ticks)
-                {
-                    sb.Append("_ih").Append(cachedHash.Hash);
-                }
-                else
-                {
-                    sb.Append("_pending").Append(fullItem.DateModified.Ticks);
-                    QueueItemUpdate(fullItem);
-                }
+                var streamHash = _overlayDataService.GetItemStreamHash(fullItem, profile, options, globalOptions);
+                sb.Append("_ih").Append(streamHash);
             }
 
             var tagsKey = GetTagsCacheKey(fullItem.Tags);
@@ -346,7 +298,7 @@ namespace EmbyIcons
             }
 
             sb.Append("_r").Append(fullItem.CommunityRating?.ToString("F1") ?? "N");
-            sb.Append("_d").Append(fullItem.DateModified.Ticks);
+
             return sb.ToString();
         }
 
@@ -411,12 +363,11 @@ namespace EmbyIcons
                 finally
                 {
                     sem.Release();
-
-                    if (_locks.TryRemove(fullItem.Id.ToString(), out var removedSem))
-                    {
-                        removedSem.Dispose();
-                    }
                 }
+            }
+            catch (ObjectDisposedException)
+            {
+                _logger.Warn($"[EmbyIcons] Semaphore was disposed during operation for {item?.Name}. This can happen during rapid operations and is non-fatal.");
             }
             catch (OperationCanceledException)
             {
@@ -442,6 +393,22 @@ namespace EmbyIcons
                     }
                 }
             }
+        }
+
+        public (long AggregationCacheSize, long ItemDataCacheSize, long EpisodeIconCacheSize) GetCacheMemoryUsage()
+        {
+            // Approximate size of an AggregatedSeriesResult object. This is a rough estimate.
+            // HashSets of strings are the main contributors. Let's estimate an average of 5 strings, 20 chars each, plus object overhead.
+            const int avgAggResultSize = (5 * (20 * 2 + 30)) + 100; // Rough estimate in bytes
+            long aggCacheSize = (long)_aggregationCache.Count * avgAggResultSize;
+
+            // Get size from OverlayDataService
+            long itemDataCacheSize = _overlayDataService.GetCacheMemoryUsage();
+
+            // Get size from EpisodeIconCache
+            long episodeIconCacheSize = GetEpisodeIconCacheMemoryUsage();
+
+            return (aggCacheSize, itemDataCacheSize, episodeIconCacheSize);
         }
 
         public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>

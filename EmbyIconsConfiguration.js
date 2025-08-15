@@ -1,779 +1,840 @@
-﻿    define(['baseView', 'loading', 'dialogHelper', 'toast', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'], function (BaseView, loading, dialogHelper, toast) {
-        'use strict';
+﻿define(['baseView', 'loading', 'dialogHelper', 'toast', 'emby-input', 'emby-button', 'emby-checkbox', 'emby-select'], function (BaseView, loading, dialogHelper, toast) {
+    'use strict';
 
-        const pluginId = "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f";
+    const pluginId = "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f";
 
-        const ApiRoutes = {
-            DefaultProfile: "EmbyIcons/DefaultProfile",
-            RefreshCache: "EmbyIcons/RefreshCache",
-            IconManagerReport: "EmbyIcons/IconManagerReport",
-            Preview: "EmbyIcons/Preview",
-            ValidatePath: "EmbyIcons/ValidatePath",
-            SeriesTroubleshooter: "EmbyIcons/SeriesTroubleshooter",
-            AspectRatio: "EmbyIcons/AspectRatio"
+    const ApiRoutes = {
+        DefaultProfile: "EmbyIcons/DefaultProfile",
+        RefreshCache: "EmbyIcons/RefreshCache",
+        IconManagerReport: "EmbyIcons/IconManagerReport",
+        Preview: "EmbyIcons/Preview",
+        ValidatePath: "EmbyIcons/ValidatePath",
+        SeriesTroubleshooter: "EmbyIcons/SeriesTroubleshooter",
+        AspectRatio: "EmbyIcons/AspectRatio",
+        MemoryReport: "EmbyIcons/MemoryReport"
+    };
+
+    const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+    function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
         };
+    }
 
-        const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
 
-        function debounce(func, wait) {
-            let timeout;
-            return function (...args) {
-                const context = this;
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(context, args), wait);
+    class EmbyIconsConfigurationView extends BaseView {
+        constructor(view, params) {
+            super(view, params);
+
+            this.pluginConfiguration = {};
+            this.allLibraries = [];
+            this.currentProfileId = null;
+            this.previewUpdateTimer = null;
+            this.configSaveTimer = null;
+            this.selectedSeriesId = null;
+            this.libraryMap = new Map();
+            this.profileMap = new Map();
+
+            this.boundDocumentClickHandler = this.onDocumentClick.bind(this);
+
+            this.getDomElements(view);
+            this.bindEvents();
+        }
+
+        getDomElements(view) {
+            this.dom = {
+                view: view,
+                form: view.querySelector('.embyIconsForm'),
+                allConfigInputs: view.querySelectorAll('[data-config-key]'),
+                allProfileInputs: view.querySelectorAll('[data-profile-key]'),
+                allProfileSelects: view.querySelectorAll('select[is="emby-select"][data-profile-key]'),
+                profileSelector: view.querySelector('#selActiveProfile'),
+                btnSelectIconsFolder: view.querySelector('#btnSelectIconsFolder'),
+                txtIconsFolder: view.querySelector('#txtIconsFolder'),
+                folderWarningIcon: view.querySelector('#folderWarningIcon'),
+                btnClearCache: view.querySelector('#btnClearCache'),
+                btnRunIconScan: view.querySelector('#btnRunIconScan'),
+                librarySelectionContainer: view.querySelector('#librarySelectionContainer'),
+                opacitySlider: view.querySelector('[data-profile-key="CommunityScoreBackgroundOpacity"]'),
+                opacityValue: view.querySelector('.valCommunityScoreBackgroundOpacity'),
+                ratingAppearanceControls: view.querySelector('#ratingAppearanceControls'),
+                pages: view.querySelectorAll('#settingsPage, #readmePage, #iconManagerPage, #troubleshooterPage'),
+                previewImage: view.querySelector('.previewImage'),
+                iconManagerReportContainer: view.querySelector('#iconManagerReportContainer'),
+                alignmentGrid: view.querySelector('.alignment-grid'),
+                prioritySelects: view.querySelectorAll('[data-profile-key$="Priority"]'),
+                txtSeriesSearch: view.querySelector('#txtSeriesSearch'),
+                seriesSearchResults: view.querySelector('#seriesSearchResults'),
+                seriesReportContainer: view.querySelector('#seriesReportContainer'),
+                troubleshooterChecks: view.querySelectorAll('#troubleshooterChecksContainer input[type=checkbox]'),
+                txtAspectRatioWidth: view.querySelector('#txtAspectRatioWidth'),
+                txtAspectRatioHeight: view.querySelector('#txtAspectRatioHeight'),
+                aspectRatioResultContainer: view.querySelector('#aspectRatioResultContainer'),
+                aspectDecimalValue: view.querySelector('#aspectDecimalValue'),
+                aspectSnappedIconName: view.querySelector('#aspectSnappedIconName'),
+                aspectPreciseIconName: view.querySelector('#aspectPreciseIconName'),
+                btnRefreshMemoryStats: view.querySelector('#btnRefreshMemoryStats'),
+                memIconCache: view.querySelector('#memIconCache'),
+                memAggregationCache: view.querySelector('#memAggregationCache'),
+                memItemDataCache: view.querySelector('#memItemDataCache'),
+                memTotalCache: view.querySelector('#memTotalCache'),
             };
         }
 
-        class EmbyIconsConfigurationView extends BaseView {
-            constructor(view, params) {
-                super(view, params);
+        bindEvents() {
+            this.dom.view.addEventListener('click', (e) => {
+                const targetButton = e.target.closest('button, a');
+                if (!targetButton) return;
 
-                this.pluginConfiguration = {};
-                this.allLibraries = [];
-                this.currentProfileId = null;
-                this.previewUpdateTimer = null;
-                this.configSaveTimer = null;
-                this.selectedSeriesId = null;
-                this.libraryMap = new Map();
+                const action = targetButton.id || targetButton.dataset.action || targetButton.dataset.target;
 
-                // *** MEMORY LEAK FIX: Store a bound reference to the event handler for later removal. ***
-                this.boundDocumentClickHandler = this.onDocumentClick.bind(this);
+                switch (action) {
+                    case 'btnAddProfile': this.addProfile(); break;
+                    case 'btnRenameProfile': this.renameProfile(); break;
+                    case 'btnDeleteProfile': this.deleteProfile(); break;
+                    case 'btnSelectIconsFolder': this.selectIconsFolder(); break;
+                    case 'btnClearCache': this.clearCache(); break;
+                    case 'btnRunIconScan': this.runIconScan(); break;
+                    case 'btnRunSeriesScan': this.runSeriesScan(); break;
+                    case 'btnRunFullSeriesScan': this.runFullSeriesScan(); break;
+                    case 'btnCalculateAspectRatio': this.calculateAspectRatio(); break;
+                    case 'btnRefreshMemoryStats': this.refreshMemoryStats(); break;
+                    case 'settingsPage':
+                    case 'iconManagerPage':
+                    case 'troubleshooterPage':
+                    case 'readmePage':
+                        this.onTabChange(targetButton); break;
+                }
+            });
 
-                this.getDomElements(view);
-                this.bindEvents();
-            }
+            this.dom.form.addEventListener('change', (e) => {
+                if (e.target.matches('[data-config-key], [data-profile-key], [data-library-id]')) {
+                    this.onFormChange(e);
+                }
+            });
+            this.dom.form.addEventListener('input', (e) => {
+                if (e.target.matches('[data-profile-key="CommunityScoreBackgroundOpacity"]')) {
+                    this.onFormChange(e);
+                }
+            });
+            this.dom.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveData();
+                return false;
+            });
 
-            getDomElements(view) {
-                this.dom = {
-                    view: view,
-                    form: view.querySelector('.embyIconsForm'),
-                    allConfigInputs: view.querySelectorAll('[data-config-key]'),
-                    allProfileInputs: view.querySelectorAll('[data-profile-key]'),
-                    allProfileSelects: view.querySelectorAll('select[is="emby-select"][data-profile-key]'),
-                    profileSelector: view.querySelector('#selActiveProfile'),
-                    btnSelectIconsFolder: view.querySelector('#btnSelectIconsFolder'),
-                    txtIconsFolder: view.querySelector('#txtIconsFolder'),
-                    folderWarningIcon: view.querySelector('#folderWarningIcon'),
-                    btnClearCache: view.querySelector('#btnClearCache'),
-                    btnRunIconScan: view.querySelector('#btnRunIconScan'),
-                    librarySelectionContainer: view.querySelector('#librarySelectionContainer'),
-                    opacitySlider: view.querySelector('[data-profile-key="CommunityScoreBackgroundOpacity"]'),
-                    opacityValue: view.querySelector('.valCommunityScoreBackgroundOpacity'),
-                    ratingAppearanceControls: view.querySelector('#ratingAppearanceControls'),
-                    pages: view.querySelectorAll('#settingsPage, #readmePage, #iconManagerPage, #troubleshooterPage'),
-                    previewImage: view.querySelector('.previewImage'),
-                    iconManagerReportContainer: view.querySelector('#iconManagerReportContainer'),
-                    alignmentGrid: view.querySelector('.alignment-grid'),
-                    prioritySelects: view.querySelectorAll('[data-profile-key$="Priority"]'),
-                    txtSeriesSearch: view.querySelector('#txtSeriesSearch'),
-                    seriesSearchResults: view.querySelector('#seriesSearchResults'),
-                    seriesReportContainer: view.querySelector('#seriesReportContainer'),
-                    troubleshooterChecks: view.querySelectorAll('#troubleshooterChecksContainer input[type=checkbox]'),
-                    txtAspectRatioWidth: view.querySelector('#txtAspectRatioWidth'),
-                    txtAspectRatioHeight: view.querySelector('#txtAspectRatioHeight'),
-                    aspectRatioResultContainer: view.querySelector('#aspectRatioResultContainer'),
-                    aspectDecimalValue: view.querySelector('#aspectDecimalValue'),
-                    aspectSnappedIconName: view.querySelector('#aspectSnappedIconName'),
-                    aspectPreciseIconName: view.querySelector('#aspectPreciseIconName')
-                };
-            }
+            this.dom.txtIconsFolder.addEventListener('input', debounce(() => this.validateIconsFolder(this.dom.txtIconsFolder.value), 500));
+            this.dom.txtSeriesSearch.addEventListener('input', debounce(() => this.searchForSeries(this.dom.txtSeriesSearch.value), 300));
 
-            bindEvents() {
-                // *** REGRESSION FIX: Attach the main click listener to the `view` element, not the `form`. ***
-                // The navigation tabs are outside the form, so the listener must be on a common parent.
-                this.dom.view.addEventListener('click', (e) => {
-                    const targetButton = e.target.closest('button, a');
-                    if (!targetButton) return;
+            this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
+            this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
 
-                    // Use dataset for all buttons to be consistent
-                    const action = targetButton.id || targetButton.dataset.action || targetButton.dataset.target;
+            this.dom.previewImage.addEventListener('error', () => {
+                this.dom.previewImage.src = transparentPixel;
+                toast({ type: 'error', text: 'Preview generation failed.' });
+            });
 
-                    switch (action) {
-                        case 'btnAddProfile': this.addProfile(); break;
-                        case 'btnRenameProfile': this.renameProfile(); break;
-                        case 'btnDeleteProfile': this.deleteProfile(); break;
-                        case 'btnSelectIconsFolder': this.selectIconsFolder(); break;
-                        case 'btnClearCache': this.clearCache(); break;
-                        case 'btnRunIconScan': this.runIconScan(); break;
-                        case 'btnRunSeriesScan': this.runSeriesScan(); break;
-                        case 'btnRunFullSeriesScan': this.runFullSeriesScan(); break;
-                        case 'btnCalculateAspectRatio': this.calculateAspectRatio(); break;
-                        case 'settingsPage':
-                        case 'iconManagerPage':
-                        case 'troubleshooterPage':
-                        case 'readmePage':
-                            this.onTabChange(targetButton); break;
-                    }
+            document.addEventListener('click', this.boundDocumentClickHandler);
+        }
+
+        async refreshMemoryStats() {
+            loading.show();
+            try {
+                const report = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.MemoryReport),
+                    dataType: "json"
                 });
 
-                this.dom.form.addEventListener('change', (e) => {
-                    if (e.target.matches('[data-config-key], [data-profile-key], [data-library-id]')) {
-                        this.onFormChange(e);
-                    }
-                });
-                this.dom.form.addEventListener('input', (e) => {
-                    if (e.target.matches('[data-profile-key="CommunityScoreBackgroundOpacity"]')) {
-                        this.onFormChange(e);
-                    }
-                });
-                this.dom.form.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.saveData();
-                    return false;
-                });
+                this.dom.memIconCache.textContent = formatBytes(report.IconCacheSize);
+                this.dom.memAggregationCache.textContent = formatBytes(report.AggregationCacheSize);
+                this.dom.memItemDataCache.textContent = formatBytes(report.ItemDataCacheSize);
+                this.dom.memTotalCache.textContent = formatBytes(report.TotalEstimatedSize);
 
-                this.dom.txtIconsFolder.addEventListener('input', debounce(() => this.validateIconsFolder(this.dom.txtIconsFolder.value), 500));
-                this.dom.txtSeriesSearch.addEventListener('input', debounce(() => this.searchForSeries(this.dom.txtSeriesSearch.value), 300));
+                toast('Memory stats refreshed.');
+            } catch (err) {
+                toast({ type: 'error', text: 'Failed to refresh memory stats.' });
+            } finally {
+                loading.hide();
+            }
+        }
 
-                this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
-                this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
+        onDocumentClick(e) {
+            if (this.dom && !this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
+                this.dom.seriesSearchResults.style.display = 'none';
+            }
+        }
 
-                this.dom.previewImage.addEventListener('error', () => {
-                    this.dom.previewImage.src = transparentPixel;
-                    toast({ type: 'error', text: 'Preview generation failed.' });
-                });
+        destroy() {
+            document.removeEventListener('click', this.boundDocumentClickHandler);
+            clearTimeout(this.previewUpdateTimer);
+            clearTimeout(this.configSaveTimer);
 
-                document.addEventListener('click', this.boundDocumentClickHandler);
+            if (super.destroy) {
+                super.destroy();
+            }
+        }
+
+        async calculateAspectRatio() {
+            const width = parseInt(this.dom.txtAspectRatioWidth.value, 10);
+            const height = parseInt(this.dom.txtAspectRatioHeight.value, 10);
+
+            if (!width || !height || width <= 0 || height <= 0) {
+                toast({ type: 'error', text: 'Please enter valid width and height values.' });
+                this.dom.aspectRatioResultContainer.style.display = 'none';
+                return;
             }
 
-            onDocumentClick(e) {
-                if (this.dom && !this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
-                    this.dom.seriesSearchResults.style.display = 'none';
-                }
-            }
-
-            destroy() {
-                document.removeEventListener('click', this.boundDocumentClickHandler);
-                clearTimeout(this.previewUpdateTimer);
-                clearTimeout(this.configSaveTimer);
-
-                if (super.destroy) {
-                    super.destroy();
-                }
-            }
-
-            async calculateAspectRatio() {
-                const width = parseInt(this.dom.txtAspectRatioWidth.value, 10);
-                const height = parseInt(this.dom.txtAspectRatioHeight.value, 10);
-
-                if (!width || !height || width <= 0 || height <= 0) {
-                    toast({ type: 'error', text: 'Please enter valid width and height values.' });
-                    this.dom.aspectRatioResultContainer.style.display = 'none';
-                    return;
-                }
-
-                try {
-                    const result = await ApiClient.ajax({
-                        type: "GET",
-                        url: ApiClient.getUrl(ApiRoutes.AspectRatio, { Width: width, Height: height }),
-                        dataType: "json"
-                    });
-
-                    this.dom.aspectDecimalValue.textContent = result.DecimalRatio.toFixed(4);
-                    this.dom.aspectSnappedIconName.textContent = result.SnappedName;
-                    this.dom.aspectPreciseIconName.textContent = result.PreciseName;
-                    this.dom.aspectRatioResultContainer.style.display = 'block';
-
-                } catch (err) {
-                    toast({ type: 'error', text: 'Error calculating aspect ratio.' });
-                    this.dom.aspectRatioResultContainer.style.display = 'none';
-                }
-            }
-
-            onFormChange(event) {
-                this.triggerConfigSave();
-                this.triggerPreviewUpdate();
-
-                const target = event.target;
-                const profileKey = target.dataset.profileKey;
-
-                if (profileKey === 'CommunityScoreBackgroundOpacity') {
-                    this.dom.opacityValue.textContent = target.value + '%';
-                }
-                if (profileKey === 'CommunityScoreIconAlignment') {
-                    this.toggleRatingAppearanceControls();
-                }
-                if (profileKey === 'UseSeriesLiteMode') {
-                    this.toggleDependentSetting('UseSeriesLiteMode', 'ShowSeriesIconsIfAllEpisodesHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one episode.');
-                }
-                if (profileKey === 'UseCollectionLiteMode') {
-                    this.toggleDependentSetting('UseCollectionLiteMode', 'ShowCollectionIconsIfAllChildrenHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one item.');
-                }
-                if (target.matches('[data-profile-key$="Priority"]')) {
-                    const cornerGroup = target.closest('[data-corner-group]');
-                    if (cornerGroup) {
-                        this.updatePriorityOptionsForGroup(cornerGroup.dataset.cornerGroup);
-                    }
-                }
-            }
-
-            updatePriorityOptionsForGroup(groupName) {
-                const groupSelects = this.dom.alignmentGrid.querySelectorAll(`[data-corner-group="${groupName}"] [data-profile-key$="Priority"]`);
-                const selectedPriorities = new Set();
-
-                groupSelects.forEach(select => {
-                    if (select.value !== '0') {
-                        selectedPriorities.add(select.value);
-                    }
+            try {
+                const result = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.AspectRatio, { Width: width, Height: height }),
+                    dataType: "json"
                 });
 
-                groupSelects.forEach(select => {
-                    const ownValue = select.value;
-                    for (const option of select.options) {
-                        if (option.value !== '0' && option.value !== ownValue) {
-                            option.disabled = selectedPriorities.has(option.value);
-                        } else {
-                            option.disabled = false;
-                        }
-                    }
-                });
+                this.dom.aspectDecimalValue.textContent = result.DecimalRatio.toFixed(4);
+                this.dom.aspectSnappedIconName.textContent = result.SnappedName;
+                this.dom.aspectPreciseIconName.textContent = result.PreciseName;
+                this.dom.aspectRatioResultContainer.style.display = 'block';
+
+            } catch (err) {
+                toast({ type: 'error', text: 'Error calculating aspect ratio.' });
+                this.dom.aspectRatioResultContainer.style.display = 'none';
             }
+        }
 
-            updateAllPriorityGroups() {
-                const groupNames = new Set(Array.from(this.dom.prioritySelects, s => s.closest('[data-corner-group]')?.dataset.cornerGroup).filter(Boolean));
-                groupNames.forEach(name => this.updatePriorityOptionsForGroup(name));
+        onFormChange(event) {
+            this.triggerConfigSave();
+            this.triggerPreviewUpdate();
+
+            const target = event.target;
+            const profileKey = target.dataset.profileKey;
+
+            if (profileKey === 'CommunityScoreBackgroundOpacity') {
+                this.dom.opacityValue.textContent = target.value + '%';
             }
-
-            toggleDependentSetting(controllerKey, dependentKey, dependentMessage) {
-                const controllerCheckbox = this.dom.view.querySelector(`[data-profile-key="${controllerKey}"]`);
-                const dependentCheckbox = this.dom.view.querySelector(`[data-profile-key="${dependentKey}"]`);
-                if (controllerCheckbox && dependentCheckbox) {
-                    const container = dependentCheckbox.closest('.checkboxContainer');
-                    const isDisabled = controllerCheckbox.checked;
-                    dependentCheckbox.disabled = isDisabled;
-                    if (container) {
-                        container.style.opacity = isDisabled ? '0.6' : '1';
-                        container.style.pointerEvents = isDisabled ? 'none' : 'auto';
-                        container.title = isDisabled ? dependentMessage : '';
-                    }
-                }
-            }
-
-            toggleRatingAppearanceControls() {
-                const ratingAlignmentSelect = this.dom.view.querySelector('[data-profile-key="CommunityScoreIconAlignment"]');
-                this.dom.ratingAppearanceControls.style.display = ratingAlignmentSelect.value === 'Disabled' ? 'none' : 'block';
-            }
-
-            onTabChange(targetButton) {
-                this.dom.view.querySelector('.localnav .ui-btn-active')?.classList.remove('ui-btn-active');
-                targetButton.classList.add('ui-btn-active');
-                const targetId = targetButton.dataset.target;
-                this.dom.pages.forEach(page => {
-                    page.classList.toggle('hide', page.id !== targetId);
-                });
-            }
-
-            onResume(options) {
-                super.onResume(options);
-                this.loadData();
-            }
-
-            async loadData() {
-                loading.show();
-                try {
-                    const [config, virtualFolders, user] = await Promise.all([
-                        ApiClient.getPluginConfiguration(pluginId),
-                        ApiClient.getVirtualFolders(),
-                        ApiClient.getCurrentUser()
-                    ]);
-
-                    this.pluginConfiguration = config;
-                    this.currentUser = user;
-                    this.loadGlobalSettings(config);
-
-                    const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
-                    this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
-                    this.libraryMap = new Map(this.allLibraries.map(lib => [lib.Id, lib.Name]));
-
-                    this.populateProfileSelector();
-                    this.dom.profileSelector.addEventListener('change', (e) => this.loadProfileSettings(e.target.value));
-                    await this.loadProfileSettings(this.dom.profileSelector.value);
-                    this.validateIconsFolder(config.IconsFolder);
-                } catch (error) {
-                    console.error('Failed to load EmbyIcons configuration', error);
-                    toast({ type: 'error', text: 'Error loading configuration.' });
-                } finally {
-                    loading.hide();
-                }
-            }
-
-            loadGlobalSettings(config) {
-                this.dom.allConfigInputs.forEach(el => {
-                    const key = el.dataset.configKey;
-                    const value = config[key];
-                    if (el.type === 'checkbox') {
-                        el.checked = value;
-                    } else {
-                        el.value = value ?? '';
-                    }
-                });
-            }
-
-            populateProfileSelector() {
-                const select = this.dom.profileSelector;
-                select.innerHTML = this.pluginConfiguration.Profiles.map(p => `<option value="${p.Id}">${p.Name}</option>`).join('');
-                this.currentProfileId = select.value;
-                if (select.embyselect) select.embyselect.refresh();
-            }
-
-            async loadProfileSettings(profileId) {
-                this.currentProfileId = profileId;
-                const profile = this.pluginConfiguration.Profiles.find(p => p.Id === profileId);
-                if (!profile) return;
-
-                this.renderProfileSettings(profile.Settings);
-                await this.populateLibraryAssignments(profileId);
-                this.triggerPreviewUpdate();
-                this.updateAllPriorityGroups();
-            }
-
-            renderProfileSettings(settings) {
-                this.dom.allProfileInputs.forEach(el => {
-                    const key = el.dataset.profileKey;
-                    const value = settings[key];
-                    if (el.type === 'checkbox') {
-                        el.checked = value;
-                    } else {
-                        el.value = value ?? '';
-                    }
-                });
-                this.dom.allProfileSelects.forEach(s => {
-                    if (s.embyselect) s.embyselect.refresh();
-                });
-
-                this.dom.opacityValue.textContent = this.dom.opacitySlider.value + '%';
-
+            if (profileKey === 'CommunityScoreIconAlignment') {
                 this.toggleRatingAppearanceControls();
+            }
+            if (profileKey === 'UseSeriesLiteMode') {
                 this.toggleDependentSetting('UseSeriesLiteMode', 'ShowSeriesIconsIfAllEpisodesHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one episode.');
+            }
+            if (profileKey === 'UseCollectionLiteMode') {
                 this.toggleDependentSetting('UseCollectionLiteMode', 'ShowCollectionIconsIfAllChildrenHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one item.');
             }
+            if (target.matches('[data-profile-key$="Priority"]')) {
+                const cornerGroup = target.closest('[data-corner-group]');
+                if (cornerGroup) {
+                    this.updatePriorityOptionsForGroup(cornerGroup.dataset.cornerGroup);
+                }
+            }
+        }
 
-            async populateLibraryAssignments(profileId) {
-                const container = this.dom.librarySelectionContainer;
-                if (!this.allLibraries.length) {
-                    const virtualFolders = await ApiClient.getVirtualFolders();
-                    const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
-                    this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
+        updatePriorityOptionsForGroup(groupName) {
+            const groupSelects = this.dom.alignmentGrid.querySelectorAll(`[data-corner-group="${groupName}"] [data-profile-key$="Priority"]`);
+            const selectedPriorities = new Set();
+
+            groupSelects.forEach(select => {
+                if (select.value !== '0') {
+                    selectedPriorities.add(select.value);
+                }
+            });
+
+            groupSelects.forEach(select => {
+                const ownValue = select.value;
+                for (const option of select.options) {
+                    if (option.value !== '0' && option.value !== ownValue) {
+                        option.disabled = selectedPriorities.has(option.value);
+                    } else {
+                        option.disabled = false;
+                    }
+                }
+            });
+        }
+
+        updateAllPriorityGroups() {
+            const groupNames = new Set(Array.from(this.dom.prioritySelects, s => s.closest('[data-corner-group]')?.dataset.cornerGroup).filter(Boolean));
+            groupNames.forEach(name => this.updatePriorityOptionsForGroup(name));
+        }
+
+        toggleDependentSetting(controllerKey, dependentKey, dependentMessage) {
+            const controllerCheckbox = this.dom.view.querySelector(`[data-profile-key="${controllerKey}"]`);
+            const dependentCheckbox = this.dom.view.querySelector(`[data-profile-key="${dependentKey}"]`);
+            if (controllerCheckbox && dependentCheckbox) {
+                const container = dependentCheckbox.closest('.checkboxContainer');
+                const isDisabled = controllerCheckbox.checked;
+                dependentCheckbox.disabled = isDisabled;
+                if (container) {
+                    container.style.opacity = isDisabled ? '0.6' : '1';
+                    container.style.pointerEvents = isDisabled ? 'none' : 'auto';
+                    container.title = isDisabled ? dependentMessage : '';
+                }
+            }
+        }
+
+        toggleRatingAppearanceControls() {
+            const ratingAlignmentSelect = this.dom.view.querySelector('[data-profile-key="CommunityScoreIconAlignment"]');
+            this.dom.ratingAppearanceControls.style.display = ratingAlignmentSelect.value === 'Disabled' ? 'none' : 'block';
+        }
+
+        onTabChange(targetButton) {
+            this.dom.view.querySelector('.localnav .ui-btn-active')?.classList.remove('ui-btn-active');
+            targetButton.classList.add('ui-btn-active');
+            const targetId = targetButton.dataset.target;
+            this.dom.pages.forEach(page => {
+                page.classList.toggle('hide', page.id !== targetId);
+            });
+
+            if (targetId === 'troubleshooterPage') {
+                this.refreshMemoryStats();
+            }
+        }
+
+        onResume(options) {
+            super.onResume(options);
+            this.loadData();
+        }
+
+        async loadData() {
+            loading.show();
+            try {
+                const [config, virtualFolders, user] = await Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getVirtualFolders(),
+                    ApiClient.getCurrentUser()
+                ]);
+
+                this.pluginConfiguration = config;
+                this.currentUser = user;
+                this.loadGlobalSettings(config);
+
+                const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
+                this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
+                this.libraryMap = new Map(this.allLibraries.map(lib => [lib.Id, lib.Name]));
+                this.profileMap = new Map(this.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));
+
+                this.populateProfileSelector();
+                this.dom.profileSelector.addEventListener('change', (e) => this.loadProfileSettings(e.target.value));
+                await this.loadProfileSettings(this.dom.profileSelector.value);
+                this.validateIconsFolder(config.IconsFolder);
+            } catch (error) {
+                console.error('Failed to load EmbyIcons configuration', error);
+                toast({ type: 'error', text: 'Error loading configuration.' });
+            } finally {
+                loading.hide();
+            }
+        }
+
+        loadGlobalSettings(config) {
+            this.dom.allConfigInputs.forEach(el => {
+                const key = el.dataset.configKey;
+                const value = config[key];
+                if (el.type === 'checkbox') {
+                    el.checked = value;
+                } else {
+                    el.value = value ?? '';
+                }
+            });
+        }
+
+        populateProfileSelector() {
+            const select = this.dom.profileSelector;
+            select.innerHTML = this.pluginConfiguration.Profiles.map(p => `<option value="${p.Id}">${p.Name}</option>`).join('');
+            this.currentProfileId = select.value;
+            this.profileMap = new Map(this.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));
+            if (select.embyselect) select.embyselect.refresh();
+        }
+
+        async loadProfileSettings(profileId) {
+            this.currentProfileId = profileId;
+            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === profileId);
+            if (!profile) return;
+
+            this.renderProfileSettings(profile.Settings);
+            await this.populateLibraryAssignments(profileId);
+            this.triggerPreviewUpdate();
+            this.updateAllPriorityGroups();
+        }
+
+        renderProfileSettings(settings) {
+            this.dom.allProfileInputs.forEach(el => {
+                const key = el.dataset.profileKey;
+                const value = settings[key];
+                if (el.type === 'checkbox') {
+                    el.checked = value;
+                } else {
+                    el.value = value ?? '';
+                }
+            });
+            this.dom.allProfileSelects.forEach(s => {
+                if (s.embyselect) s.embyselect.refresh();
+            });
+
+            this.dom.opacityValue.textContent = this.dom.opacitySlider.value + '%';
+
+            this.toggleRatingAppearanceControls();
+            this.toggleDependentSetting('UseSeriesLiteMode', 'ShowSeriesIconsIfAllEpisodesHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one episode.');
+            this.toggleDependentSetting('UseCollectionLiteMode', 'ShowCollectionIconsIfAllChildrenHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one item.');
+        }
+
+        async populateLibraryAssignments(profileId) {
+            const container = this.dom.librarySelectionContainer;
+            const libraryToProfileMap = new Map(this.pluginConfiguration.LibraryProfileMappings.map(m => [m.LibraryId, m.ProfileId]));
+
+            let html = '';
+            for (const library of this.allLibraries) {
+                const assignedProfileId = libraryToProfileMap.get(library.Id);
+                const isAssignedToCurrent = assignedProfileId === profileId;
+                const isAssignedToOther = assignedProfileId && !isAssignedToCurrent;
+
+                const isChecked = isAssignedToCurrent || isAssignedToOther;
+                const isDisabled = isAssignedToOther;
+
+                let title = '';
+                if (isDisabled) {
+                    const otherProfileName = this.profileMap.get(assignedProfileId) || 'another profile';
+                    title = ` title="This library is managed by the '${otherProfileName}' profile."`;
                 }
 
-                container.innerHTML = this.allLibraries.map(library => `<div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-library-id="${library.Id}" /><span>${library.Name}</span></label></div>`).join('');
-                const mappedLibraryIds = new Set(this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId === profileId).map(m => m.LibraryId));
-                container.querySelectorAll('input[type=checkbox]').forEach(checkbox => {
-                    checkbox.checked = mappedLibraryIds.has(checkbox.dataset.libraryId);
-                });
+                html += `<div class="checkboxContainer"${title}>
+                                <label>
+                                    <input is="emby-checkbox" type="checkbox" data-library-id="${library.Id}" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} />
+                                    <span>${library.Name}</span>
+                                </label>
+                             </div>`;
             }
+            container.innerHTML = html;
+        }
 
-            getCurrentProfileSettingsFromForm() {
-                const settings = {};
-                this.dom.allProfileInputs.forEach(el => {
-                    const key = el.dataset.profileKey;
-                    if (el.type === 'checkbox') {
-                        settings[key] = el.checked;
-                    } else if (el.type === 'number' || el.classList.contains('slider') || key.endsWith('Priority')) {
-                        settings[key] = parseInt(el.value, 10) || 0;
-                    } else {
-                        settings[key] = el.value;
-                    }
-                });
-                return settings;
-            }
+        getCurrentProfileSettingsFromForm() {
+            const settings = {};
+            this.dom.allProfileInputs.forEach(el => {
+                const key = el.dataset.profileKey;
+                if (el.type === 'checkbox') {
+                    settings[key] = el.checked;
+                } else if (el.type === 'number' || el.classList.contains('slider') || key.endsWith('Priority')) {
+                    settings[key] = parseInt(el.value, 10) || 0;
+                } else {
+                    settings[key] = el.value;
+                }
+            });
+            return settings;
+        }
 
-            saveCurrentProfileSettings() {
-                const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
-                if (!profile) return;
+        saveCurrentProfileSettings() {
+            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
+            if (!profile) return;
 
-                Object.assign(profile.Settings, this.getCurrentProfileSettingsFromForm());
+            Object.assign(profile.Settings, this.getCurrentProfileSettingsFromForm());
 
-                this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
-                this.dom.librarySelectionContainer.querySelectorAll('input:checked').forEach(checkbox => {
+            // Remove all mappings for the current profile
+            this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
+
+            // Add back the mappings for the currently checked (and enabled) libraries for this profile
+            this.dom.librarySelectionContainer.querySelectorAll('input:checked').forEach(checkbox => {
+                if (!checkbox.disabled) {
                     this.pluginConfiguration.LibraryProfileMappings.push({
                         LibraryId: checkbox.dataset.libraryId,
                         ProfileId: this.currentProfileId
                     });
-                });
-            }
+                }
+            });
+        }
 
-            showDialog(templateId, dialogOptions) {
-                const template = this.dom.view.querySelector(templateId);
-                const dlg = dialogHelper.createDialog(dialogOptions);
-                dlg.innerHTML = '';
-                dlg.appendChild(template.content.cloneNode(true));
-                dialogHelper.open(dlg);
-                return dlg;
-            }
+        showDialog(templateId, dialogOptions) {
+            const template = this.dom.view.querySelector(templateId);
+            const dlg = dialogHelper.createDialog(dialogOptions);
+            dlg.innerHTML = '';
+            dlg.appendChild(template.content.cloneNode(true));
+            dialogHelper.open(dlg);
+            return dlg;
+        }
 
-            addProfile() {
-                const dlg = this.showDialog('#addProfileDialogTemplate', { removeOnClose: true, size: 'small' });
+        addProfile() {
+            const dlg = this.showDialog('#addProfileDialogTemplate', { removeOnClose: true, size: 'small' });
 
-                dlg.querySelector('form').addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    loading.show();
-                    try {
-                        const newName = dlg.querySelector('#txtNewProfileName').value;
-                        const newProfile = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.DefaultProfile), dataType: "json" });
-                        newProfile.Name = newName;
+            dlg.querySelector('form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                loading.show();
+                try {
+                    const newName = dlg.querySelector('#txtNewProfileName').value;
+                    const newProfile = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.DefaultProfile), dataType: "json" });
+                    newProfile.Name = newName;
 
-                        this.pluginConfiguration.Profiles.push(newProfile);
-                        this.populateProfileSelector();
-                        this.dom.profileSelector.value = newProfile.Id;
-                        if (this.dom.profileSelector.embyselect) this.dom.profileSelector.embyselect.refresh();
-                        await this.loadProfileSettings(newProfile.Id);
-                        toast('New profile created.');
-                    } catch (err) {
-                        toast({ type: 'error', text: 'Error creating profile.' });
-                    } finally {
-                        loading.hide();
-                        dialogHelper.close(dlg);
-                    }
-                    return false;
-                });
-                dlg.querySelector('.btnCancel').addEventListener('click', () => dialogHelper.close(dlg));
-            }
-
-            renameProfile() {
-                const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
-                if (!profile) return;
-
-                const dlg = this.showDialog('#renameProfileDialogTemplate', { removeOnClose: true, size: 'small' });
-                const input = dlg.querySelector('#txtRenameProfile');
-                input.value = profile.Name;
-
-                dlg.querySelector('form').addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    profile.Name = input.value;
+                    this.pluginConfiguration.Profiles.push(newProfile);
                     this.populateProfileSelector();
-                    this.triggerConfigSave();
-                    toast('Profile renamed.');
-                    dialogHelper.close(dlg);
-                    return false;
-                });
-                dlg.querySelector('.btnCancel').addEventListener('click', () => dialogHelper.close(dlg));
-            }
-
-            deleteProfile() {
-                if (this.pluginConfiguration.Profiles.length <= 1) {
-                    toast({ type: 'error', text: 'Cannot delete the last profile.' });
-                    return;
-                }
-                const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
-                if (!profile) return;
-
-                dialogHelper.confirm(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile').then(async (result) => {
-                    if (result) {
-                        this.pluginConfiguration.Profiles = this.pluginConfiguration.Profiles.filter(p => p.Id !== this.currentProfileId);
-                        this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
-                        this.populateProfileSelector();
-                        await this.loadProfileSettings(this.dom.profileSelector.value);
-                        this.triggerConfigSave();
-                    }
-                });
-            }
-
-            async saveData() {
-                if (!this.pluginConfiguration.Profiles?.length) {
-                    toast({ type: 'error', text: 'Cannot save settings. You must create at least one profile.' });
-                    return;
-                }
-
-                loading.show();
-                clearTimeout(this.configSaveTimer);
-                this.saveCurrentProfileSettings();
-
-                this.dom.allConfigInputs.forEach(el => {
-                    const key = el.dataset.configKey;
-                    if (el.type === 'checkbox') {
-                        this.pluginConfiguration[key] = el.checked;
-                    } else {
-                        this.pluginConfiguration[key] = el.value;
-                    }
-                });
-                try {
-                    await ApiClient.updatePluginConfiguration(pluginId, this.pluginConfiguration);
-                    toast('Settings saved.');
-                } catch (error) {
-                    console.error('Error saving EmbyIcons settings', error);
-                    toast({ type: 'error', text: 'Error saving settings.' });
-                } finally {
-                    loading.hide();
-                }
-            }
-
-            triggerConfigSave() {
-                clearTimeout(this.configSaveTimer);
-                this.configSaveTimer = setTimeout(() => {
-                    if (this.dom.view) {
-                        this.saveCurrentProfileSettings();
-                    }
-                }, 400);
-            }
-
-            triggerPreviewUpdate() {
-                clearTimeout(this.previewUpdateTimer);
-                this.previewUpdateTimer = setTimeout(() => {
-                    if (this.dom.view) this.updatePreview();
-                }, 300);
-            }
-
-            updatePreview() {
-                const currentSettings = this.getCurrentProfileSettingsFromForm();
-                if (!currentSettings) return;
-
-                this.dom.previewImage.src = ApiClient.getUrl(ApiRoutes.Preview, {
-                    OptionsJson: JSON.stringify(currentSettings),
-                    v: new Date().getTime()
-                });
-            }
-
-            selectIconsFolder() {
-                require(['directorybrowser'], (directorybrowser) => {
-                    const browser = new directorybrowser();
-                    browser.show({
-                        header: 'Select Icons Folder',
-                        path: this.dom.txtIconsFolder.value,
-                        callback: (path) => {
-                            if (path) {
-                                this.dom.txtIconsFolder.value = path;
-                                this.onFormChange({ target: this.dom.txtIconsFolder });
-                                this.validateIconsFolder(path);
-                            }
-                            browser.close();
-                        }
-                    });
-                });
-            }
-
-            async validateIconsFolder(path) {
-                if (!path) {
-                    this.dom.folderWarningIcon.style.display = 'none';
-                    return;
-                }
-
-                try {
-                    const result = await ApiClient.ajax({
-                        type: 'GET',
-                        url: ApiClient.getUrl(ApiRoutes.ValidatePath, { Path: path }),
-                        dataType: 'json'
-                    });
-
-                    if (!result.Exists) {
-                        this.dom.folderWarningIcon.style.display = 'block';
-                        this.dom.folderWarningIcon.title = 'The specified folder does not exist on the server.';
-                    } else if (!result.HasImages) {
-                        this.dom.folderWarningIcon.style.display = 'block';
-                        this.dom.folderWarningIcon.title = 'The specified folder exists, but no supported image files were found inside.';
-                    } else {
-                        this.dom.folderWarningIcon.style.display = 'none';
-                    }
+                    this.dom.profileSelector.value = newProfile.Id;
+                    if (this.dom.profileSelector.embyselect) this.dom.profileSelector.embyselect.refresh();
+                    await this.loadProfileSettings(newProfile.Id);
+                    toast('New profile created.');
                 } catch (err) {
-                    console.error('Error validating path', err);
+                    toast({ type: 'error', text: 'Error creating profile.' });
+                } finally {
+                    loading.hide();
+                    dialogHelper.close(dlg);
+                }
+                return false;
+            });
+            dlg.querySelector('.btnCancel').addEventListener('click', () => dialogHelper.close(dlg));
+        }
+
+        renameProfile() {
+            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
+            if (!profile) return;
+
+            const dlg = this.showDialog('#renameProfileDialogTemplate', { removeOnClose: true, size: 'small' });
+            const input = dlg.querySelector('#txtRenameProfile');
+            input.value = profile.Name;
+
+            dlg.querySelector('form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                profile.Name = input.value;
+                this.populateProfileSelector();
+                this.triggerConfigSave();
+                toast('Profile renamed.');
+                dialogHelper.close(dlg);
+                return false;
+            });
+            dlg.querySelector('.btnCancel').addEventListener('click', () => dialogHelper.close(dlg));
+        }
+
+        deleteProfile() {
+            if (this.pluginConfiguration.Profiles.length <= 1) {
+                toast({ type: 'error', text: 'Cannot delete the last profile.' });
+                return;
+            }
+            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
+            if (!profile) return;
+
+            dialogHelper.confirm(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile').then(async (result) => {
+                if (result) {
+                    this.pluginConfiguration.Profiles = this.pluginConfiguration.Profiles.filter(p => p.Id !== this.currentProfileId);
+                    this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
+                    this.populateProfileSelector();
+                    await this.loadProfileSettings(this.dom.profileSelector.value);
+                    this.triggerConfigSave();
+                }
+            });
+        }
+
+        async saveData() {
+            if (!this.pluginConfiguration.Profiles?.length) {
+                toast({ type: 'error', text: 'Cannot save settings. You must create at least one profile.' });
+                return;
+            }
+
+            loading.show();
+            clearTimeout(this.configSaveTimer);
+            this.saveCurrentProfileSettings();
+
+            this.dom.allConfigInputs.forEach(el => {
+                const key = el.dataset.configKey;
+                if (el.type === 'checkbox') {
+                    this.pluginConfiguration[key] = el.checked;
+                } else {
+                    this.pluginConfiguration[key] = el.value;
+                }
+            });
+            try {
+                await ApiClient.updatePluginConfiguration(pluginId, this.pluginConfiguration);
+                toast('Settings saved.');
+            } catch (error) {
+                console.error('Error saving EmbyIcons settings', error);
+                toast({ type: 'error', text: 'Error saving settings.' });
+            } finally {
+                loading.hide();
+            }
+        }
+
+        triggerConfigSave() {
+            clearTimeout(this.configSaveTimer);
+            this.configSaveTimer = setTimeout(() => {
+                if (this.dom.view) {
+                    this.saveCurrentProfileSettings();
+                }
+            }, 400);
+        }
+
+        triggerPreviewUpdate() {
+            clearTimeout(this.previewUpdateTimer);
+            this.previewUpdateTimer = setTimeout(() => {
+                if (this.dom.view) this.updatePreview();
+            }, 300);
+        }
+
+        updatePreview() {
+            const currentSettings = this.getCurrentProfileSettingsFromForm();
+            if (!currentSettings) return;
+
+            this.dom.previewImage.src = ApiClient.getUrl(ApiRoutes.Preview, {
+                OptionsJson: JSON.stringify(currentSettings),
+                v: new Date().getTime()
+            });
+        }
+
+        selectIconsFolder() {
+            require(['directorybrowser'], (directorybrowser) => {
+                const browser = new directorybrowser();
+                browser.show({
+                    header: 'Select Icons Folder',
+                    path: this.dom.txtIconsFolder.value,
+                    callback: (path) => {
+                        if (path) {
+                            this.dom.txtIconsFolder.value = path;
+                            this.onFormChange({ target: this.dom.txtIconsFolder });
+                            this.validateIconsFolder(path);
+                        }
+                        browser.close();
+                    }
+                });
+            });
+        }
+
+        async validateIconsFolder(path) {
+            if (!path) {
+                this.dom.folderWarningIcon.style.display = 'none';
+                return;
+            }
+
+            try {
+                const result = await ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl(ApiRoutes.ValidatePath, { Path: path }),
+                    dataType: 'json'
+                });
+
+                if (!result.Exists) {
+                    this.dom.folderWarningIcon.style.display = 'block';
+                    this.dom.folderWarningIcon.title = 'The specified folder does not exist on the server.';
+                } else if (!result.HasImages) {
+                    this.dom.folderWarningIcon.style.display = 'block';
+                    this.dom.folderWarningIcon.title = 'The specified folder exists, but no supported image files were found inside.';
+                } else {
                     this.dom.folderWarningIcon.style.display = 'none';
                 }
+            } catch (err) {
+                console.error('Error validating path', err);
+                this.dom.folderWarningIcon.style.display = 'none';
             }
+        }
 
-            async clearCache() {
-                loading.show();
-                try {
-                    await ApiClient.ajax({ type: "POST", url: ApiClient.getUrl(ApiRoutes.RefreshCache) });
-                    toast('Cache cleared, icons will be redrawn.');
-                } catch (error) {
-                    console.error('Error clearing EmbyIcons cache', error);
-                    toast({ type: 'error', text: 'Error clearing icon cache.' });
-                } finally {
-                    loading.hide();
-                }
+        async clearCache() {
+            loading.show();
+            try {
+                await ApiClient.ajax({ type: "POST", url: ApiClient.getUrl(ApiRoutes.RefreshCache) });
+                toast('Cache cleared, icons will be redrawn.');
+                this.refreshMemoryStats();
+            } catch (error) {
+                console.error('Error clearing EmbyIcons cache', error);
+                toast({ type: 'error', text: 'Error clearing icon cache.' });
+            } finally {
+                loading.hide();
             }
+        }
 
-            async runIconScan() {
-                const button = this.dom.view.querySelector('#btnRunIconScan');
-                loading.show();
-                button.disabled = true;
-                button.querySelector('span').textContent = 'Scanning...';
+        async runIconScan() {
+            const button = this.dom.view.querySelector('#btnRunIconScan');
+            loading.show();
+            button.disabled = true;
+            button.querySelector('span').textContent = 'Scanning...';
 
-                const container = this.dom.iconManagerReportContainer;
-                container.innerHTML = '<p>Scanning your library... This may take several minutes on the first run.</p>';
+            const container = this.dom.iconManagerReportContainer;
+            container.innerHTML = '<p>Scanning your library... This may take several minutes on the first run.</p>';
 
-                try {
-                    const report = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.IconManagerReport), dataType: "json" });
-                    this.renderIconManagerReport(report);
-                } catch (error) {
-                    console.error('Error getting icon manager report', error);
-                    container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
-                } finally {
-                    loading.hide();
-                    button.disabled = false;
-                    button.querySelector('span').textContent = 'Scan Library & Icons';
-                }
+            try {
+                const report = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.IconManagerReport), dataType: "json" });
+                this.renderIconManagerReport(report);
+            } catch (error) {
+                console.error('Error getting icon manager report', error);
+                container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+            } finally {
+                loading.hide();
+                button.disabled = false;
+                button.querySelector('span').textContent = 'Scan Library & Icons';
             }
+        }
 
-            renderIconManagerReport(report) {
-                const container = this.dom.iconManagerReportContainer;
-                const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings' };
-                const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr." };
+        renderIconManagerReport(report) {
+            const container = this.dom.iconManagerReportContainer;
+            const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings' };
+            const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr." };
 
-                let html = `<p class="fieldDescription">Report generated on: ${new Date(report.ReportDate).toLocaleString()}</p>`;
+            let html = `<p class="fieldDescription">Report generated on: ${new Date(report.ReportDate).toLocaleString()}</p>`;
 
-                for (const groupName in report.Groups) {
-                    if (Object.prototype.hasOwnProperty.call(report.Groups, groupName) && friendlyNames[groupName]) {
-                        const group = report.Groups[groupName];
-                        const librarySet = new Set(group.FoundInLibrary.map(i => i.toLowerCase()));
-                        const folderSet = new Set(group.FoundInFolder.map(i => i.toLowerCase()));
-                        const found = [...folderSet].filter(i => librarySet.has(i)).sort();
-                        const missing = [...librarySet].filter(i => !folderSet.has(i)).sort();
-                        const unused = [...folderSet].filter(i => !librarySet.has(i)).sort();
+            for (const groupName in report.Groups) {
+                if (Object.prototype.hasOwnProperty.call(report.Groups, groupName) && friendlyNames[groupName]) {
+                    const group = report.Groups[groupName];
+                    const librarySet = new Set(group.FoundInLibrary.map(i => i.toLowerCase()));
+                    const folderSet = new Set(group.FoundInFolder.map(i => i.toLowerCase()));
+                    const found = [...folderSet].filter(i => librarySet.has(i)).sort();
+                    const missing = [...librarySet].filter(i => !folderSet.has(i)).sort();
+                    const unused = [...folderSet].filter(i => !librarySet.has(i)).sort();
 
-                        if (found.length === 0 && missing.length === 0 && unused.length === 0) continue;
+                    if (found.length === 0 && missing.length === 0 && unused.length === 0) continue;
 
-                        html += `<div class="paper-card" style="margin-top: 1.5em; padding: 1em 1.5em;">
+                    html += `<div class="paper-card" style="margin-top: 1.5em; padding: 1em 1.5em;">
                                 <h3 style="margin-top: 0; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">${friendlyNames[groupName]}</h3>
                                 <div class="collapsible-content" style="display: none;">`;
-                        if (missing.length > 0) {
-                            html += `<h4><span style="color: #ffc107;">!</span> Missing Icons (${missing.length})</h4><p class="fieldDescription">Your library needs these icons, but they were not found in your custom folder. You can add them or rely on the built-in fallback icons (if enabled).</p>
+                    if (missing.length > 0) {
+                        html += `<h4><span style="color: #ffc107;">!</span> Missing Icons (${missing.length})</h4><p class="fieldDescription">Your library needs these icons, but they were not found in your custom folder. You can add them or rely on the built-in fallback icons (if enabled).</p>
                                  <div class="icon-grid">${missing.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
-                        }
-                        if (found.length > 0) {
-                            html += `<h4 style="margin-top: 1.5em;"><span style="color: #4CAF50;">✓</span> Found Icons (${found.length})</h4><p class="fieldDescription">These custom icons are correctly configured and used by your library.</p>
+                    }
+                    if (found.length > 0) {
+                        html += `<h4 style="margin-top: 1.5em;"><span style="color: #4CAF50;">✓</span> Found Icons (${found.length})</h4><p class="fieldDescription">These custom icons are correctly configured and used by your library.</p>
                                  <div class="icon-grid">${found.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
-                        }
-                        if (unused.length > 0) {
-                            html += `<h4 style="margin-top: 1.5em;"><span style="color: #888;">-</span> Unused Icons (${unused.length})</h4><p class="fieldDescription">These icons exist in your folder but are not currently needed by any media.</p>
+                    }
+                    if (unused.length > 0) {
+                        html += `<h4 style="margin-top: 1.5em;"><span style="color: #888;">-</span> Unused Icons (${unused.length})</h4><p class="fieldDescription">These icons exist in your folder but are not currently needed by any media.</p>
                                  <div class="icon-grid">${unused.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
-                        }
-                        html += `</div></div>`;
                     }
-                }
-                html += `<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }</style>`;
-
-                container.innerHTML = html;
-            }
-
-            async searchForSeries(searchTerm) {
-                const resultsContainer = this.dom.seriesSearchResults;
-
-                if (searchTerm.length < 2) {
-                    resultsContainer.innerHTML = '';
-                    resultsContainer.style.display = 'none';
-                    return;
-                }
-
-                try {
-                    const results = await ApiClient.getItems(this.currentUser.Id, {
-                        IncludeItemTypes: 'Series',
-                        Recursive: true,
-                        SearchTerm: searchTerm,
-                        Limit: 10,
-                        Fields: 'Path'
-                    });
-
-                    if (results.Items.length) {
-                        resultsContainer.innerHTML = results.Items.map(item =>
-                            `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.75em 1em; cursor: pointer;">${item.Name} <span style="color:#aaa; font-size:0.9em;">(${item.Path || 'Unknown'})</span></div>`
-                        ).join('');
-                        resultsContainer.style.display = 'block';
-                    } else {
-                        resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
-                        resultsContainer.style.display = 'block';
-                    }
-                } catch (err) {
-                    console.error('Error searching for series', err);
-                    resultsContainer.style.display = 'none';
+                    html += `</div></div>`;
                 }
             }
+            html += `<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }</style>`;
 
-            onSeriesSearchResultClick(e) {
-                const target = e.target.closest('.searchResultItem');
-                if (target) {
-                    this.selectedSeriesId = target.dataset.id;
-                    this.dom.txtSeriesSearch.value = target.dataset.name;
-                    this.dom.seriesSearchResults.style.display = 'none';
-                    this.dom.seriesSearchResults.innerHTML = '';
-                }
+            container.innerHTML = html;
+        }
+
+        async searchForSeries(searchTerm) {
+            const resultsContainer = this.dom.seriesSearchResults;
+
+            if (searchTerm.length < 2) {
+                resultsContainer.innerHTML = '';
+                resultsContainer.style.display = 'none';
+                return;
             }
 
-            getTroubleshooterChecks() {
-                return Array.from(this.dom.troubleshooterChecks)
-                    .filter(cb => cb.checked)
-                    .map(cb => cb.dataset.checkName)
-                    .join(',');
+            try {
+                const results = await ApiClient.getItems(this.currentUser.Id, {
+                    IncludeItemTypes: 'Series',
+                    Recursive: true,
+                    SearchTerm: searchTerm,
+                    Limit: 10,
+                    Fields: 'Path'
+                });
+
+                if (results.Items.length) {
+                    resultsContainer.innerHTML = results.Items.map(item =>
+                        `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.75em 1em; cursor: pointer;">${item.Name} <span style="color:#aaa; font-size:0.9em;">(${item.Path || 'Unknown'})</span></div>`
+                    ).join('');
+                    resultsContainer.style.display = 'block';
+                } else {
+                    resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
+                    resultsContainer.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Error searching for series', err);
+                resultsContainer.style.display = 'none';
+            }
+        }
+
+        onSeriesSearchResultClick(e) {
+            const target = e.target.closest('.searchResultItem');
+            if (target) {
+                this.selectedSeriesId = target.dataset.id;
+                this.dom.txtSeriesSearch.value = target.dataset.name;
+                this.dom.seriesSearchResults.style.display = 'none';
+                this.dom.seriesSearchResults.innerHTML = '';
+            }
+        }
+
+        getTroubleshooterChecks() {
+            return Array.from(this.dom.troubleshooterChecks)
+                .filter(cb => cb.checked)
+                .map(cb => cb.dataset.checkName)
+                .join(',');
+        }
+
+        async runSeriesScan() {
+            if (!this.selectedSeriesId) {
+                toast({ type: 'error', text: 'Please search for and select a TV show first.' });
+                return;
+            }
+            const checksToRun = this.getTroubleshooterChecks();
+            if (!checksToRun) {
+                toast({ type: 'error', text: 'Please select at least one property to check.' });
+                return;
             }
 
-            async runSeriesScan() {
-                if (!this.selectedSeriesId) {
-                    toast({ type: 'error', text: 'Please search for and select a TV show first.' });
-                    return;
-                }
-                const checksToRun = this.getTroubleshooterChecks();
-                if (!checksToRun) {
-                    toast({ type: 'error', text: 'Please select at least one property to check.' });
-                    return;
-                }
+            const button = this.dom.view.querySelector('#btnRunSeriesScan');
+            loading.show();
+            button.disabled = true;
+            const container = this.dom.seriesReportContainer;
+            container.innerHTML = '<p>Scanning series... This might take a moment.</p>';
 
-                const button = this.dom.view.querySelector('#btnRunSeriesScan');
-                loading.show();
-                button.disabled = true;
-                const container = this.dom.seriesReportContainer;
-                container.innerHTML = '<p>Scanning series... This might take a moment.</p>';
+            try {
+                const reports = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { SeriesId: this.selectedSeriesId, ChecksToRun: checksToRun }),
+                    dataType: "json"
+                });
+                this.renderSeriesReport(reports);
+            } catch (error) {
+                console.error('Error getting series troubleshooter report', error);
+                container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+            } finally {
+                loading.hide();
+                button.disabled = false;
+            }
+        }
 
-                try {
-                    const reports = await ApiClient.ajax({
-                        type: "GET",
-                        url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { SeriesId: this.selectedSeriesId, ChecksToRun: checksToRun }),
-                        dataType: "json"
-                    });
-                    this.renderSeriesReport(reports);
-                } catch (error) {
-                    console.error('Error getting series troubleshooter report', error);
-                    container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
-                } finally {
-                    loading.hide();
-                    button.disabled = false;
-                }
+        async runFullSeriesScan() {
+            const checksToRun = this.getTroubleshooterChecks();
+            if (!checksToRun) {
+                toast({ type: 'error', text: 'Please select at least one property to check.' });
+                return;
             }
 
-            async runFullSeriesScan() {
-                const checksToRun = this.getTroubleshooterChecks();
-                if (!checksToRun) {
-                    toast({ type: 'error', text: 'Please select at least one property to check.' });
-                    return;
-                }
+            const button = this.dom.view.querySelector('#btnRunFullSeriesScan');
+            loading.show();
+            button.disabled = true;
+            const container = this.dom.seriesReportContainer;
+            container.innerHTML = '<p>Scanning all TV shows in your library... This can take several minutes.</p>';
 
-                const button = this.dom.view.querySelector('#btnRunFullSeriesScan');
-                loading.show();
-                button.disabled = true;
-                const container = this.dom.seriesReportContainer;
-                container.innerHTML = '<p>Scanning all TV shows in your library... This can take several minutes.</p>';
+            try {
+                const reports = await ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { ChecksToRun: checksToRun }),
+                    dataType: "json"
+                });
+                this.renderSeriesReport(reports);
+            } catch (error) {
+                console.error('Error getting full series troubleshooter report', error);
+                container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+            } finally {
+                loading.hide();
+                button.disabled = false;
+            }
+        }
 
-                try {
-                    const reports = await ApiClient.ajax({
-                        type: "GET",
-                        url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { ChecksToRun: checksToRun }),
-                        dataType: "json"
-                    });
-                    this.renderSeriesReport(reports);
-                } catch (error) {
-                    console.error('Error getting full series troubleshooter report', error);
-                    container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
-                } finally {
-                    loading.hide();
-                    button.disabled = false;
-                }
+        renderSeriesReport(reports) {
+            const container = this.dom.seriesReportContainer;
+            if (!reports || reports.length === 0) {
+                container.innerHTML = '<h2>Scan Complete</h2><p>No inconsistencies found for the selected criteria.</p>';
+                return;
             }
 
-            renderSeriesReport(reports) {
-                const container = this.dom.seriesReportContainer;
-                if (!reports || reports.length === 0) {
-                    container.innerHTML = '<h2>Scan Complete</h2><p>No inconsistencies found for the selected criteria.</p>';
-                    return;
+            const html = reports.map(report => {
+                const mismatchChecks = report.Checks.filter(c => c.Status === 'Mismatch');
+                if (mismatchChecks.length === 0) {
+                    return '';
                 }
 
-                const html = reports.map(report => {
-                    const mismatchChecks = report.Checks.filter(c => c.Status === 'Mismatch');
-                    if (mismatchChecks.length === 0) {
-                        return '';
-                    }
-
-                    const checksHtml = mismatchChecks.map(check => {
-                        const episodesHtml = check.MismatchedEpisodes.map(ep =>
-                            `<li>
+                const checksHtml = mismatchChecks.map(check => {
+                    const episodesHtml = check.MismatchedEpisodes.map(ep =>
+                        `<li>
                             <code>${ep.EpisodeName || `Item ID: ${ep.EpisodeId}`}</code>
                             <br>
                             <span style="font-size: 0.9em;">
@@ -781,16 +842,16 @@
                                 Found: <code class="report-code report-code-warn">${ep.Actual.join(', ') || 'Nothing'}</code>
                             </span>
                          </li>`
-                        ).join('');
+                    ).join('');
 
-                        return `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                    return `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
                                 <h4 style="margin:0; color: #ffc107;">${check.CheckName}</h4>
                                 <p class="fieldDescription" style="margin: 0.5em 0;">${check.Message}</p>
                                 <ul style="margin: 1em 0 0.5em; padding-left: 1.5em; list-style-type: disc;">${episodesHtml}</ul>
                             </div>`;
-                    }).join('');
+                }).join('');
 
-                    return `<div class="report-group collapsible" style="margin-bottom: 1em;">
+                return `<div class="report-group collapsible" style="margin-bottom: 1em;">
                             <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                                 <h2 style="margin: 0;">${report.SeriesName} <span class="fieldDescription">(${report.TotalEpisodes} episodes)</span></h2>
                                 <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
@@ -800,31 +861,31 @@
                             </div>
                         </div>`;
 
-                }).join('');
+            }).join('');
 
-                container.innerHTML = (html.trim() === '') ? '<h2>Scan Complete</h2><p>No inconsistencies found in any TV show for the selected criteria.</p>' : html;
+            container.innerHTML = (html.trim() === '') ? '<h2>Scan Complete</h2><p>No inconsistencies found in any TV show for the selected criteria.</p>' : html;
 
-                container.insertAdjacentHTML('beforeend', `<style>
+            container.insertAdjacentHTML('beforeend', `<style>
                 .report-code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; }
                 .report-code-ok { color: #4CAF50; }
                 .report-code-warn { color: #ffc107; }
             </style>`);
-            }
-
-            onSeriesReportHeaderClick(e) {
-                const header = e.target.closest('.collapsible-header');
-                if (!header) return;
-
-                const content = header.nextElementSibling;
-                const indicator = header.querySelector('.collapsible-indicator');
-
-                if (content?.classList.contains('collapsible-content')) {
-                    const isVisible = content.style.display !== 'none';
-                    content.style.display = isVisible ? 'none' : 'block';
-                    indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
-                }
-            }
         }
 
-        return EmbyIconsConfigurationView;
-    });
+        onSeriesReportHeaderClick(e) {
+            const header = e.target.closest('.collapsible-header');
+            if (!header) return;
+
+            const content = header.nextElementSibling;
+            const indicator = header.querySelector('.collapsible-indicator');
+
+            if (content?.classList.contains('collapsible-content')) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+            }
+        }
+    }
+
+    return EmbyIconsConfigurationView;
+});

@@ -141,11 +141,9 @@ namespace EmbyIcons
             {
                 if (e.Item.Id != Guid.Empty)
                 {
-                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; invalidating its data caches and queueing for hash update.");
-                    enhancer.InvalidateItemHashCache(e.Item.Id);
+                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; invalidating its data caches.");
                     OverlayDataService.InvalidateCacheForItem(e.Item.Id);
                     enhancer.ClearEpisodeIconCache(e.Item.Id);
-                    enhancer.QueueItemUpdate(e.Item);
                 }
             }
         }
