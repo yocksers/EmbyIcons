@@ -1,4 +1,4 @@
-﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
@@ -59,6 +59,13 @@
                                 <input is="emby-checkbox" type="checkbox" data-config-key="EnableImageSmoothing" />
                                 <span>Enable image smoothing (improves icon quality on scaled images)</span>
                             </label>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" data-config-key="EnableCollectionProfileLookup" />
+                                <span>Enable deep profile lookup for collections</span>
+                            </label>
+                            <div class="fieldDescription">Required for icons on collections, but may cause slowdowns on the home screen for some users. If you experience UI lag, try disabling this.</div>
                         </div>
                         <div class="checkboxContainer" style="margin-top: 1.5em;">
                             <label>

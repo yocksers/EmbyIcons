@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    internal class ImageOverlayService : IDisposable
+    internal class ImageOverlayService
     {
         private readonly ILogger _logger;
         private readonly IconCacheManager _iconCache;
@@ -43,12 +43,12 @@ namespace EmbyIcons.Services
             _iconCache = iconCache;
         }
 
-        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, bool sourceWasPng = false)
+        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
-            return await ApplyOverlaysAsync(sourceBitmap, data, profileOptions, globalOptions, cancellationToken, null, sourceWasPng);
+            return await ApplyOverlaysAsync(sourceBitmap, data, profileOptions, globalOptions, cancellationToken, null);
         }
 
-        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons, bool sourceWasPng = false)
+        public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             await _iconCache.InitializeAsync(globalOptions.IconsFolder, cancellationToken);
 
@@ -87,12 +87,10 @@ namespace EmbyIcons.Services
 
             using var image = surface.Snapshot();
 
-            // Decide output format
             var format = globalOptions.OutputFormat switch
             {
                 OutputFormat.Png => SKEncodedImageFormat.Png,
                 OutputFormat.Jpeg => SKEncodedImageFormat.Jpeg,
-                // New "Auto" logic: Use JPEG unless the source image has transparency, in which case use PNG to preserve it.
                 _ => (sourceBitmap.Info.AlphaType == SKAlphaType.Opaque) ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png
             };
 
@@ -418,11 +416,6 @@ namespace EmbyIcons.Services
 
             var ratingIcon = await _iconCache.GetCachedIconAsync("imdb", IconCacheManager.IconType.CommunityRating, options, cancellationToken);
             return new RatingOverlayInfo(profileOptions.CommunityScoreIconAlignment, profileOptions.CommunityScoreIconPriority, profileOptions.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, ratingIcon);
-        }
-
-        public void Dispose()
-        {
-            _backgroundPaint.Dispose();
         }
     }
 }

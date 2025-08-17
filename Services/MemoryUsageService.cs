@@ -28,15 +28,14 @@ namespace EmbyIcons.Services
         public object Get(GetMemoryReport request)
         {
             var iconCacheSize = _enhancer._iconCacheManager.GetCacheMemoryUsage();
-            var (aggCacheSize, itemDataCacheSize, episodeCacheSize) = _enhancer.GetCacheMemoryUsage();
-            var combinedItemCache = itemDataCacheSize + episodeCacheSize;
+            var (aggCacheSize, itemDataCacheSize) = _enhancer.GetCacheMemoryUsage();
 
             return new MemoryReportResponse
             {
                 IconCacheSize = iconCacheSize,
                 AggregationCacheSize = aggCacheSize,
-                ItemDataCacheSize = combinedItemCache,
-                TotalEstimatedSize = iconCacheSize + aggCacheSize + combinedItemCache
+                ItemDataCacheSize = itemDataCacheSize,
+                TotalEstimatedSize = iconCacheSize + aggCacheSize + itemDataCacheSize
             };
         }
     }

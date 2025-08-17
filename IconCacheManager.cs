@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -16,9 +16,6 @@ namespace EmbyIcons.Helpers
         private readonly ILogger _logger;
         private readonly ConcurrentDictionary<string, CachedIcon> _iconImageCache = new();
         private readonly ConcurrentDictionary<string, SKImage> _embeddedIconCache = new();
-
-        private const int MaxCustomIconCacheSize = 250;
-        private const int MaxEmbeddedIconCacheSize = 250;
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
         private static readonly object _embeddedCacheLock = new object();
@@ -224,11 +221,7 @@ namespace EmbyIcons.Helpers
             if (stream == null) return Task.FromResult<SKImage?>(null);
             using var data = SKData.Create(stream);
             var img = SKImage.FromEncodedData(data);
-            if (img != null)
-            {
-                PruneImageCache(_embeddedIconCache, MaxEmbeddedIconCacheSize);
-                _embeddedIconCache.TryAdd(baseFileName, img);
-            }
+            if (img != null) _embeddedIconCache.TryAdd(baseFileName, img);
             return Task.FromResult(img);
         }
 
@@ -246,32 +239,13 @@ namespace EmbyIcons.Helpers
                 using var data = SKData.Create(memoryStream);
                 var img = SKImage.FromEncodedData(data);
                 if (img == null) return null;
-
-                PruneImageCache(_iconImageCache, MaxCustomIconCacheSize);
                 _iconImageCache[cacheKey] = new CachedIcon(img, File.GetLastWriteTimeUtc(iconPath), iconPath);
-
                 return img;
             }
             catch (Exception ex)
             {
                 _logger.ErrorException($"[EmbyIcons] A critical error occurred while loading icon '{iconPath}'.", ex);
                 return null;
-            }
-        }
-
-        private void PruneImageCache<TValue>(ConcurrentDictionary<string, TValue> cache, int maxSize) where TValue : class
-        {
-            if (cache.Count >= maxSize)
-            {
-                int itemsToRemove = cache.Count - (int)(maxSize * 0.9); // Trim to 90% capacity
-                var keysToRemove = cache.Keys.Take(itemsToRemove).ToList();
-                foreach (var key in keysToRemove)
-                {
-                    if (cache.TryRemove(key, out var item) && item is IDisposable disposable)
-                    {
-                        disposable.Dispose();
-                    }
-                }
             }
         }
 
@@ -301,7 +275,7 @@ namespace EmbyIcons.Helpers
             return dict;
         }
 
-        private sealed class CachedIcon : IDisposable
+        private sealed class CachedIcon
         {
             public SKImage? Image { get; }
             public DateTime FileWriteTimeUtc { get; }
@@ -311,11 +285,6 @@ namespace EmbyIcons.Helpers
                 Image = image;
                 FileWriteTimeUtc = fileWriteTimeUtc;
                 FullPath = fullPath;
-            }
-
-            public void Dispose()
-            {
-                Image?.Dispose();
             }
         }
     }

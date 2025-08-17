@@ -34,9 +34,8 @@ namespace EmbyIcons.Services
         private readonly ILibraryManager _libraryManager;
         private readonly IconCacheManager _iconCacheManager;
 
-        private static (DateTime Timestamp, IconManagerReport Report)? _cachedReport;
+        private static IconManagerReport? _cachedReport;
         private static readonly object _cacheLock = new object();
-        private static readonly TimeSpan _cacheDuration = TimeSpan.FromHours(12);
 
         public IconManagerService(ILibraryManager libraryManager)
         {
@@ -48,18 +47,16 @@ namespace EmbyIcons.Services
         {
             lock (_cacheLock)
             {
-                if (_cachedReport.HasValue && (DateTime.UtcNow - _cachedReport.Value.Timestamp) < _cacheDuration)
+                if (_cachedReport != null)
                 {
-                    Plugin.Instance?.Logger.Info("[EmbyIcons] Serving cached Icon Manager report.");
-                    return _cachedReport.Value.Report;
+                    return _cachedReport;
                 }
             }
 
             var report = GenerateReport();
-
             lock (_cacheLock)
             {
-                _cachedReport = (DateTime.UtcNow, report);
+                _cachedReport = report;
             }
 
             return report;

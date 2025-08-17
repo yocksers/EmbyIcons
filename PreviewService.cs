@@ -111,7 +111,7 @@ namespace EmbyIcons
                 }
             }
 
-            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons, sourceWasPng: true);
+            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons);
             return resultStream;
         }
     }

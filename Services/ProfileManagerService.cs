@@ -46,7 +46,6 @@ namespace EmbyIcons.Services
             var newTrie = new Trie<string>();
             try
             {
-                // The library list is ordered by path length descending to ensure deeper paths are checked first.
                 var libraries = _libraryManager.GetVirtualFolders()
                     .Where(lib => lib != null && lib.Locations != null)
                     .SelectMany(lib => lib.Locations!.Select(loc => (Path: loc, lib.Name, lib.Id)))
@@ -117,15 +116,13 @@ namespace EmbyIcons.Services
 
             if (item is BoxSet boxSet)
             {
-                // Efficiently find the profile by checking the parent library ID, avoiding a slow child item query.
                 var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == boxSet.ParentId.ToString());
                 if (mapping != null)
                 {
                     foundProfile = _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
                 }
-                else
+                else if (_configuration.EnableCollectionProfileLookup)
                 {
-                    // Fallback to the old method if the direct parent isn't a mapped library (e.g., for nested collections)
                     var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
                     {
                         CollectionIds = new[] { boxSet.InternalId },
@@ -140,9 +137,14 @@ namespace EmbyIcons.Services
                     }
                     else
                     {
-                        _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile for icon processing.");
+                        if (_configuration.EnableDebugLogging)
+                            _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
                         foundProfile = null;
                     }
+                }
+                else
+                {
+                    foundProfile = null;
                 }
             }
             else

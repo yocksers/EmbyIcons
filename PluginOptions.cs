@@ -34,6 +34,7 @@ namespace EmbyIcons
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
+        public bool EnableCollectionProfileLookup { get; set; } = true;
 
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
@@ -200,18 +201,6 @@ namespace EmbyIcons
 
         public int IconSize { get; set; } = 10;
         public bool UseSeriesLiteMode { get; set; } = true;
-
-        public bool RequiresAggregation()
-        {
-            return AudioIconAlignment != IconAlignment.Disabled ||
-                   SubtitleIconAlignment != IconAlignment.Disabled ||
-                   ChannelIconAlignment != IconAlignment.Disabled ||
-                   AudioCodecIconAlignment != IconAlignment.Disabled ||
-                   VideoCodecIconAlignment != IconAlignment.Disabled ||
-                   VideoFormatIconAlignment != IconAlignment.Disabled ||
-                   ResolutionIconAlignment != IconAlignment.Disabled ||
-                   AspectRatioIconAlignment != IconAlignment.Disabled;
-        }
     }
 
     public enum IconLoadingMode

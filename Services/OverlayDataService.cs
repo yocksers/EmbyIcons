@@ -3,95 +3,26 @@ using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
-using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    internal record ItemAnalysisResult(long Ticks, string StreamHash, OverlayData Data);
-
     internal class OverlayDataService
     {
         private readonly EmbyIconsEnhancer _enhancer;
-
-        private static readonly ConcurrentDictionary<string, Lazy<ItemAnalysisResult>> _itemDataCache = new();
-        private const int MaxItemCacheSize = 4000;
 
         public OverlayDataService(EmbyIconsEnhancer enhancer)
         {
             _enhancer = enhancer;
         }
 
-        public long GetCacheMemoryUsage()
-        {
-            if (_itemDataCache.IsEmpty) return 0;
-
-            const int avgOverlayDataSize = 1280; // 1.25 KB estimate per entry, accounting for overhead
-            return (long)_itemDataCache.Count * avgOverlayDataSize;
-        }
-
-        public void InvalidateCacheForItem(Guid itemId)
-        {
-            if (itemId == Guid.Empty) return;
-
-            var keysToRemove = _itemDataCache.Keys.Where(k => k.StartsWith(itemId.ToString())).ToList();
-            foreach (var key in keysToRemove)
-            {
-                if (_itemDataCache.TryRemove(key, out _))
-                {
-                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Invalidated overlay data cache for key: {key}");
-                }
-            }
-        }
-
-        private static readonly char[] _whitespaceChars = { ' ', '\t', '\r', '\n' };
         private static string NormalizeTag(string tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
-            var parts = tag.Trim().ToLowerInvariant().Split(_whitespaceChars, StringSplitOptions.RemoveEmptyEntries);
-            return string.Join("-", parts);
-        }
-
-        private ItemAnalysisResult GetOrBuildAnalysisResult(BaseItem item, IconProfile profile, ProfileSettings profileOptions, PluginOptions globalOptions)
-        {
-            var cacheKey = $"{item.Id}_{profile.Id}_{globalOptions.IconLoadingMode}_{profileOptions.SnapAspectRatioToCommon}";
-            var currentTicks = item.DateModified.Ticks;
-
-            var lazyResult = _itemDataCache.GetOrAdd(cacheKey, key =>
-            {
-                PruneItemDataCache();
-                return new Lazy<ItemAnalysisResult>(() =>
-                {
-                    if (globalOptions.EnableDebugLogging) _enhancer.Logger.Debug($"[EmbyIcons] Cache factory invoked for '{item.Name}'. Processing streams.");
-
-                    var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                    var newData = ProcessMediaStreams(item, streams, globalOptions, profileOptions);
-                    var newHash = MediaStreamHelper.GetItemMediaStreamHashV2(item, streams);
-
-                    return new ItemAnalysisResult(currentTicks, newHash, newData);
-                });
-            });
-
-            var cachedEntry = lazyResult.Value;
-
-            if (cachedEntry.Ticks != currentTicks)
-            {
-                _itemDataCache.TryRemove(cacheKey, out _);
-                if (globalOptions.EnableDebugLogging) _enhancer.Logger.Debug($"[EmbyIcons] Stale cache detected for '{item.Name}'. Re-processing.");
-                return GetOrBuildAnalysisResult(item, profile, profileOptions, globalOptions);
-            }
-
-            return cachedEntry;
-        }
-
-        public string GetItemStreamHash(BaseItem item, IconProfile profile, ProfileSettings profileOptions, PluginOptions globalOptions)
-        {
-            if (item is Series || item is BoxSet) return string.Empty;
-            var result = GetOrBuildAnalysisResult(item, profile, profileOptions, globalOptions);
-            return result.StreamHash;
+            var t = tag.Trim().ToLowerInvariant();
+            t = System.Text.RegularExpressions.Regex.Replace(t, "\\s+", "-");
+            return t;
         }
 
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
@@ -122,49 +53,83 @@ namespace EmbyIcons.Services
             };
         }
 
-        public OverlayData GetOverlayData(BaseItem item, IconProfile profile, ProfileSettings profileOptions, PluginOptions globalOptions)
+        public OverlayData GetOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
             if (item is Series seriesItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profile, profileOptions, globalOptions);
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
                 return CreateOverlayDataFromAggregate(aggResult, seriesItem);
             }
 
             if (item is BoxSet collectionItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profile, profileOptions, globalOptions);
+                if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
+                {
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    {
+                        Plugin.Instance.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
+                    }
+                    return new OverlayData();
+                }
+
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
                 return CreateOverlayDataFromAggregate(aggResult, collectionItem);
             }
 
-            var result = GetOrBuildAnalysisResult(item, profile, profileOptions, globalOptions);
-            if (globalOptions.EnableDebugLogging) _enhancer.Logger.Debug($"[EmbyIcons] Using cached overlay data for '{item.Name}'.");
-            return result.Data;
-        }
-
-        private void PruneItemDataCache()
-        {
-            if (_itemDataCache.Count >= MaxItemCacheSize)
+            if (EmbyIconsEnhancer._episodeIconCache.TryGetValue(item.Id, out var cachedInfo) && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
             {
-                int itemsToRemove = _itemDataCache.Count - (int)(MaxItemCacheSize * 0.9);
-                var keysToRemove = _itemDataCache.Keys.Take(itemsToRemove).ToList();
-                foreach (var key in keysToRemove)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
+                var updatedInfo = cachedInfo with { DateCached = System.DateTime.UtcNow };
+                EmbyIconsEnhancer._episodeIconCache.TryUpdate(item.Id, updatedInfo, cachedInfo);
+                return new OverlayData
                 {
-                    _itemDataCache.TryRemove(key, out _);
-                }
+                    AudioLanguages = cachedInfo.AudioLangs,
+                    SubtitleLanguages = cachedInfo.SubtitleLangs,
+                    AudioCodecs = cachedInfo.AudioCodecs,
+                    VideoCodecs = cachedInfo.VideoCodecs,
+                    Tags = cachedInfo.Tags,
+                    ChannelIconName = cachedInfo.ChannelIconName,
+                    VideoFormatIconName = cachedInfo.VideoFormatIconName,
+                    ResolutionIconName = cachedInfo.ResolutionIconName,
+                    CommunityRating = item.CommunityRating,
+                    AspectRatioIconName = cachedInfo.AspectRatioIconName,
+                    ParentalRatingIconName = cachedInfo.ParentalRatingIconName
+                };
             }
+
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] No valid cache. Processing streams for '{item.Name}'.");
+            var overlayData = ProcessMediaStreams(item, profileOptions, globalOptions);
+
+            var newInfo = new EmbyIconsEnhancer.EpisodeIconInfo
+            {
+                AudioLangs = overlayData.AudioLanguages,
+                SubtitleLangs = overlayData.SubtitleLanguages,
+                AudioCodecs = overlayData.AudioCodecs,
+                VideoCodecs = overlayData.VideoCodecs,
+                Tags = overlayData.Tags,
+                ChannelIconName = overlayData.ChannelIconName,
+                VideoFormatIconName = overlayData.VideoFormatIconName,
+                ResolutionIconName = overlayData.ResolutionIconName,
+                DateModifiedTicks = item.DateModified.Ticks,
+                DateCached = System.DateTime.UtcNow,
+                AspectRatioIconName = overlayData.AspectRatioIconName,
+                ParentalRatingIconName = overlayData.ParentalRatingIconName
+            };
+            EmbyIconsEnhancer._episodeIconCache[item.Id] = newInfo;
+            _enhancer.PruneEpisodeCache();
+            return overlayData;
         }
 
-        private OverlayData ProcessMediaStreams(BaseItem item, IReadOnlyList<MediaStream> mainItemStreams, PluginOptions options, ProfileSettings profileOptions)
+        private OverlayData ProcessMediaStreams(BaseItem item, ProfileSettings profileOptions, PluginOptions options)
         {
-            var data = new OverlayData();
+            var data = new OverlayData
+            {
+                CommunityRating = item.CommunityRating,
+                ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
+            };
 
-            if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled)
-                data.CommunityRating = item.CommunityRating;
-
-            if (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled)
-                data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
-
-            if (profileOptions.TagIconAlignment != IconAlignment.Disabled && item.Tags != null && item.Tags.Length > 0)
+            // Capture normalized tags for non-series too
+            if (item.Tags != null && item.Tags.Length > 0)
             {
                 foreach (var tag in item.Tags)
                 {
@@ -173,60 +138,37 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (!mainItemStreams.Any()) return data;
+            var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
 
-            MediaStream? primaryVideoStream = null;
-            MediaStream? primaryAudioStream = null;
+            MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+            MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
             foreach (var stream in mainItemStreams)
             {
-                switch (stream.Type)
+                if (stream.Type == MediaStreamType.Audio)
                 {
-                    case MediaStreamType.Audio:
-                        if (profileOptions.AudioIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage))
-                            data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
-
-                        if (profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled)
-                        {
-                            var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
-                            if (audioCodec != null) data.AudioCodecs.Add(audioCodec);
-                        }
-
-                        if (primaryAudioStream == null || (stream.Channels ?? 0) > (primaryAudioStream.Channels ?? 0))
-                        {
-                            primaryAudioStream = stream;
-                        }
-                        break;
-                    case MediaStreamType.Subtitle:
-                        if (profileOptions.SubtitleIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage))
-                            data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
-                        break;
-                    case MediaStreamType.Video:
-                        if (profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled)
-                        {
-                            var videoCodec = MediaStreamHelper.GetVideoCodecIconName(stream);
-                            if (videoCodec != null) data.VideoCodecs.Add(videoCodec);
-                        }
-                        if (primaryVideoStream == null) primaryVideoStream = stream;
-                        break;
+                    if (!string.IsNullOrEmpty(stream.DisplayLanguage)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                    var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream);
+                    if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
+                }
+                else if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                {
+                    data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                }
+                else if (stream.Type == MediaStreamType.Video)
+                {
+                    var codecIcon = MediaStreamHelper.GetVideoCodecIconName(stream);
+                    if (codecIcon != null) data.VideoCodecs.Add(codecIcon);
                 }
             }
 
-            if (profileOptions.ChannelIconAlignment != IconAlignment.Disabled && primaryAudioStream != null)
-                data.ChannelIconName = MediaStreamHelper.GetChannelIconName(primaryAudioStream);
+            _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
+                .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
 
-            if (profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled)
-                data.VideoFormatIconName = MediaStreamHelper.GetVideoFormatIconName(item, mainItemStreams);
-
-            if (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && primaryVideoStream != null)
-            {
-                _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
-                    .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
-                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>());
-            }
-
-            if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)
-                data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
+            if (primaryAudioStream != null) data.ChannelIconName = MediaStreamHelper.GetChannelIconName(primaryAudioStream);
+            data.VideoFormatIconName = MediaStreamHelper.GetVideoFormatIconName(item, mainItemStreams);
+            data.ResolutionIconName = primaryVideoStream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>()) : null;
+            data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
 
             return data;
         }

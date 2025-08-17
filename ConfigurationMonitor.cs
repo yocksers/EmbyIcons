@@ -115,10 +115,6 @@ namespace EmbyIcons.Services
             _logger.Info($"[EmbyIcons] Triggering soft refresh (image-only) for {items.Count} items due to a configuration change.");
 
             Task.Run(() => {
-                // CORRECTION: This is the correct way to perform a lightweight, image-focused refresh.
-                // We leave MetadataRefreshMode at its default (which is much faster than a full scan)
-                // but explicitly set ImageRefreshMode to FullRefresh. This tells Emby to re-evaluate
-                // the images for each item without triggering a slow, full metadata download.
                 var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
                     ImageRefreshMode = MetadataRefreshMode.FullRefresh,

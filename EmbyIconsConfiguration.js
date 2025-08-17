@@ -43,11 +43,10 @@
             this.currentProfileId = null;
             this.previewUpdateTimer = null;
             this.configSaveTimer = null;
+            this.folderValidationTimer = null;
             this.selectedSeriesId = null;
             this.libraryMap = new Map();
             this.profileMap = new Map();
-
-            this.boundDocumentClickHandler = this.onDocumentClick.bind(this);
 
             this.getDomElements(view);
             this.bindEvents();
@@ -60,7 +59,11 @@
                 allConfigInputs: view.querySelectorAll('[data-config-key]'),
                 allProfileInputs: view.querySelectorAll('[data-profile-key]'),
                 allProfileSelects: view.querySelectorAll('select[is="emby-select"][data-profile-key]'),
+                navButtons: view.querySelectorAll('.localnav .nav-button'),
                 profileSelector: view.querySelector('#selActiveProfile'),
+                btnAddProfile: view.querySelector('#btnAddProfile'),
+                btnRenameProfile: view.querySelector('#btnRenameProfile'),
+                btnDeleteProfile: view.querySelector('#btnDeleteProfile'),
                 btnSelectIconsFolder: view.querySelector('#btnSelectIconsFolder'),
                 txtIconsFolder: view.querySelector('#txtIconsFolder'),
                 folderWarningIcon: view.querySelector('#folderWarningIcon'),
@@ -77,8 +80,11 @@
                 prioritySelects: view.querySelectorAll('[data-profile-key$="Priority"]'),
                 txtSeriesSearch: view.querySelector('#txtSeriesSearch'),
                 seriesSearchResults: view.querySelector('#seriesSearchResults'),
+                btnRunSeriesScan: view.querySelector('#btnRunSeriesScan'),
+                btnRunFullSeriesScan: view.querySelector('#btnRunFullSeriesScan'),
                 seriesReportContainer: view.querySelector('#seriesReportContainer'),
                 troubleshooterChecks: view.querySelectorAll('#troubleshooterChecksContainer input[type=checkbox]'),
+                btnCalculateAspectRatio: view.querySelector('#btnCalculateAspectRatio'),
                 txtAspectRatioWidth: view.querySelector('#txtAspectRatioWidth'),
                 txtAspectRatioHeight: view.querySelector('#txtAspectRatioHeight'),
                 aspectRatioResultContainer: view.querySelector('#aspectRatioResultContainer'),
@@ -94,59 +100,50 @@
         }
 
         bindEvents() {
-            this.dom.view.addEventListener('click', (e) => {
-                const targetButton = e.target.closest('button, a');
-                if (!targetButton) return;
+            this.dom.form.addEventListener('change', this.onFormChange.bind(this));
+            this.dom.opacitySlider.addEventListener('input', this.onFormChange.bind(this));
 
-                const action = targetButton.id || targetButton.dataset.action || targetButton.dataset.target;
-
-                switch (action) {
-                    case 'btnAddProfile': this.addProfile(); break;
-                    case 'btnRenameProfile': this.renameProfile(); break;
-                    case 'btnDeleteProfile': this.deleteProfile(); break;
-                    case 'btnSelectIconsFolder': this.selectIconsFolder(); break;
-                    case 'btnClearCache': this.clearCache(); break;
-                    case 'btnRunIconScan': this.runIconScan(); break;
-                    case 'btnRunSeriesScan': this.runSeriesScan(); break;
-                    case 'btnRunFullSeriesScan': this.runFullSeriesScan(); break;
-                    case 'btnCalculateAspectRatio': this.calculateAspectRatio(); break;
-                    case 'btnRefreshMemoryStats': this.refreshMemoryStats(); break;
-                    case 'settingsPage':
-                    case 'iconManagerPage':
-                    case 'troubleshooterPage':
-                    case 'readmePage':
-                        this.onTabChange(targetButton); break;
-                }
+            this.dom.navButtons.forEach(navButton => {
+                navButton.addEventListener('click', this.onTabChange.bind(this));
             });
-
-            this.dom.form.addEventListener('change', (e) => {
-                if (e.target.matches('[data-config-key], [data-profile-key], [data-library-id]')) {
-                    this.onFormChange(e);
-                }
-            });
-            this.dom.form.addEventListener('input', (e) => {
-                if (e.target.matches('[data-profile-key="CommunityScoreBackgroundOpacity"]')) {
-                    this.onFormChange(e);
-                }
-            });
-            this.dom.form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveData();
-                return false;
-            });
-
-            this.dom.txtIconsFolder.addEventListener('input', debounce(() => this.validateIconsFolder(this.dom.txtIconsFolder.value), 500));
-            this.dom.txtSeriesSearch.addEventListener('input', debounce(() => this.searchForSeries(this.dom.txtSeriesSearch.value), 300));
-
-            this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
-            this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
 
             this.dom.previewImage.addEventListener('error', () => {
                 this.dom.previewImage.src = transparentPixel;
                 toast({ type: 'error', text: 'Preview generation failed.' });
             });
 
-            document.addEventListener('click', this.boundDocumentClickHandler);
+            this.dom.profileSelector.addEventListener('change', this.onProfileSelected.bind(this));
+            this.dom.btnAddProfile.addEventListener('click', this.addProfile.bind(this));
+            this.dom.btnRenameProfile.addEventListener('click', this.renameProfile.bind(this));
+            this.dom.btnDeleteProfile.addEventListener('click', this.deleteProfile.bind(this));
+            this.dom.btnSelectIconsFolder.addEventListener('click', this.selectIconsFolder.bind(this));
+            this.dom.btnClearCache.addEventListener('click', this.clearCache.bind(this));
+            this.dom.btnRunIconScan.addEventListener('click', this.runIconScan.bind(this));
+            this.dom.txtIconsFolder.addEventListener('input', debounce(this.validateIconsFolder.bind(this), 500));
+            this.dom.prioritySelects.forEach(select => {
+                select.addEventListener('change', this.onPriorityChange.bind(this));
+            });
+
+            this.dom.txtSeriesSearch.addEventListener('input', debounce(this.searchForSeries.bind(this), 300));
+            this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
+            this.dom.btnRunSeriesScan.addEventListener('click', this.runSeriesScan.bind(this));
+            this.dom.btnRunFullSeriesScan.addEventListener('click', this.runFullSeriesScan.bind(this));
+            this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
+
+            this.dom.btnCalculateAspectRatio.addEventListener('click', this.calculateAspectRatio.bind(this));
+            this.dom.btnRefreshMemoryStats.addEventListener('click', this.refreshMemoryStats.bind(this));
+
+            this.dom.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveData();
+                return false;
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
+                    this.dom.seriesSearchResults.style.display = 'none';
+                }
+            });
         }
 
         async refreshMemoryStats() {
@@ -168,22 +165,6 @@
                 toast({ type: 'error', text: 'Failed to refresh memory stats.' });
             } finally {
                 loading.hide();
-            }
-        }
-
-        onDocumentClick(e) {
-            if (this.dom && !this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
-                this.dom.seriesSearchResults.style.display = 'none';
-            }
-        }
-
-        destroy() {
-            document.removeEventListener('click', this.boundDocumentClickHandler);
-            clearTimeout(this.previewUpdateTimer);
-            clearTimeout(this.configSaveTimer);
-
-            if (super.destroy) {
-                super.destroy();
             }
         }
 
@@ -219,27 +200,27 @@
             this.triggerConfigSave();
             this.triggerPreviewUpdate();
 
-            const target = event.target;
-            const profileKey = target.dataset.profileKey;
-
-            if (profileKey === 'CommunityScoreBackgroundOpacity') {
-                this.dom.opacityValue.textContent = target.value + '%';
+            if (event.target.matches('[data-profile-key="CommunityScoreBackgroundOpacity"]')) {
+                this.dom.opacityValue.textContent = event.target.value + '%';
             }
-            if (profileKey === 'CommunityScoreIconAlignment') {
+            if (event.target.matches('[data-profile-key="CommunityScoreIconAlignment"]')) {
                 this.toggleRatingAppearanceControls();
             }
-            if (profileKey === 'UseSeriesLiteMode') {
+            if (event.target.matches('[data-profile-key="UseSeriesLiteMode"]')) {
                 this.toggleDependentSetting('UseSeriesLiteMode', 'ShowSeriesIconsIfAllEpisodesHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one episode.');
             }
-            if (profileKey === 'UseCollectionLiteMode') {
+            if (event.target.matches('[data-profile-key="UseCollectionLiteMode"]')) {
                 this.toggleDependentSetting('UseCollectionLiteMode', 'ShowCollectionIconsIfAllChildrenHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one item.');
             }
-            if (target.matches('[data-profile-key$="Priority"]')) {
-                const cornerGroup = target.closest('[data-corner-group]');
-                if (cornerGroup) {
-                    this.updatePriorityOptionsForGroup(cornerGroup.dataset.cornerGroup);
-                }
-            }
+        }
+
+        onPriorityChange(event) {
+            const changedSelect = event.target;
+            const cornerGroup = changedSelect.closest('[data-corner-group]');
+            if (!cornerGroup) return;
+
+            const groupName = cornerGroup.getAttribute('data-corner-group');
+            this.updatePriorityOptionsForGroup(groupName);
         }
 
         updatePriorityOptionsForGroup(groupName) {
@@ -254,18 +235,22 @@
 
             groupSelects.forEach(select => {
                 const ownValue = select.value;
-                for (const option of select.options) {
+                select.querySelectorAll('option').forEach(option => {
                     if (option.value !== '0' && option.value !== ownValue) {
                         option.disabled = selectedPriorities.has(option.value);
                     } else {
                         option.disabled = false;
                     }
-                }
+                });
             });
         }
 
         updateAllPriorityGroups() {
-            const groupNames = new Set(Array.from(this.dom.prioritySelects, s => s.closest('[data-corner-group]')?.dataset.cornerGroup).filter(Boolean));
+            const groupNames = new Set();
+            this.dom.prioritySelects.forEach(select => {
+                const cornerGroup = select.closest('[data-corner-group]');
+                if (cornerGroup) groupNames.add(cornerGroup.getAttribute('data-corner-group'));
+            });
             groupNames.forEach(name => this.updatePriorityOptionsForGroup(name));
         }
 
@@ -289,14 +274,14 @@
             this.dom.ratingAppearanceControls.style.display = ratingAlignmentSelect.value === 'Disabled' ? 'none' : 'block';
         }
 
-        onTabChange(targetButton) {
+        onTabChange(e) {
+            const currentTarget = e.currentTarget;
             this.dom.view.querySelector('.localnav .ui-btn-active')?.classList.remove('ui-btn-active');
-            targetButton.classList.add('ui-btn-active');
-            const targetId = targetButton.dataset.target;
+            currentTarget.classList.add('ui-btn-active');
+            const targetId = currentTarget.getAttribute('data-target');
             this.dom.pages.forEach(page => {
                 page.classList.toggle('hide', page.id !== targetId);
             });
-
             if (targetId === 'troubleshooterPage') {
                 this.refreshMemoryStats();
             }
@@ -326,9 +311,8 @@
                 this.profileMap = new Map(this.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));
 
                 this.populateProfileSelector();
-                this.dom.profileSelector.addEventListener('change', (e) => this.loadProfileSettings(e.target.value));
-                await this.loadProfileSettings(this.dom.profileSelector.value);
-                this.validateIconsFolder(config.IconsFolder);
+                this.loadProfileSettings(this.dom.profileSelector.value);
+                this.validateIconsFolder();
             } catch (error) {
                 console.error('Failed to load EmbyIcons configuration', error);
                 toast({ type: 'error', text: 'Error loading configuration.' });
@@ -339,7 +323,7 @@
 
         loadGlobalSettings(config) {
             this.dom.allConfigInputs.forEach(el => {
-                const key = el.dataset.configKey;
+                const key = el.getAttribute('data-config-key');
                 const value = config[key];
                 if (el.type === 'checkbox') {
                     el.checked = value;
@@ -353,24 +337,27 @@
             const select = this.dom.profileSelector;
             select.innerHTML = this.pluginConfiguration.Profiles.map(p => `<option value="${p.Id}">${p.Name}</option>`).join('');
             this.currentProfileId = select.value;
-            this.profileMap = new Map(this.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));
             if (select.embyselect) select.embyselect.refresh();
         }
 
-        async loadProfileSettings(profileId) {
+        onProfileSelected(e) {
+            this.loadProfileSettings(e.target.value);
+        }
+
+        loadProfileSettings(profileId) {
             this.currentProfileId = profileId;
             const profile = this.pluginConfiguration.Profiles.find(p => p.Id === profileId);
             if (!profile) return;
 
             this.renderProfileSettings(profile.Settings);
-            await this.populateLibraryAssignments(profileId);
+            this.populateLibraryAssignments(profileId);
             this.triggerPreviewUpdate();
             this.updateAllPriorityGroups();
         }
 
         renderProfileSettings(settings) {
             this.dom.allProfileInputs.forEach(el => {
-                const key = el.dataset.profileKey;
+                const key = el.getAttribute('data-profile-key');
                 const value = settings[key];
                 if (el.type === 'checkbox') {
                     el.checked = value;
@@ -391,6 +378,12 @@
 
         async populateLibraryAssignments(profileId) {
             const container = this.dom.librarySelectionContainer;
+            if (!this.allLibraries) {
+                const virtualFolders = await ApiClient.getVirtualFolders();
+                const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
+                this.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
+            }
+
             const libraryToProfileMap = new Map(this.pluginConfiguration.LibraryProfileMappings.map(m => [m.LibraryId, m.ProfileId]));
 
             let html = '';
@@ -399,7 +392,7 @@
                 const isAssignedToCurrent = assignedProfileId === profileId;
                 const isAssignedToOther = assignedProfileId && !isAssignedToCurrent;
 
-                const isChecked = isAssignedToCurrent || isAssignedToOther;
+                const isChecked = isAssignedToCurrent;
                 const isDisabled = isAssignedToOther;
 
                 let title = '';
@@ -421,7 +414,7 @@
         getCurrentProfileSettingsFromForm() {
             const settings = {};
             this.dom.allProfileInputs.forEach(el => {
-                const key = el.dataset.profileKey;
+                const key = el.getAttribute('data-profile-key');
                 if (el.type === 'checkbox') {
                     settings[key] = el.checked;
                 } else if (el.type === 'number' || el.classList.contains('slider') || key.endsWith('Priority')) {
@@ -439,17 +432,12 @@
 
             Object.assign(profile.Settings, this.getCurrentProfileSettingsFromForm());
 
-            // Remove all mappings for the current profile
             this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
-
-            // Add back the mappings for the currently checked (and enabled) libraries for this profile
-            this.dom.librarySelectionContainer.querySelectorAll('input:checked').forEach(checkbox => {
-                if (!checkbox.disabled) {
-                    this.pluginConfiguration.LibraryProfileMappings.push({
-                        LibraryId: checkbox.dataset.libraryId,
-                        ProfileId: this.currentProfileId
-                    });
-                }
+            this.dom.librarySelectionContainer.querySelectorAll('input:checked:not(:disabled)').forEach(checkbox => {
+                this.pluginConfiguration.LibraryProfileMappings.push({
+                    LibraryId: checkbox.getAttribute('data-library-id'),
+                    ProfileId: this.currentProfileId
+                });
             });
         }
 
@@ -477,7 +465,7 @@
                     this.populateProfileSelector();
                     this.dom.profileSelector.value = newProfile.Id;
                     if (this.dom.profileSelector.embyselect) this.dom.profileSelector.embyselect.refresh();
-                    await this.loadProfileSettings(newProfile.Id);
+                    this.loadProfileSettings(newProfile.Id);
                     toast('New profile created.');
                 } catch (err) {
                     toast({ type: 'error', text: 'Error creating profile.' });
@@ -518,19 +506,19 @@
             const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
             if (!profile) return;
 
-            dialogHelper.confirm(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile').then(async (result) => {
+            dialogHelper.confirm(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile').then(result => {
                 if (result) {
                     this.pluginConfiguration.Profiles = this.pluginConfiguration.Profiles.filter(p => p.Id !== this.currentProfileId);
                     this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
                     this.populateProfileSelector();
-                    await this.loadProfileSettings(this.dom.profileSelector.value);
+                    this.loadProfileSettings(this.dom.profileSelector.value);
                     this.triggerConfigSave();
                 }
             });
         }
 
         async saveData() {
-            if (!this.pluginConfiguration.Profiles?.length) {
+            if (!this.pluginConfiguration.Profiles || !this.pluginConfiguration.Profiles.length) {
                 toast({ type: 'error', text: 'Cannot save settings. You must create at least one profile.' });
                 return;
             }
@@ -540,7 +528,7 @@
             this.saveCurrentProfileSettings();
 
             this.dom.allConfigInputs.forEach(el => {
-                const key = el.dataset.configKey;
+                const key = el.getAttribute('data-config-key');
                 if (el.type === 'checkbox') {
                     this.pluginConfiguration[key] = el.checked;
                 } else {
@@ -548,8 +536,8 @@
                 }
             });
             try {
-                await ApiClient.updatePluginConfiguration(pluginId, this.pluginConfiguration);
-                toast('Settings saved.');
+                const result = await ApiClient.updatePluginConfiguration(pluginId, this.pluginConfiguration);
+                Dashboard.processPluginConfigurationUpdateResult(result);
             } catch (error) {
                 console.error('Error saving EmbyIcons settings', error);
                 toast({ type: 'error', text: 'Error saving settings.' });
@@ -594,7 +582,7 @@
                         if (path) {
                             this.dom.txtIconsFolder.value = path;
                             this.onFormChange({ target: this.dom.txtIconsFolder });
-                            this.validateIconsFolder(path);
+                            this.validateIconsFolder();
                         }
                         browser.close();
                     }
@@ -602,7 +590,8 @@
             });
         }
 
-        async validateIconsFolder(path) {
+        async validateIconsFolder() {
+            const path = this.dom.txtIconsFolder.value;
             if (!path) {
                 this.dom.folderWarningIcon.style.display = 'none';
                 return;
@@ -645,10 +634,9 @@
         }
 
         async runIconScan() {
-            const button = this.dom.view.querySelector('#btnRunIconScan');
             loading.show();
-            button.disabled = true;
-            button.querySelector('span').textContent = 'Scanning...';
+            this.dom.btnRunIconScan.disabled = true;
+            this.dom.btnRunIconScan.querySelector('span').textContent = 'Scanning...';
 
             const container = this.dom.iconManagerReportContainer;
             container.innerHTML = '<p>Scanning your library... This may take several minutes on the first run.</p>';
@@ -661,8 +649,8 @@
                 container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
             } finally {
                 loading.hide();
-                button.disabled = false;
-                button.querySelector('span').textContent = 'Scan Library & Icons';
+                this.dom.btnRunIconScan.disabled = false;
+                this.dom.btnRunIconScan.querySelector('span').textContent = 'Scan Library & Icons';
             }
         }
 
@@ -671,7 +659,8 @@
             const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings' };
             const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr." };
 
-            let html = `<p class="fieldDescription">Report generated on: ${new Date(report.ReportDate).toLocaleString()}</p>`;
+            const htmlParts = [];
+            htmlParts.push(`<p class="fieldDescription">Report generated on: ${new Date(report.ReportDate).toLocaleString()}</p>`);
 
             for (const groupName in report.Groups) {
                 if (Object.prototype.hasOwnProperty.call(report.Groups, groupName) && friendlyNames[groupName]) {
@@ -684,30 +673,32 @@
 
                     if (found.length === 0 && missing.length === 0 && unused.length === 0) continue;
 
-                    html += `<div class="paper-card" style="margin-top: 1.5em; padding: 1em 1.5em;">
-                                <h3 style="margin-top: 0; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">${friendlyNames[groupName]}</h3>
-                                <div class="collapsible-content" style="display: none;">`;
+                    htmlParts.push(`<div class="paper-card" style="margin-top: 1.5em; padding: 1em 1.5em;">`);
+                    htmlParts.push(`<h3 style="margin-top: 0; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">${friendlyNames[groupName]}</h3>`);
+                    htmlParts.push(`<div class="collapsible-content" style="display: none;">`);
+
                     if (missing.length > 0) {
-                        html += `<h4><span style="color: #ffc107;">!</span> Missing Icons (${missing.length})</h4><p class="fieldDescription">Your library needs these icons, but they were not found in your custom folder. You can add them or rely on the built-in fallback icons (if enabled).</p>
-                                 <div class="icon-grid">${missing.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
+                        htmlParts.push(`<h4><span style="color: #ffc107;">!</span> Missing Icons (${missing.length})</h4><p class="fieldDescription">Your library needs these icons, but they were not found in your custom folder. You can add them or rely on the built-in fallback icons (if enabled).</p>`);
+                        htmlParts.push(`<div class="icon-grid">${missing.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`);
                     }
                     if (found.length > 0) {
-                        html += `<h4 style="margin-top: 1.5em;"><span style="color: #4CAF50;">✓</span> Found Icons (${found.length})</h4><p class="fieldDescription">These custom icons are correctly configured and used by your library.</p>
-                                 <div class="icon-grid">${found.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
+                        htmlParts.push(`<h4 style="margin-top: 1.5em;"><span style="color: #4CAF50;">✓</span> Found Icons (${found.length})</h4><p class="fieldDescription">These custom icons are correctly configured and used by your library.</p>`);
+                        htmlParts.push(`<div class="icon-grid">${found.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`);
                     }
                     if (unused.length > 0) {
-                        html += `<h4 style="margin-top: 1.5em;"><span style="color: #888;">-</span> Unused Icons (${unused.length})</h4><p class="fieldDescription">These icons exist in your folder but are not currently needed by any media.</p>
-                                 <div class="icon-grid">${unused.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`;
+                        htmlParts.push(`<h4 style="margin-top: 1.5em;"><span style="color: #888;">-</span> Unused Icons (${unused.length})</h4><p class="fieldDescription">These icons exist in your folder but are not currently needed by any media.</p>`);
+                        htmlParts.push(`<div class="icon-grid">${unused.map(i => `<code>${prefixMap[groupName] || ''}${i}.png</code>`).join('')}</div>`);
                     }
-                    html += `</div></div>`;
+                    htmlParts.push(`</div></div>`);
                 }
             }
-            html += `<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }</style>`;
+            htmlParts.push(`<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }</style>`);
 
-            container.innerHTML = html;
+            container.innerHTML = htmlParts.join('');
         }
 
-        async searchForSeries(searchTerm) {
+        async searchForSeries() {
+            const searchTerm = this.dom.txtSeriesSearch.value;
             const resultsContainer = this.dom.seriesSearchResults;
 
             if (searchTerm.length < 2) {
@@ -743,8 +734,8 @@
         onSeriesSearchResultClick(e) {
             const target = e.target.closest('.searchResultItem');
             if (target) {
-                this.selectedSeriesId = target.dataset.id;
-                this.dom.txtSeriesSearch.value = target.dataset.name;
+                this.selectedSeriesId = target.getAttribute('data-id');
+                this.dom.txtSeriesSearch.value = target.getAttribute('data-name');
                 this.dom.seriesSearchResults.style.display = 'none';
                 this.dom.seriesSearchResults.innerHTML = '';
             }
@@ -753,7 +744,7 @@
         getTroubleshooterChecks() {
             return Array.from(this.dom.troubleshooterChecks)
                 .filter(cb => cb.checked)
-                .map(cb => cb.dataset.checkName)
+                .map(cb => cb.getAttribute('data-check-name'))
                 .join(',');
         }
 
@@ -768,9 +759,8 @@
                 return;
             }
 
-            const button = this.dom.view.querySelector('#btnRunSeriesScan');
             loading.show();
-            button.disabled = true;
+            this.dom.btnRunSeriesScan.disabled = true;
             const container = this.dom.seriesReportContainer;
             container.innerHTML = '<p>Scanning series... This might take a moment.</p>';
 
@@ -786,7 +776,7 @@
                 container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
             } finally {
                 loading.hide();
-                button.disabled = false;
+                this.dom.btnRunSeriesScan.disabled = false;
             }
         }
 
@@ -797,9 +787,8 @@
                 return;
             }
 
-            const button = this.dom.view.querySelector('#btnRunFullSeriesScan');
             loading.show();
-            button.disabled = true;
+            this.dom.btnRunFullSeriesScan.disabled = true;
             const container = this.dom.seriesReportContainer;
             container.innerHTML = '<p>Scanning all TV shows in your library... This can take several minutes.</p>';
 
@@ -815,7 +804,7 @@
                 container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
             } finally {
                 loading.hide();
-                button.disabled = false;
+                this.dom.btnRunFullSeriesScan.disabled = false;
             }
         }
 
@@ -829,7 +818,7 @@
             const html = reports.map(report => {
                 const mismatchChecks = report.Checks.filter(c => c.Status === 'Mismatch');
                 if (mismatchChecks.length === 0) {
-                    return '';
+                    return ''; 
                 }
 
                 const checksHtml = mismatchChecks.map(check => {
@@ -879,10 +868,13 @@
             const content = header.nextElementSibling;
             const indicator = header.querySelector('.collapsible-indicator');
 
-            if (content?.classList.contains('collapsible-content')) {
+            if (content && content.classList.contains('collapsible-content')) {
                 const isVisible = content.style.display !== 'none';
                 content.style.display = isVisible ? 'none' : 'block';
-                indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+
+                if (indicator) {
+                    indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+                }
             }
         }
     }

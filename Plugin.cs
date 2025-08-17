@@ -1,17 +1,20 @@
 ﻿using EmbyIcons.Api;
 using EmbyIcons.Helpers;
 using EmbyIcons.Services;
+using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Plugins;
+using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Generic;
@@ -19,20 +22,25 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
     public class Plugin : BasePlugin<PluginOptions>, IHasWebPages, IHasThumbImage, IDisposable
     {
+        private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
-        private readonly ILogManager _logManager;
-        private readonly ILogger _logger;
+        private readonly IUserViewManager _userViewManager;
         private readonly IFileSystem _fileSystem;
+        private readonly ILogger _logger;
+        private readonly ILogManager _logManager;
         private EmbyIconsEnhancer? _enhancer;
+        private Timer? _pruningTimer;
         private ProfileManagerService? _profileManager;
         private ConfigurationMonitor? _configMonitor;
-        private OverlayDataService? _overlayDataService;
+
+        private bool _migrationPerformed = false;
 
         public static Plugin? Instance { get; private set; }
 
@@ -40,27 +48,133 @@ namespace EmbyIcons
 
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
-        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
+        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager);
         private ProfileManagerService ProfileManager => _profileManager ??= new ProfileManagerService(_libraryManager, _logger, Configuration);
         private ConfigurationMonitor ConfigMonitor => _configMonitor ??= new ConfigurationMonitor(_logger, _libraryManager, _fileSystem);
 
-        private OverlayDataService OverlayDataService => _overlayDataService ??= new OverlayDataService(Enhancer);
 
         public Plugin(
+            IApplicationHost appHost,
             IApplicationPaths appPaths,
             ILibraryManager libraryManager,
+            IUserViewManager userViewManager,
             ILogManager logManager,
             IFileSystem fileSystem,
             IXmlSerializer xmlSerializer)
             : base(appPaths, xmlSerializer)
         {
+            _appHost = appHost;
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
+            _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
             _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
             _logger = logManager.GetLogger(nameof(Plugin));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
             Instance = this;
 
-            _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
+            _logger.Debug("EmbyIcons plugin initialized.");
+            SubscribeLibraryEvents();
+
+            _pruningTimer = new Timer(
+                _ => Enhancer.PruneSeriesAggregationCache(),
+                null,
+                TimeSpan.FromHours(1),
+                TimeSpan.FromHours(6)
+            );
+        }
+
+        private void EnsureConfigurationMigrated()
+        {
+            if (_migrationPerformed) return;
+
+#pragma warning disable CS0612
+            if (Configuration.Profiles == null || !Configuration.Profiles.Any())
+            {
+                _logger.Info("[EmbyIcons] No profiles found. Attempting to migrate old settings.");
+
+                var defaultProfileSettings = new ProfileSettings
+                {
+                    ShowOverlaysForEpisodes = Configuration.ShowOverlaysForEpisodes,
+                    ShowSeriesIconsIfAllEpisodesHaveLanguage = Configuration.ShowSeriesIconsIfAllEpisodesHaveLanguage,
+
+                    AudioIconAlignment = Configuration.ShowAudioIcons ? Configuration.AudioIconAlignment : IconAlignment.Disabled,
+                    SubtitleIconAlignment = Configuration.ShowSubtitleIcons ? Configuration.SubtitleIconAlignment : IconAlignment.Disabled,
+                    ChannelIconAlignment = Configuration.ShowAudioChannelIcons ? Configuration.ChannelIconAlignment : IconAlignment.Disabled,
+                    AudioCodecIconAlignment = Configuration.ShowAudioCodecIcons ? Configuration.AudioCodecIconAlignment : IconAlignment.Disabled,
+                    VideoFormatIconAlignment = Configuration.ShowVideoFormatIcons ? Configuration.VideoFormatIconAlignment : IconAlignment.Disabled,
+                    VideoCodecIconAlignment = Configuration.ShowVideoCodecIcons ? Configuration.VideoCodecIconAlignment : IconAlignment.Disabled,
+                    TagIconAlignment = Configuration.ShowTagIcons ? Configuration.TagIconAlignment : IconAlignment.Disabled,
+                    ResolutionIconAlignment = Configuration.ShowResolutionIcons ? Configuration.ResolutionIconAlignment : IconAlignment.Disabled,
+                    CommunityScoreIconAlignment = Configuration.ShowCommunityScoreIcon ? Configuration.CommunityScoreIconAlignment : IconAlignment.Disabled,
+                    AspectRatioIconAlignment = Configuration.ShowAspectRatioIcons ? Configuration.AspectRatioIconAlignment : IconAlignment.Disabled,
+
+                    AudioOverlayHorizontal = Configuration.AudioOverlayHorizontal,
+                    SubtitleOverlayHorizontal = Configuration.SubtitleOverlayHorizontal,
+                    ChannelOverlayHorizontal = Configuration.ChannelOverlayHorizontal,
+                    AudioCodecOverlayHorizontal = Configuration.AudioCodecOverlayHorizontal,
+                    VideoFormatOverlayHorizontal = Configuration.VideoFormatOverlayHorizontal,
+                    VideoCodecOverlayHorizontal = Configuration.VideoCodecOverlayHorizontal,
+                    TagOverlayHorizontal = Configuration.TagOverlayHorizontal,
+                    ResolutionOverlayHorizontal = Configuration.ResolutionOverlayHorizontal,
+                    CommunityScoreOverlayHorizontal = Configuration.CommunityScoreOverlayHorizontal,
+                    AspectRatioOverlayHorizontal = Configuration.AspectRatioOverlayHorizontal,
+                    CommunityScoreBackgroundShape = Configuration.CommunityScoreBackgroundShape,
+                    CommunityScoreBackgroundColor = Configuration.CommunityScoreBackgroundColor,
+                    CommunityScoreBackgroundOpacity = Configuration.CommunityScoreBackgroundOpacity,
+                    IconSize = Configuration.IconSize,
+                    UseSeriesLiteMode = Configuration.UseSeriesLiteMode
+                };
+
+                var defaultProfile = new IconProfile
+                {
+                    Name = "Default",
+                    Id = Guid.NewGuid(),
+                    Settings = defaultProfileSettings
+                };
+
+                if (Configuration.Profiles == null)
+                {
+                    Configuration.Profiles = new List<IconProfile>();
+                }
+                Configuration.Profiles.Add(defaultProfile);
+
+                var oldSelectedLibsSet = new HashSet<string>((Configuration.SelectedLibraries ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+                oldSelectedLibsSet.RemoveWhere(string.IsNullOrWhiteSpace);
+
+                var virtualFolders = _libraryManager.GetVirtualFolders();
+                var libraryNameMap = virtualFolders
+                    .GroupBy(lib => lib.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First().Id.ToString(), StringComparer.OrdinalIgnoreCase);
+
+                if (oldSelectedLibsSet.Any())
+                {
+                    foreach (var libName in oldSelectedLibsSet)
+                    {
+                        if (libraryNameMap.TryGetValue(libName, out var libId))
+                        {
+                            if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
+                            {
+                                Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var lib in virtualFolders)
+                    {
+                        var libId = lib.Id.ToString();
+                        if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
+                        {
+                            Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
+                        }
+                    }
+                }
+
+                _logger.Info($"[EmbyIcons] Migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
+                SaveConfiguration();
+            }
+#pragma warning restore CS0612
+            _migrationPerformed = true;
         }
 
         public IconProfile? GetProfileForItem(BaseItem item)
@@ -90,63 +204,83 @@ namespace EmbyIcons
             };
         }
 
+        private void SubscribeLibraryEvents()
+        {
+            _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
+            _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
+            _libraryManager.ItemRemoved += LibraryManagerOnItemChanged;
+        }
+
+        private void UnsubscribeLibraryEvents()
+        {
+            _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged;
+            _libraryManager.ItemAdded -= LibraryManagerOnItemChanged;
+            _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged;
+        }
+
+        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
+        {
+            var enhancer = Enhancer;
+
+            try
+            {
+                if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
+                {
+                    ProfileManager.InvalidateLibraryCache();
+                    return;
+                }
+
+                bool dateModifiedChanged = e.UpdateReason == ItemUpdateType.MetadataEdit ||
+                                         e.UpdateReason == ItemUpdateType.MetadataImport ||
+                                         e.UpdateReason == ItemUpdateType.None;
+
+                enhancer.ClearEpisodeIconCache(e.Item.Id);
+
+                var seriesToClear = (e.Item as Episode)?.Series
+                                 ?? (e.Item as Season)?.Series
+                                 ?? e.Item as Series;
+
+                if (dateModifiedChanged && e.Item is Episode episode && episode.Series != null)
+                {
+                    _logger.Debug($"[EmbyIcons] DateModified change detected for episode '{episode.Name}', clearing series cache.");
+                }
+
+                if (seriesToClear != null && seriesToClear.Id != Guid.Empty)
+                {
+                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for parent series '{seriesToClear.Name}' ({seriesToClear.Id}).");
+                    enhancer.ClearSeriesAggregationCache(seriesToClear.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("[EmbyIcons] Error in LibraryManagerOnItemChanged event handler.", ex);
+            }
+        }
+
         public void SaveCurrentConfiguration() => SaveConfiguration();
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var newOptions = (PluginOptions)configuration;
-
             var oldOptions = JsonSerializer.Deserialize<PluginOptions>(JsonSerializer.Serialize(Configuration));
+
+            _logger.Info("[EmbyIcons] Saving new configuration.");
+
+            newOptions.PersistedVersion = Guid.NewGuid().ToString("N");
+            base.UpdateConfiguration(newOptions);
 
             if (oldOptions != null)
             {
                 ConfigMonitor.CheckForChangesAndTriggerRefreshes(oldOptions, newOptions);
             }
 
-            _logger.Info("[EmbyIcons] Saving new configuration.");
-
-            newOptions.PersistedVersion = Guid.NewGuid().ToString("N");
-
-            base.UpdateConfiguration(newOptions);
-
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();
-            _profileManager = null;
+            _profileManager = null; // Re-create on next access
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{newOptions.PersistedVersion}'. Images will refresh as they are viewed.");
         }
 
-        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
-        {
-            if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
-            {
-                ProfileManager.InvalidateLibraryCache();
-                return;
-            }
-
-            var enhancer = Enhancer;
-
-            var seriesToUpdate = (e.Item as Episode)?.Series
-                              ?? (e.Item as Season)?.Series
-                              ?? e.Item as Series;
-
-            if (seriesToUpdate != null && seriesToUpdate.Id != Guid.Empty)
-            {
-                enhancer.InvalidateAggregationCache(seriesToUpdate.Id);
-                _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; queueing background re-aggregation for parent series '{seriesToUpdate.Name}' ({seriesToUpdate.Id}).");
-                enhancer.QueueItemUpdate(seriesToUpdate);
-            }
-
-            if (e.Item is Episode || e.Item is Movie)
-            {
-                if (e.Item.Id != Guid.Empty)
-                {
-                    _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; invalidating its data caches.");
-                    OverlayDataService.InvalidateCacheForItem(e.Item.Id);
-                    enhancer.ClearEpisodeIconCache(e.Item.Id);
-                }
-            }
-        }
 
         public override string Name => "EmbyIcons";
         public override string Description => "Overlays language, channel, video format, and resolution icons onto media posters.";
@@ -154,6 +288,7 @@ namespace EmbyIcons
 
         public PluginOptions GetConfiguredOptions()
         {
+            EnsureConfigurationMigrated();
             return Configuration;
         }
 
@@ -168,11 +303,10 @@ namespace EmbyIcons
 
         public void Dispose()
         {
-            _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged;
-
+            UnsubscribeLibraryEvents();
+            _pruningTimer?.Dispose();
             _enhancer?.Dispose();
             _enhancer = null;
-            _overlayDataService = null;
             Instance = null;
             _logger.Debug("EmbyIcons plugin disposed.");
         }
