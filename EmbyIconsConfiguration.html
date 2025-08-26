@@ -1,4 +1,4 @@
-﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
@@ -302,26 +302,9 @@
                     <!-- Memory Usage -->
                     <h1 style="margin-bottom: 0.5em;">Diagnostics & Maintenance</h1>
                     <div class="paper-card" style="padding: 1.5em;">
-                        <h3 style="margin-top:0;">Memory & Cache Diagnostics</h3>
+                        <h3 style="margin-top:0;">Cache Management</h3>
                         <p class="fieldDescription" style="margin-top:0;">
-                            The plugin caches icons and media data to improve performance. The numbers below are an estimate of the RAM currently used by the plugin's caches. This is for diagnostic purposes only.
-                        </p>
-                        <div id="memoryReportContainer" style="margin-top: 1.5em;">
-                            <p><strong>Icon Image Cache:</strong> <span id="memIconCache">N/A</span></p>
-                            <p><strong>Series/Collection Aggregation Cache:</strong> <span id="memAggregationCache">N/A</span></p>
-                            <p><strong>Item Data &amp; Info Cache:</strong> <span id="memItemDataCache">N/A</span></p>
-                            <hr style="margin: 1em 0; border-color: rgba(128,128,128,0.2);" />
-                            <p><strong>Total Estimated Usage:</strong> <span id="memTotalCache" style="font-weight: bold;">N/A</span></p>
-                        </div>
-                        <div style="margin-top: 2em;">
-                            <button is="emby-button" type="button" class="raised" id="btnRefreshMemoryStats">
-                                <span>Refresh Stats</span>
-                            </button>
-                        </div>
-
-                        <h3 style="margin-top:2.5em;">Cache Management</h3>
-                        <p class="fieldDescription" style="margin-top:0;">
-                            If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse. This will also clear all data caches shown above.
+                            If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse. This also clears all internal data caches.
                         </p>
                         <div style="margin-top: 1.5em;">
                             <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">

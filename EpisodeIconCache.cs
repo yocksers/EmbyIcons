@@ -2,12 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Caching.Memory; 
 
 namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal static readonly ConcurrentDictionary<Guid, EpisodeIconInfo> _episodeIconCache = new();
+        internal static MemoryCache _episodeIconCache;
+
         private const int MaxEpisodeCacheSize = 2000;
 
         public record EpisodeIconInfo
@@ -23,36 +25,18 @@ namespace EmbyIcons
             public string? AspectRatioIconName { get; init; }
             public string? ParentalRatingIconName { get; init; }
             public long DateModifiedTicks { get; init; }
-            public DateTime DateCached { get; init; }
         }
 
         public void ClearEpisodeIconCache(Guid episodeId)
         {
             if (episodeId == Guid.Empty) return;
 
-            if (_episodeIconCache.TryRemove(episodeId, out _))
+            _episodeIconCache.Remove(episodeId);
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
+                _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
             }
         }
 
-        internal void PruneEpisodeCache()
-        {
-            if (_episodeIconCache.Count > MaxEpisodeCacheSize)
-            {
-                var toRemove = _episodeIconCache.Count - MaxEpisodeCacheSize;
-                if (toRemove <= 0) return;
-
-                var oldest = _episodeIconCache.ToArray()
-                    .OrderBy(kvp => kvp.Value.DateCached)
-                    .Take(toRemove);
-
-                foreach (var item in oldest)
-                {
-                    _episodeIconCache.TryRemove(item.Key, out _);
-                }
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] Pruned {toRemove} items from the episode icon cache.");
-            }
-        }
     }
 }

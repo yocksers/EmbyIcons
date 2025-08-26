@@ -43,5 +43,14 @@ namespace EmbyIcons.Helpers
                 return _typeface;
             }
         }
+
+        public static void Dispose()
+        {
+            lock (_lock)
+            {
+                _typeface?.Dispose();
+                _typeface = null;
+            }
+        }
     }
 }

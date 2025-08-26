@@ -3,6 +3,8 @@ using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
+using Microsoft.Extensions.Caching.Memory; // *** ADD THIS using statement ***
+using System; // *** ADD THIS using statement ***
 using System.Collections.Generic;
 using System.Linq;
 
@@ -76,11 +78,9 @@ namespace EmbyIcons.Services
                 return CreateOverlayDataFromAggregate(aggResult, collectionItem);
             }
 
-            if (EmbyIconsEnhancer._episodeIconCache.TryGetValue(item.Id, out var cachedInfo) && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
+            if (EmbyIconsEnhancer._episodeIconCache.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo cachedInfo) && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
             {
                 if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
-                var updatedInfo = cachedInfo with { DateCached = System.DateTime.UtcNow };
-                EmbyIconsEnhancer._episodeIconCache.TryUpdate(item.Id, updatedInfo, cachedInfo);
                 return new OverlayData
                 {
                     AudioLanguages = cachedInfo.AudioLangs,
@@ -111,12 +111,16 @@ namespace EmbyIcons.Services
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
                 DateModifiedTicks = item.DateModified.Ticks,
-                DateCached = System.DateTime.UtcNow,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName
             };
-            EmbyIconsEnhancer._episodeIconCache[item.Id] = newInfo;
-            _enhancer.PruneEpisodeCache();
+
+            var cacheEntryOptions = new MemoryCacheEntryOptions()
+                .SetSize(1)
+                .SetSlidingExpiration(TimeSpan.FromHours(6));
+
+            EmbyIconsEnhancer._episodeIconCache.Set(item.Id, newInfo, cacheEntryOptions);
+
             return overlayData;
         }
 
@@ -128,7 +132,6 @@ namespace EmbyIcons.Services
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
 
-            // Capture normalized tags for non-series too
             if (item.Tags != null && item.Tags.Length > 0)
             {
                 foreach (var tag in item.Tags)

@@ -8,6 +8,7 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
@@ -17,6 +18,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Model.Querying;
 
 namespace EmbyIcons
 {
@@ -37,13 +39,15 @@ namespace EmbyIcons
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
 
-        internal static readonly SKPaint ResamplingPaint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
-        internal static readonly SKPaint AliasedPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None };
-        internal static readonly SKPaint TextPaint = new() { IsAntialias = true, Color = SKColors.White };
-        internal static readonly SKPaint AliasedTextPaint = new() { IsAntialias = false, FilterQuality = SKFilterQuality.None, Color = SKColors.White };
-        internal static readonly SKPaint TextStrokePaint = new() { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
-
         public ILogger Logger => _logger;
+
+        static EmbyIconsEnhancer()
+        {
+            _episodeIconCache = new MemoryCache(new MemoryCacheOptions
+            {
+                SizeLimit = MaxEpisodeCacheSize
+            });
+        }
 
         public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager)
         {
@@ -67,19 +71,50 @@ namespace EmbyIcons
         public void ClearAllItemDataCaches()
         {
             _seriesAggregationCache.Clear();
-            _episodeIconCache.Clear();
+
+            _episodeIconCache.Dispose();
+            _episodeIconCache = new MemoryCache(new MemoryCacheOptions
+            {
+                SizeLimit = MaxEpisodeCacheSize
+            });
+
             _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
         }
 
         public void ForceSeriesRefresh(Guid seriesId)
         {
             ClearSeriesAggregationCache(seriesId);
-            var episodesToClear = _episodeIconCache.Where(kvp =>
-                _libraryManager.GetItemById(kvp.Key) is Episode ep &&
-                ep.Series?.Id == seriesId).ToList();
-            foreach (var episode in episodesToClear)
+
+            if (seriesId == Guid.Empty)
             {
-                _episodeIconCache.TryRemove(episode.Key, out _);
+                _logger.Warn("[EmbyIcons] Attempted to force refresh for an empty series ID. Skipping episode cache clear.");
+                return;
+            }
+
+            // First, get the series item to access its InternalId.
+            var seriesItem = _libraryManager.GetItemById(seriesId);
+            if (seriesItem == null)
+            {
+                _logger.Warn($"[EmbyIcons] Could not find series with ID '{seriesId}' for ForceSeriesRefresh. Skipping episode cache clear.");
+                return;
+            }
+
+            // *** FIX: Use the seriesItem's InternalId (long) which is the correct type for ParentIds. ***
+            var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                ParentIds = new[] { seriesItem.InternalId },
+                IncludeItemTypes = new[] { Constants.Episode },
+                Recursive = true
+            }).Select(ep => ep.Id).ToList();
+
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+            {
+                _logger.Debug($"[EmbyIcons] ForceSeriesRefresh identified {episodesInSeries.Count} episodes for series '{seriesId}' to clear from cache.");
+            }
+
+            foreach (var episodeId in episodesInSeries)
+            {
+                ClearEpisodeIconCache(episodeId);
             }
         }
 
@@ -116,18 +151,6 @@ namespace EmbyIcons
                     _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
             }
         }
-
-        public (long AggregationCacheSize, long ItemDataCacheSize) GetCacheMemoryUsage()
-        {
-            const int avgAggResultSize = 768;
-            long aggCacheSize = (long)_seriesAggregationCache.Count * avgAggResultSize;
-
-            const int avgEpisodeInfoSize = 768;
-            long itemDataCacheSize = (long)_episodeIconCache.Count * avgEpisodeInfoSize;
-
-            return (aggCacheSize, itemDataCacheSize);
-        }
-
 
         public MetadataProviderPriority Priority => MetadataProviderPriority.Last;
 
@@ -263,7 +286,7 @@ namespace EmbyIcons
             }
 
             sb.Append("_r").Append(item.CommunityRating?.ToString("F1") ?? "N");
-            sb.Append("_d").Append(item.DateModified.Ticks);
+
             return sb.ToString();
         }
 
@@ -286,9 +309,12 @@ namespace EmbyIcons
             var globalOptions = plugin.GetConfiguredOptions();
             var profileOptions = profile.Settings;
 
-            await _globalConcurrencyLock.WaitAsync(cancellationToken);
+            bool lockAcquired = false;
             try
             {
+                await _globalConcurrencyLock.WaitAsync(cancellationToken);
+                lockAcquired = true;
+
                 var sem = _locks.GetOrAdd(item.Id.ToString(), _ => new SemaphoreSlim(1, 1));
                 await sem.WaitAsync(cancellationToken);
                 try
@@ -303,7 +329,7 @@ namespace EmbyIcons
                         return;
                     }
 
-                    using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(
+                    await using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(
                         sourceBitmap, overlayData, profileOptions, globalOptions, cancellationToken);
 
                     string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -348,7 +374,10 @@ namespace EmbyIcons
             }
             finally
             {
-                _globalConcurrencyLock.Release();
+                if (lockAcquired)
+                {
+                    _globalConcurrencyLock.Release();
+                }
             }
         }
 
@@ -364,11 +393,8 @@ namespace EmbyIcons
             _locks.Clear();
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();
-            ResamplingPaint.Dispose();
-            AliasedPaint.Dispose();
-            TextPaint.Dispose();
-            AliasedTextPaint.Dispose();
-            TextStrokePaint.Dispose();
+            _episodeIconCache.Dispose();
+            FontHelper.Dispose();
         }
     }
 }

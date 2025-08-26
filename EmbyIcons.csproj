@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.36.00</Version>
-		<AssemblyVersion>5.36.0.0</AssemblyVersion>
-		<FileVersion>5.36.0.0</FileVersion>
+		<Version>5.36.90</Version>
+		<AssemblyVersion>5.36.9.0</AssemblyVersion>
+		<FileVersion>5.36.9.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -120,6 +120,7 @@
 	<ItemGroup>
 		<PackageReference Include="MediaBrowser.Common" Version="4.8.11" />
 		<PackageReference Include="MediaBrowser.Server.Core" Version="4.8.11" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>

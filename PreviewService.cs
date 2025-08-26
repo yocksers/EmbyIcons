@@ -95,24 +95,32 @@ namespace EmbyIcons
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13")
             };
 
-            var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
-            var asm = Assembly.GetExecutingAssembly();
-            var resourceName = $"{GetType().Namespace}.Images.tag.png";
-            using (var stream = asm.GetManifestResourceStream(resourceName))
+            SKImage? tagIcon = null;
+            try
             {
-                if (stream != null && stream.Length > 0)
+                var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
+                var asm = Assembly.GetExecutingAssembly();
+                var resourceName = $"{GetType().Namespace}.Images.tag.png";
+                await using (var stream = asm.GetManifestResourceStream(resourceName))
                 {
-                    using var data = SKData.Create(stream);
-                    var tagIcon = SKImage.FromEncodedData(data);
-                    if (tagIcon != null)
+                    if (stream != null && stream.Length > 0)
                     {
-                        injectedIcons[IconCacheManager.IconType.Tag] = new List<SKImage> { tagIcon };
+                        using var data = SKData.Create(stream);
+                        tagIcon = SKImage.FromEncodedData(data);
+                        if (tagIcon != null)
+                        {
+                            injectedIcons[IconCacheManager.IconType.Tag] = new List<SKImage> { tagIcon };
+                        }
                     }
                 }
-            }
 
-            var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons);
-            return resultStream;
+                var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons);
+                return resultStream;
+            }
+            finally
+            {
+                tagIcon?.Dispose();
+            }
         }
     }
 }

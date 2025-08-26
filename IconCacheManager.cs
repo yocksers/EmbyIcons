@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
 using MediaBrowser.Model.Logging;
 
@@ -14,8 +15,8 @@ namespace EmbyIcons.Helpers
     public class IconCacheManager : IDisposable
     {
         private readonly ILogger _logger;
-        private readonly ConcurrentDictionary<string, CachedIcon> _iconImageCache = new();
-        private readonly ConcurrentDictionary<string, SKImage> _embeddedIconCache = new();
+        private MemoryCache _iconImageCache; // Removed readonly to allow re-creation
+        private readonly long _cacheSizeLimitInBytes;
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
         private static readonly object _embeddedCacheLock = new object();
@@ -37,21 +38,15 @@ namespace EmbyIcons.Helpers
         public IconCacheManager(ILogger logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
 
-        public long GetCacheMemoryUsage()
-        {
-            long totalBytes = 0;
-            try
+            // Define the cache size limit.
+            _cacheSizeLimitInBytes = 250 * 1024 * 1024; // 250 MB
+
+            // Initialize the cache with the size limit.
+            _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
-                totalBytes += _iconImageCache.Values.Sum(icon => (long)(icon.Image?.Info.BytesSize ?? 0));
-                totalBytes += _embeddedIconCache.Values.Sum(icon => (long)icon.Info.BytesSize);
-            }
-            catch (Exception ex)
-            {
-                _logger.ErrorException("Error calculating icon cache memory usage", ex);
-            }
-            return totalBytes;
+                SizeLimit = _cacheSizeLimitInBytes
+            });
         }
 
         public Dictionary<IconType, List<string>> GetAllAvailableIconKeys(string iconsFolder)
@@ -150,9 +145,12 @@ namespace EmbyIcons.Helpers
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
 
-            ClearImageCache(_iconImageCache);
-            foreach (var icon in _embeddedIconCache.Values) icon.Dispose();
-            _embeddedIconCache.Clear();
+            // *** FIX: The correct way to clear a MemoryCache is to dispose the old one and create a new one.
+            _iconImageCache.Dispose();
+            _iconImageCache = new MemoryCache(new MemoryCacheOptions
+            {
+                SizeLimit = _cacheSizeLimitInBytes
+            });
 
             lock (_customKeysLock)
             {
@@ -163,7 +161,7 @@ namespace EmbyIcons.Helpers
             return Task.CompletedTask;
         }
 
-        public async Task<SKImage?> GetCachedIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
+        public async Task<byte[]?> GetIconBytesAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
         {
             var loadingMode = options.IconLoadingMode;
             var prefix = Constants.PrefixMap[iconType];
@@ -175,72 +173,76 @@ namespace EmbyIcons.Helpers
 
             if (loadingMode == IconLoadingMode.CustomOnly)
             {
-                return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken);
+                return await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken);
             }
 
             if (loadingMode == IconLoadingMode.BuiltInOnly)
             {
-                return await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
+                return await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken);
             }
 
-            var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken);
-            return customIcon ?? await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken);
+            var customIconBytes = await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken);
+            return customIconBytes ?? await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken);
         }
 
-        private async Task<SKImage?> LoadCustomIconAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken)
+        private async Task<byte[]?> LoadCustomIconBytesAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (_iconImageCache.TryGetValue(baseFileName, out var cached))
+            if (_iconImageCache.TryGetValue(baseFileName, out byte[]? cachedData))
             {
-                try
-                {
-                    if (File.GetLastWriteTimeUtc(cached.FullPath) == cached.FileWriteTimeUtc) return cached.Image;
-                    if (_iconImageCache.TryRemove(baseFileName, out var oldCached)) oldCached.Image?.Dispose();
-                }
-                catch (Exception)
-                {
-                    if (_iconImageCache.TryRemove(baseFileName, out var oldCached)) oldCached.Image?.Dispose();
-                }
+                return cachedData;
             }
 
             foreach (var ext in SupportedCustomIconExtensions)
             {
                 var fullPath = Path.Combine(iconsFolder, baseFileName + ext);
-                if (File.Exists(fullPath)) return await TryLoadAndCacheIconAsync(fullPath, baseFileName, cancellationToken);
+                if (File.Exists(fullPath)) return await TryLoadAndCacheIconBytesAsync(fullPath, baseFileName, cancellationToken);
             }
 
             return null;
         }
 
-        private Task<SKImage?> LoadEmbeddedIconAsync(string baseFileName, CancellationToken cancellationToken)
+        private async Task<byte[]?> LoadEmbeddedIconBytesAsync(string baseFileName, CancellationToken cancellationToken)
         {
-            if (_embeddedIconCache.TryGetValue(baseFileName, out var cachedImage)) return Task.FromResult<SKImage?>(cachedImage);
+            var cacheKey = $"embedded_{baseFileName}";
+            if (_iconImageCache.TryGetValue(cacheKey, out byte[]? cachedData))
+            {
+                return cachedData;
+            }
+
             var resourceName = $"EmbyIcons.EmbeddedIcons.{baseFileName}.png";
-            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
-            if (stream == null) return Task.FromResult<SKImage?>(null);
-            using var data = SKData.Create(stream);
-            var img = SKImage.FromEncodedData(data);
-            if (img != null) _embeddedIconCache.TryAdd(baseFileName, img);
-            return Task.FromResult(img);
+            await using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+            if (stream == null) return null;
+
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream, cancellationToken);
+            var bytes = memoryStream.ToArray();
+
+            var cacheEntryOptions = new MemoryCacheEntryOptions()
+                .SetSize(bytes.Length) // This is crucial for the size limit to work
+                .SetSlidingExpiration(TimeSpan.FromHours(12));
+
+            _iconImageCache.Set(cacheKey, bytes, cacheEntryOptions);
+
+            return bytes;
         }
 
-        private async Task<SKImage?> TryLoadAndCacheIconAsync(string iconPath, string cacheKey, CancellationToken cancellationToken)
+        private async Task<byte[]?> TryLoadAndCacheIconBytesAsync(string iconPath, string cacheKey, CancellationToken cancellationToken)
         {
             try
             {
                 if (new FileInfo(iconPath).Length < 50) return null;
-                using var memoryStream = new MemoryStream();
-                await using (var fileStream = new FileStream(iconPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
-                {
-                    await fileStream.CopyToAsync(memoryStream, cancellationToken).ConfigureAwait(false);
-                }
-                memoryStream.Position = 0;
-                using var data = SKData.Create(memoryStream);
-                var img = SKImage.FromEncodedData(data);
-                if (img == null) return null;
-                _iconImageCache[cacheKey] = new CachedIcon(img, File.GetLastWriteTimeUtc(iconPath), iconPath);
-                return img;
+
+                var bytes = await File.ReadAllBytesAsync(iconPath, cancellationToken);
+                if (bytes.Length == 0) return null;
+
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                    .SetSize(bytes.Length) // Set the "size" of this entry
+                    .SetSlidingExpiration(TimeSpan.FromHours(12)); // Evict if not used for 12 hours
+
+                _iconImageCache.Set(cacheKey, bytes, cacheEntryOptions);
+                return bytes;
             }
             catch (Exception ex)
             {
@@ -251,9 +253,7 @@ namespace EmbyIcons.Helpers
 
         public void Dispose()
         {
-            ClearImageCache(_iconImageCache);
-            foreach (var icon in _embeddedIconCache.Values) icon.Dispose();
-            _embeddedIconCache.Clear();
+            _iconImageCache.Dispose();
 
             lock (_customKeysLock)
             {
@@ -262,30 +262,11 @@ namespace EmbyIcons.Helpers
             }
         }
 
-        private void ClearImageCache(ConcurrentDictionary<string, CachedIcon> cache)
-        {
-            foreach (var cached in cache.Values) cached.Image?.Dispose();
-            cache.Clear();
-        }
-
         private static Dictionary<IconType, List<string>> CreateEmptyIconKeyMap()
         {
             var dict = new Dictionary<IconType, List<string>>();
             foreach (IconType type in Enum.GetValues(typeof(IconType))) dict[type] = new List<string>();
             return dict;
-        }
-
-        private sealed class CachedIcon
-        {
-            public SKImage? Image { get; }
-            public DateTime FileWriteTimeUtc { get; }
-            public string FullPath { get; }
-            public CachedIcon(SKImage? image, DateTime fileWriteTimeUtc, string fullPath)
-            {
-                Image = image;
-                FileWriteTimeUtc = fileWriteTimeUtc;
-                FullPath = fullPath;
-            }
         }
     }
 }

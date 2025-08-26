@@ -10,8 +10,7 @@
         Preview: "EmbyIcons/Preview",
         ValidatePath: "EmbyIcons/ValidatePath",
         SeriesTroubleshooter: "EmbyIcons/SeriesTroubleshooter",
-        AspectRatio: "EmbyIcons/AspectRatio",
-        MemoryReport: "EmbyIcons/MemoryReport"
+        AspectRatio: "EmbyIcons/AspectRatio"
     };
 
     const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -23,15 +22,6 @@
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(context, args), wait);
         };
-    }
-
-    function formatBytes(bytes, decimals = 2) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 
     class EmbyIconsConfigurationView extends BaseView {
@@ -91,11 +81,6 @@
                 aspectDecimalValue: view.querySelector('#aspectDecimalValue'),
                 aspectSnappedIconName: view.querySelector('#aspectSnappedIconName'),
                 aspectPreciseIconName: view.querySelector('#aspectPreciseIconName'),
-                btnRefreshMemoryStats: view.querySelector('#btnRefreshMemoryStats'),
-                memIconCache: view.querySelector('#memIconCache'),
-                memAggregationCache: view.querySelector('#memAggregationCache'),
-                memItemDataCache: view.querySelector('#memItemDataCache'),
-                memTotalCache: view.querySelector('#memTotalCache'),
             };
         }
 
@@ -131,7 +116,6 @@
             this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
 
             this.dom.btnCalculateAspectRatio.addEventListener('click', this.calculateAspectRatio.bind(this));
-            this.dom.btnRefreshMemoryStats.addEventListener('click', this.refreshMemoryStats.bind(this));
 
             this.dom.form.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -144,28 +128,6 @@
                     this.dom.seriesSearchResults.style.display = 'none';
                 }
             });
-        }
-
-        async refreshMemoryStats() {
-            loading.show();
-            try {
-                const report = await ApiClient.ajax({
-                    type: "GET",
-                    url: ApiClient.getUrl(ApiRoutes.MemoryReport),
-                    dataType: "json"
-                });
-
-                this.dom.memIconCache.textContent = formatBytes(report.IconCacheSize);
-                this.dom.memAggregationCache.textContent = formatBytes(report.AggregationCacheSize);
-                this.dom.memItemDataCache.textContent = formatBytes(report.ItemDataCacheSize);
-                this.dom.memTotalCache.textContent = formatBytes(report.TotalEstimatedSize);
-
-                toast('Memory stats refreshed.');
-            } catch (err) {
-                toast({ type: 'error', text: 'Failed to refresh memory stats.' });
-            } finally {
-                loading.hide();
-            }
         }
 
         async calculateAspectRatio() {
@@ -282,9 +244,6 @@
             this.dom.pages.forEach(page => {
                 page.classList.toggle('hide', page.id !== targetId);
             });
-            if (targetId === 'troubleshooterPage') {
-                this.refreshMemoryStats();
-            }
         }
 
         onResume(options) {
@@ -624,7 +583,6 @@
             try {
                 await ApiClient.ajax({ type: "POST", url: ApiClient.getUrl(ApiRoutes.RefreshCache) });
                 toast('Cache cleared, icons will be redrawn.');
-                this.refreshMemoryStats();
             } catch (error) {
                 console.error('Error clearing EmbyIcons cache', error);
                 toast({ type: 'error', text: 'Error clearing icon cache.' });
@@ -818,7 +776,7 @@
             const html = reports.map(report => {
                 const mismatchChecks = report.Checks.filter(c => c.Status === 'Mismatch');
                 if (mismatchChecks.length === 0) {
-                    return ''; 
+                    return ''; // Don't render shows that are OK for the full scan
                 }
 
                 const checksHtml = mismatchChecks.map(check => {
