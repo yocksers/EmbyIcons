@@ -4,9 +4,8 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Querying;
+using Microsoft.Extensions.Caching.Memory;
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace EmbyIcons.Services
@@ -20,8 +19,8 @@ namespace EmbyIcons.Services
         private static Trie<string>? _libraryPathTrie;
         private static readonly object _libraryPathCacheLock = new object();
 
-        private static readonly ConcurrentDictionary<Guid, Guid> _itemToProfileIdCache = new();
         private const int MaxItemToProfileCacheSize = 20000;
+        private static MemoryCache _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
 
         public ProfileManagerService(ILibraryManager libraryManager, ILogger logger, PluginOptions configuration)
         {
@@ -35,7 +34,10 @@ namespace EmbyIcons.Services
             lock (_libraryPathCacheLock)
             {
                 _libraryPathTrie = null;
-                _itemToProfileIdCache.Clear();
+                var oldCache = _itemToProfileIdCache;
+                _itemToProfileIdCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
+                oldCache.Dispose();
+
                 _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
             }
         }
@@ -106,7 +108,7 @@ namespace EmbyIcons.Services
 
         public IconProfile? GetProfileForItem(BaseItem item)
         {
-            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out var cachedProfileId))
+            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
             {
                 if (cachedProfileId == Guid.Empty) return null; // A cached result of "no profile"
                 return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
@@ -155,13 +157,11 @@ namespace EmbyIcons.Services
             if (item.Id != Guid.Empty)
             {
                 var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
-                _itemToProfileIdCache[item.Id] = profileIdToCache;
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                    .SetSize(1) 
+                    .SetSlidingExpiration(TimeSpan.FromDays(1)); 
 
-                if (_itemToProfileIdCache.Count > MaxItemToProfileCacheSize)
-                {
-                    var keyToRemove = _itemToProfileIdCache.Keys.FirstOrDefault();
-                    _itemToProfileIdCache.TryRemove(keyToRemove, out _);
-                }
+                _itemToProfileIdCache.Set(item.Id, profileIdToCache, cacheEntryOptions);
             }
 
             return foundProfile;

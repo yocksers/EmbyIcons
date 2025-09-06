@@ -3,16 +3,6 @@
 
     const pluginId = "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f";
 
-    const ApiRoutes = {
-        DefaultProfile: "EmbyIcons/DefaultProfile",
-        RefreshCache: "EmbyIcons/RefreshCache",
-        IconManagerReport: "EmbyIcons/IconManagerReport",
-        Preview: "EmbyIcons/Preview",
-        ValidatePath: "EmbyIcons/ValidatePath",
-        SeriesTroubleshooter: "EmbyIcons/SeriesTroubleshooter",
-        AspectRatio: "EmbyIcons/AspectRatio"
-    };
-
     const transparentPixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
     function debounce(func, wait) {
@@ -37,6 +27,7 @@
             this.selectedSeriesId = null;
             this.libraryMap = new Map();
             this.profileMap = new Map();
+            this.apiRoutes = null; 
 
             this.getDomElements(view);
             this.bindEvents();
@@ -143,7 +134,7 @@
             try {
                 const result = await ApiClient.ajax({
                     type: "GET",
-                    url: ApiClient.getUrl(ApiRoutes.AspectRatio, { Width: width, Height: height }),
+                    url: ApiClient.getUrl(this.apiRoutes.AspectRatio, { Width: width, Height: height }),
                     dataType: "json"
                 });
 
@@ -246,13 +237,32 @@
             });
         }
 
-        onResume(options) {
+        async onResume(options) {
             super.onResume(options);
-            this.loadData();
+            loading.show();
+            try {
+                await this.fetchApiRoutes();
+                await this.loadData();
+            } catch (error) {
+                console.error('Failed to initialize EmbyIcons configuration page', error);
+                toast({ type: 'error', text: 'Error loading page. Please refresh.' });
+            } finally {
+                loading.hide();
+            }
+        }
+
+        async fetchApiRoutes() {
+            if (this.apiRoutes) {
+                return; 
+            }
+             this.apiRoutes = await ApiClient.ajax({
+                type: "GET",
+                url: ApiClient.getUrl("EmbyIcons/ApiRoutes"),
+                dataType: "json"
+            });
         }
 
         async loadData() {
-            loading.show();
             try {
                 const [config, virtualFolders, user] = await Promise.all([
                     ApiClient.getPluginConfiguration(pluginId),
@@ -275,8 +285,7 @@
             } catch (error) {
                 console.error('Failed to load EmbyIcons configuration', error);
                 toast({ type: 'error', text: 'Error loading configuration.' });
-            } finally {
-                loading.hide();
+                throw error;
             }
         }
 
@@ -417,7 +426,7 @@
                 loading.show();
                 try {
                     const newName = dlg.querySelector('#txtNewProfileName').value;
-                    const newProfile = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.DefaultProfile), dataType: "json" });
+                    const newProfile = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(this.apiRoutes.DefaultProfile), dataType: "json" });
                     newProfile.Name = newName;
 
                     this.pluginConfiguration.Profiles.push(newProfile);
@@ -525,7 +534,7 @@
             const currentSettings = this.getCurrentProfileSettingsFromForm();
             if (!currentSettings) return;
 
-            this.dom.previewImage.src = ApiClient.getUrl(ApiRoutes.Preview, {
+            this.dom.previewImage.src = ApiClient.getUrl(this.apiRoutes.Preview, {
                 OptionsJson: JSON.stringify(currentSettings),
                 v: new Date().getTime()
             });
@@ -559,7 +568,7 @@
             try {
                 const result = await ApiClient.ajax({
                     type: 'GET',
-                    url: ApiClient.getUrl(ApiRoutes.ValidatePath, { Path: path }),
+                    url: ApiClient.getUrl(this.apiRoutes.ValidatePath, { Path: path }),
                     dataType: 'json'
                 });
 
@@ -581,7 +590,7 @@
         async clearCache() {
             loading.show();
             try {
-                await ApiClient.ajax({ type: "POST", url: ApiClient.getUrl(ApiRoutes.RefreshCache) });
+                await ApiClient.ajax({ type: "POST", url: ApiClient.getUrl(this.apiRoutes.RefreshCache) });
                 toast('Cache cleared, icons will be redrawn.');
             } catch (error) {
                 console.error('Error clearing EmbyIcons cache', error);
@@ -600,7 +609,7 @@
             container.innerHTML = '<p>Scanning your library... This may take several minutes on the first run.</p>';
 
             try {
-                const report = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(ApiRoutes.IconManagerReport), dataType: "json" });
+                const report = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(this.apiRoutes.IconManagerReport), dataType: "json" });
                 this.renderIconManagerReport(report);
             } catch (error) {
                 console.error('Error getting icon manager report', error);
@@ -725,7 +734,7 @@
             try {
                 const reports = await ApiClient.ajax({
                     type: "GET",
-                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { SeriesId: this.selectedSeriesId, ChecksToRun: checksToRun }),
+                    url: ApiClient.getUrl(this.apiRoutes.SeriesTroubleshooter, { SeriesId: this.selectedSeriesId, ChecksToRun: checksToRun }),
                     dataType: "json"
                 });
                 this.renderSeriesReport(reports);
@@ -753,7 +762,7 @@
             try {
                 const reports = await ApiClient.ajax({
                     type: "GET",
-                    url: ApiClient.getUrl(ApiRoutes.SeriesTroubleshooter, { ChecksToRun: checksToRun }),
+                    url: ApiClient.getUrl(this.apiRoutes.SeriesTroubleshooter, { ChecksToRun: checksToRun }),
                     dataType: "json"
                 });
                 this.renderSeriesReport(reports);

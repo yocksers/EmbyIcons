@@ -3,8 +3,8 @@ using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
-using Microsoft.Extensions.Caching.Memory; // *** ADD THIS using statement ***
-using System; // *** ADD THIS using statement ***
+using Microsoft.Extensions.Caching.Memory;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
