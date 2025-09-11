@@ -27,7 +27,7 @@
             this.selectedSeriesId = null;
             this.libraryMap = new Map();
             this.profileMap = new Map();
-            this.apiRoutes = null; 
+            this.apiRoutes = null;
 
             this.getDomElements(view);
             this.bindEvents();
@@ -72,6 +72,8 @@
                 aspectDecimalValue: view.querySelector('#aspectDecimalValue'),
                 aspectSnappedIconName: view.querySelector('#aspectSnappedIconName'),
                 aspectPreciseIconName: view.querySelector('#aspectPreciseIconName'),
+                filenameMappingsContainer: view.querySelector('#filenameMappingsContainer'),
+                btnAddFilenameMapping: view.querySelector('#btnAddFilenameMapping'),
             };
         }
 
@@ -107,6 +109,9 @@
             this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
 
             this.dom.btnCalculateAspectRatio.addEventListener('click', this.calculateAspectRatio.bind(this));
+
+            this.dom.btnAddFilenameMapping.addEventListener('click', this.addFilenameMappingRow.bind(this, null));
+            this.dom.filenameMappingsContainer.addEventListener('click', this.onFilenameMappingButtonClick.bind(this));
 
             this.dom.form.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -253,9 +258,9 @@
 
         async fetchApiRoutes() {
             if (this.apiRoutes) {
-                return; 
+                return;
             }
-             this.apiRoutes = await ApiClient.ajax({
+            this.apiRoutes = await ApiClient.ajax({
                 type: "GET",
                 url: ApiClient.getUrl("EmbyIcons/ApiRoutes"),
                 dataType: "json"
@@ -319,6 +324,7 @@
 
             this.renderProfileSettings(profile.Settings);
             this.populateLibraryAssignments(profileId);
+            this.loadFilenameMappings(profile);
             this.triggerPreviewUpdate();
             this.updateAllPriorityGroups();
         }
@@ -399,6 +405,7 @@
             if (!profile) return;
 
             Object.assign(profile.Settings, this.getCurrentProfileSettingsFromForm());
+            this.saveFilenameMappings(profile);
 
             this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
             this.dom.librarySelectionContainer.querySelectorAll('input:checked:not(:disabled)').forEach(checkbox => {
@@ -843,6 +850,58 @@
                     indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
                 }
             }
+        }
+
+        addFilenameMappingRow(mapping) {
+            const keyword = mapping ? mapping.Keyword : '';
+            const iconName = mapping ? mapping.IconName : '';
+
+            const newRow = document.createElement('div');
+            newRow.classList.add('filenameMappingRow');
+            newRow.style.display = 'flex';
+            newRow.style.gap = '1em';
+            newRow.style.alignItems = 'center';
+            newRow.style.marginBottom = '1em';
+
+            newRow.innerHTML = `
+                <div class="inputContainer" style="flex-grow: 1; margin: 0;">
+                    <input is="emby-input" type="text" label="Keyword:" value="${keyword}" class="txtFilenameKeyword" />
+                    <div class="fieldDescription">Case-insensitive text to find in the filename.</div>
+                </div>
+                <div class="inputContainer" style="flex-grow: 1; margin: 0;">
+                    <input is="emby-input" type="text" label="Icon Name:" value="${iconName}" class="txtFilenameIconName" />
+                    <div class="fieldDescription">e.g., 'remux' for 'source.remux.png'</div>
+                </div>
+                <button is="emby-button" type="button" class="raised button-cancel btnDeleteFilenameMapping" title="Delete Mapping"><span></span></button>
+            `;
+
+            this.dom.filenameMappingsContainer.appendChild(newRow);
+        }
+
+        onFilenameMappingButtonClick(e) {
+            const deleteButton = e.target.closest('.btnDeleteFilenameMapping');
+            if (deleteButton) {
+                deleteButton.closest('.filenameMappingRow').remove();
+                this.triggerConfigSave();
+            }
+        }
+
+        loadFilenameMappings(profile) {
+            this.dom.filenameMappingsContainer.innerHTML = '';
+            const mappings = profile.Settings.FilenameBasedIcons || [];
+            mappings.forEach(mapping => this.addFilenameMappingRow(mapping));
+        }
+
+        saveFilenameMappings(profile) {
+            const mappings = [];
+            this.dom.filenameMappingsContainer.querySelectorAll('.filenameMappingRow').forEach(row => {
+                const keyword = row.querySelector('.txtFilenameKeyword').value.trim();
+                const iconName = row.querySelector('.txtFilenameIconName').value.trim();
+                if (keyword && iconName) {
+                    mappings.push({ Keyword: keyword, IconName: iconName });
+                }
+            });
+            profile.Settings.FilenameBasedIcons = mappings;
         }
     }
 

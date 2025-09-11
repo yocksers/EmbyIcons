@@ -1,4 +1,4 @@
-﻿﻿﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
+﻿<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/EmbyIconsConfigurationjs" data-title="EmbyIcons">
 
     <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
         <div class="readOnlyContent auto-center">
@@ -128,6 +128,10 @@
                             <div class="fieldDescription checkboxFieldDescription">When disabled, overlays only appear on movies and TV shows.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowOverlaysForSeasons" /><span>Show overlays on season images</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">When enabled, icons will also appear on season posters based on the episodes within that season.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowSeriesIconsIfAllEpisodesHaveLanguage" /><span>Show icons on TV show posters</span></label>
                             <div class="fieldDescription checkboxFieldDescription">Language icons require all child episodes share the same language (matched by the display language name).</div>
                         </div>
@@ -241,6 +245,13 @@
                                     </div>
                                     <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="ParentalRatingOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
                                 </div>
+                                <div>
+                                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                                        <select is="emby-select" label="Source Icons (from filename)" data-profile-key="SourceIconAlignment" data-corner-group="BottomRight"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                        <select is="emby-select" label="Priority" data-profile-key="SourceIconPriority" data-corner-group="BottomRight"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select>
+                                    </div>
+                                    <div class="checkboxContainer" style="margin-top: 1.5em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="SourceOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                </div>
                                 <div id="ratingAppearanceControls">
                                     <select is="emby-select" label="Rating Background Shape" data-profile-key="CommunityScoreBackgroundShape">
                                         <option value="None">None</option>
@@ -261,6 +272,21 @@
 
                         <div style="text-align: center; margin-top: 3em; margin-bottom: 2em;">
                             <img class="previewImage" alt="Loading Preview..." style="max-height: 24em; display: block; background-color: #101010; margin: auto;" />
+                        </div>
+
+                        <div class="flex align-items-center" style="margin: 3em 0 .5em;">
+                            <h2 style="margin: 0;">Filename-based Icons</h2>
+                        </div>
+                        <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">
+                            Display icons for movies based on keywords in the filename (e.g., 'remux', 'extended', 'web-dl'). The icon name you provide is used to find a file like <code>source.icon-name.png</code> in your custom icons folder.
+                        </p>
+                        <div class="paper-card" style="padding: 1.5em;">
+                            <div id="filenameMappingsContainer">
+                                <!-- Mappings will be added here by JS -->
+                            </div>
+                            <button is="emby-button" type="button" class="raised" id="btnAddFilenameMapping" style="margin-top: 1em;">
+                                <span>Add Mapping</span>
+                            </button>
                         </div>
 
                         <div class="flex align-items-center" style="margin: 3em 0 .5em;">

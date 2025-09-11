@@ -57,7 +57,7 @@ namespace EmbyIcons
             _logger.Info("[EmbyIcons] Session started.");
 
             _iconCacheManager = new IconCacheManager(_logger);
-            _overlayDataService = new OverlayDataService(this);
+            _overlayDataService = new OverlayDataService(this, _libraryManager);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
         }
 
@@ -91,7 +91,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // First, get the series item to access its InternalId.
             var seriesItem = _libraryManager.GetItemById(seriesId);
             if (seriesItem == null)
             {
@@ -99,7 +98,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // *** FIX: Use the seriesItem's InternalId (long) which is the correct type for ParentIds. ***
             var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentIds = new[] { seriesItem.InternalId },
@@ -120,7 +118,7 @@ namespace EmbyIcons
 
         private BaseItem GetFullItem(BaseItem item)
         {
-            if ((item is Series || item is BoxSet) && item.Id == Guid.Empty && item.InternalId > 0)
+            if ((item is Series || item is BoxSet || item is Season) && item.Id == Guid.Empty && item.InternalId > 0)
             {
                 var fullItem = _libraryManager.GetItemById(item.InternalId);
                 return fullItem ?? item;
@@ -177,6 +175,7 @@ namespace EmbyIcons
             if (!isSupportedType) return false;
 
             if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
+            if (item is Season && !(options.ShowOverlaysForSeasons)) return false;
 
             return options.AudioIconAlignment != IconAlignment.Disabled ||
                    options.SubtitleIconAlignment != IconAlignment.Disabled ||
@@ -263,6 +262,12 @@ namespace EmbyIcons
             {
                 var fullSeries = GetFullItem(series) as Series ?? series;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, globalOptions);
+                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+            }
+            else if (item is Season season)
+            {
+                var fullSeason = GetFullItem(season) as Season ?? season;
+                var aggResult = GetOrBuildAggregatedDataForParent(fullSeason, options, globalOptions);
                 sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
             }
             else if (item is BoxSet collection)

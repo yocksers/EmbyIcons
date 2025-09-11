@@ -75,6 +75,19 @@ namespace EmbyIcons
                     OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
                 };
             }
+            else if (parent is Season)
+            {
+                useLiteMode = profileOptions.UseSeriesLiteMode; 
+                requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
+                query = new InternalItemsQuery
+                {
+                    Parent = parent,
+                    Recursive = true,
+                    IncludeItemTypes = new[] { EmbyIcons.Constants.Episode },
+                    Limit = useLiteMode ? 1 : null,
+                    OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
+                };
+            }
             else if (parent is BoxSet boxSet)
             {
                 useLiteMode = profileOptions.UseCollectionLiteMode;

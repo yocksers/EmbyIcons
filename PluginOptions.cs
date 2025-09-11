@@ -19,6 +19,12 @@ namespace EmbyIcons
         Auto
     }
 
+    public class FilenameIconMapping
+    {
+        public string Keyword { get; set; } = string.Empty;
+        public string IconName { get; set; } = string.Empty;
+    }
+
     public class PluginOptions : BasePluginConfiguration
     {
         public string PersistedVersion { get; set; } = "1.0.0";
@@ -145,6 +151,7 @@ namespace EmbyIcons
         public bool EnableForBanners { get; set; } = false;
 
         public bool ShowOverlaysForEpisodes { get; set; } = true;
+        public bool ShowOverlaysForSeasons { get; set; } = false;
         public bool ShowSeriesIconsIfAllEpisodesHaveLanguage { get; set; } = true;
         public bool ExcludeSpecialsFromSeriesAggregation { get; set; } = false;
         public bool ShowCollectionIconsIfAllChildrenHaveLanguage { get; set; } = true;
@@ -195,12 +202,17 @@ namespace EmbyIcons
         public bool ParentalRatingOverlayHorizontal { get; set; } = true;
         public int ParentalRatingIconPriority { get; set; } = 11;
 
+        public IconAlignment SourceIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool SourceOverlayHorizontal { get; set; } = true;
+        public int SourceIconPriority { get; set; } = 12;
+
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";
         public int CommunityScoreBackgroundOpacity { get; set; } = 80;
 
         public int IconSize { get; set; } = 10;
         public bool UseSeriesLiteMode { get; set; } = true;
+        public List<FilenameIconMapping> FilenameBasedIcons { get; set; } = new List<FilenameIconMapping>();
     }
 
     public enum IconLoadingMode

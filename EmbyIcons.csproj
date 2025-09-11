@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.37.00</Version>
-		<AssemblyVersion>5.37.0.0</AssemblyVersion>
-		<FileVersion>5.37.0.0</FileVersion>
+		<Version>5.38.20</Version>
+		<AssemblyVersion>5.38.2.0</AssemblyVersion>
+		<FileVersion>5.38.2.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -125,7 +125,7 @@
 
 	<ItemGroup>
 	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
+	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 

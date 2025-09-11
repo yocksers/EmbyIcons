@@ -19,7 +19,8 @@ namespace EmbyIcons
             { IconCacheManager.IconType.Tag, "tag" },
             { IconCacheManager.IconType.CommunityRating, "rating" },
             { IconCacheManager.IconType.AspectRatio, "ar" },
-            { IconCacheManager.IconType.ParentalRating, "pr" }
+            { IconCacheManager.IconType.ParentalRating, "pr" },
+            { IconCacheManager.IconType.Source, "source" }
         };
     }
 }

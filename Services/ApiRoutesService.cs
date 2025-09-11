@@ -17,7 +17,7 @@ namespace EmbyIcons.Services
             var routes = typeof(ApiRoutes)
                 .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
                 .Where(fi => fi.IsLiteral && !fi.IsInitOnly && fi.FieldType == typeof(string))
-                .ToDictionary(fi => fi.Name, fi => (string)fi.GetRawConstantValue());
+                .ToDictionary(fi => fi.Name, fi => (string)fi.GetRawConstantValue()!);
 
             return Task.FromResult<object>(routes);
         }

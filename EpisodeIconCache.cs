@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Extensions.Caching.Memory; 
+using Microsoft.Extensions.Caching.Memory;
 
 namespace EmbyIcons
 {
@@ -19,6 +19,7 @@ namespace EmbyIcons
             public HashSet<string> AudioCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> VideoCodecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> Tags { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> SourceIcons { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public string? ChannelIconName { get; init; }
             public string? VideoFormatIconName { get; init; }
             public string? ResolutionIconName { get; init; }

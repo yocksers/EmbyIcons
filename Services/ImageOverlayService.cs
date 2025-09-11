@@ -32,7 +32,8 @@ namespace EmbyIcons.Services
                 (p => p.ChannelIconAlignment, p => p.ChannelIconPriority, p => p.ChannelOverlayHorizontal, IconCacheManager.IconType.Channel, d => d.ChannelIconName != null ? new[] { d.ChannelIconName } : null),
                 (p => p.AudioCodecIconAlignment, p => p.AudioCodecIconPriority, p => p.AudioCodecOverlayHorizontal, IconCacheManager.IconType.AudioCodec, d => d.AudioCodecs),
                 (p => p.AspectRatioIconAlignment, p => p.AspectRatioIconPriority, p => p.AspectRatioOverlayHorizontal, IconCacheManager.IconType.AspectRatio, d => d.AspectRatioIconName != null ? new[] { d.AspectRatioIconName } : null),
-                (p => p.ParentalRatingIconAlignment, p => p.ParentalRatingIconPriority, p => p.ParentalRatingOverlayHorizontal, IconCacheManager.IconType.ParentalRating, d => d.ParentalRatingIconName != null ? new[] { d.ParentalRatingIconName } : null)
+                (p => p.ParentalRatingIconAlignment, p => p.ParentalRatingIconPriority, p => p.ParentalRatingOverlayHorizontal, IconCacheManager.IconType.ParentalRating, d => d.ParentalRatingIconName != null ? new[] { d.ParentalRatingIconName } : null),
+                (p => p.SourceIconAlignment, p => p.SourceIconPriority, p => p.SourceOverlayHorizontal, IconCacheManager.IconType.Source, d => d.SourceIcons)
             }.AsReadOnly();
 
         public ImageOverlayService(ILogger logger, IconCacheManager iconCache)

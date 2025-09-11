@@ -1,11 +1,15 @@
 ﻿using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace EmbyIcons.Services
@@ -13,10 +17,12 @@ namespace EmbyIcons.Services
     internal class OverlayDataService
     {
         private readonly EmbyIconsEnhancer _enhancer;
+        private readonly ILibraryManager _libraryManager;
 
-        public OverlayDataService(EmbyIconsEnhancer enhancer)
+        public OverlayDataService(EmbyIconsEnhancer enhancer, ILibraryManager libraryManager)
         {
             _enhancer = enhancer;
+            _libraryManager = libraryManager;
         }
 
         private static string NormalizeTag(string tag)
@@ -63,6 +69,12 @@ namespace EmbyIcons.Services
                 return CreateOverlayDataFromAggregate(aggResult, seriesItem);
             }
 
+            if (item is Season seasonItem)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
+                return CreateOverlayDataFromAggregate(aggResult, seasonItem);
+            }
+
             if (item is BoxSet collectionItem)
             {
                 if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
@@ -88,6 +100,7 @@ namespace EmbyIcons.Services
                     AudioCodecs = cachedInfo.AudioCodecs,
                     VideoCodecs = cachedInfo.VideoCodecs,
                     Tags = cachedInfo.Tags,
+                    SourceIcons = cachedInfo.SourceIcons,
                     ChannelIconName = cachedInfo.ChannelIconName,
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
                     ResolutionIconName = cachedInfo.ResolutionIconName,
@@ -107,6 +120,7 @@ namespace EmbyIcons.Services
                 AudioCodecs = overlayData.AudioCodecs,
                 VideoCodecs = overlayData.VideoCodecs,
                 Tags = overlayData.Tags,
+                SourceIcons = overlayData.SourceIcons,
                 ChannelIconName = overlayData.ChannelIconName,
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
@@ -131,6 +145,55 @@ namespace EmbyIcons.Services
                 CommunityRating = item.CommunityRating,
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
+
+            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            {
+                var allPaths = new List<string>();
+                var allVersions = new List<Movie> { movieItem };
+
+                var providerIdKey = movieItem.ProviderIds.Keys.FirstOrDefault(k => k.Equals("Imdb", StringComparison.OrdinalIgnoreCase) || k.Equals("Tmdb", StringComparison.OrdinalIgnoreCase));
+
+                if (movieItem.Parent != null && !string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
+                {
+                    var query = new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { "Movie" },
+                        Parent = movieItem.Parent,
+                        Recursive = true
+                    };
+
+                    var itemsInLibrary = _libraryManager.GetItemList(query).OfType<Movie>();
+
+                    foreach (var libraryMovie in itemsInLibrary)
+                    {
+                        if (libraryMovie.ProviderIds.TryGetValue(providerIdKey, out var value) && value == providerIdValue)
+                        {
+                            allVersions.Add(libraryMovie);
+                        }
+                    }
+                }
+
+                foreach (var version in allVersions.Distinct(new BaseItemComparer()))
+                {
+                    if (!string.IsNullOrEmpty(version.Path))
+                    {
+                        allPaths.Add(version.Path.ToLowerInvariant());
+                    }
+                }
+
+                foreach (var path in allPaths.Distinct())
+                {
+                    foreach (var mapping in profileOptions.FilenameBasedIcons)
+                    {
+                        if (!string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                            !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                            path.Contains(mapping.Keyword.ToLowerInvariant()))
+                        {
+                            data.SourceIcons.Add(mapping.IconName.ToLowerInvariant());
+                        }
+                    }
+                }
+            }
 
             if (item.Tags != null && item.Tags.Length > 0)
             {
@@ -174,6 +237,21 @@ namespace EmbyIcons.Services
             data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
 
             return data;
+        }
+    }
+
+    class BaseItemComparer : IEqualityComparer<BaseItem>
+    {
+        public bool Equals(BaseItem? x, BaseItem? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+            return x.Id == y.Id;
+        }
+
+        public int GetHashCode([DisallowNull] BaseItem obj)
+        {
+            return obj.Id.GetHashCode();
         }
     }
 }
