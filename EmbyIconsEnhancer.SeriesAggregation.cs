@@ -77,7 +77,7 @@ namespace EmbyIcons
             }
             else if (parent is Season)
             {
-                useLiteMode = profileOptions.UseSeriesLiteMode; 
+                useLiteMode = profileOptions.UseSeriesLiteMode; // Seasons should probably follow series settings for lite mode
                 requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
                 query = new InternalItemsQuery
                 {

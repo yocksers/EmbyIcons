@@ -15,7 +15,7 @@ namespace EmbyIcons.Helpers
     public class IconCacheManager : IDisposable
     {
         private readonly ILogger _logger;
-        private MemoryCache _iconImageCache; 
+        private MemoryCache _iconImageCache; // Removed readonly to allow re-creation
         private readonly long _cacheSizeLimitInBytes;
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
@@ -39,8 +39,10 @@ namespace EmbyIcons.Helpers
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
+            // Define the cache size limit.
             _cacheSizeLimitInBytes = 250 * 1024 * 1024; // 250 MB
 
+            // Initialize the cache with the size limit.
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
                 SizeLimit = _cacheSizeLimitInBytes
@@ -143,6 +145,7 @@ namespace EmbyIcons.Helpers
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
 
+            // *** FIX: The correct way to clear a MemoryCache is to dispose the old one and create a new one.
             _iconImageCache.Dispose();
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {

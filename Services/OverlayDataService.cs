@@ -153,12 +153,11 @@ namespace EmbyIcons.Services
 
                 var providerIdKey = movieItem.ProviderIds.Keys.FirstOrDefault(k => k.Equals("Imdb", StringComparison.OrdinalIgnoreCase) || k.Equals("Tmdb", StringComparison.OrdinalIgnoreCase));
 
-                if (movieItem.Parent != null && !string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
+                if (!string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
                 {
                     var query = new InternalItemsQuery
                     {
                         IncludeItemTypes = new[] { "Movie" },
-                        Parent = movieItem.Parent,
                         Recursive = true
                     };
 

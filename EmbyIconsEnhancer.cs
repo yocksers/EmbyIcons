@@ -91,6 +91,7 @@ namespace EmbyIcons
                 return;
             }
 
+            // First, get the series item to access its InternalId.
             var seriesItem = _libraryManager.GetItemById(seriesId);
             if (seriesItem == null)
             {
@@ -98,6 +99,7 @@ namespace EmbyIcons
                 return;
             }
 
+            // *** FIX: Use the seriesItem's InternalId (long) which is the correct type for ParentIds. ***
             var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentIds = new[] { seriesItem.InternalId },
