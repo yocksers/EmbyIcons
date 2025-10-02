@@ -16,33 +16,31 @@ namespace EmbyIcons.Services
         private readonly ILogger _logger;
         private readonly PluginOptions _configuration;
 
-        private static Trie<string>? _libraryPathTrie;
-        private static readonly object _libraryPathCacheLock = new object();
+        private Lazy<Trie<string>> _libraryPathTrieLazy;
 
         private const int MaxItemToProfileCacheSize = 20000;
-        private static MemoryCache _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
+        private MemoryCache _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
 
         public ProfileManagerService(ILibraryManager libraryManager, ILogger logger, PluginOptions configuration)
         {
             _libraryManager = libraryManager;
             _logger = logger;
             _configuration = configuration;
+            _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
         }
 
         public void InvalidateLibraryCache()
         {
-            lock (_libraryPathCacheLock)
-            {
-                _libraryPathTrie = null;
-                var oldCache = _itemToProfileIdCache;
-                _itemToProfileIdCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
-                oldCache.Dispose();
+            _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
 
-                _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
-            }
+            var oldCache = _itemToProfileIdCache;
+            _itemToProfileIdCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
+            oldCache.Dispose();
+
+            _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
         }
 
-        private void PopulateLibraryPathCache()
+        private Trie<string> CreateLibraryPathTrie()
         {
             _logger.Debug("[EmbyIcons] Populating library path cache using Trie.");
             var newTrie = new Trie<string>();
@@ -64,10 +62,7 @@ namespace EmbyIcons.Services
                 _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to get virtual folders from LibraryManager.", ex);
             }
 
-            lock (_libraryPathCacheLock)
-            {
-                _libraryPathTrie = newTrie;
-            }
+            return newTrie;
         }
 
         private IconProfile? GetProfileForPath(string? path)
@@ -77,15 +72,8 @@ namespace EmbyIcons.Services
                 return null;
             }
 
-            lock (_libraryPathCacheLock)
-            {
-                if (_libraryPathTrie == null)
-                {
-                    PopulateLibraryPathCache();
-                }
-            }
+            var currentLibraryTrie = _libraryPathTrieLazy.Value;
 
-            var currentLibraryTrie = _libraryPathTrie;
             if (currentLibraryTrie == null)
             {
                 _logger.Warn("[EmbyIcons] Library path Trie is null, cannot check library restrictions.");
@@ -158,8 +146,8 @@ namespace EmbyIcons.Services
             {
                 var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
                 var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetSize(1) 
-                    .SetSlidingExpiration(TimeSpan.FromDays(1)); 
+                    .SetSize(1)
+                    .SetSlidingExpiration(TimeSpan.FromDays(1));
 
                 _itemToProfileIdCache.Set(item.Id, profileIdToCache, cacheEntryOptions);
             }

@@ -41,6 +41,9 @@ namespace EmbyIcons
         private ConfigurationMonitor? _configMonitor;
 
         private bool _migrationPerformed = false;
+        private static bool _migrationAttempted = false; // Add a static flag to ensure it only runs once per server start
+        private static readonly object _migrationLock = new object(); // Add a lock for thread safety
+
 
         public static Plugin? Instance { get; private set; }
 
@@ -84,97 +87,121 @@ namespace EmbyIcons
 
         private void EnsureConfigurationMigrated()
         {
-            if (_migrationPerformed) return;
+            // This method is now thread-safe and non-blocking.
+            lock (_migrationLock)
+            {
+                if (_migrationPerformed || _migrationAttempted) return;
+
+                if (Configuration.Profiles != null && Configuration.Profiles.Any())
+                {
+                    _migrationPerformed = true;
+                    return;
+                }
+
+                _migrationAttempted = true;
+            }
+
+            // Run the potentially blocking logic in the background.
+            Task.Run(() =>
+            {
+                try
+                {
+                    _logger.Info("[EmbyIcons] No profiles found. Attempting to migrate old settings in the background.");
 
 #pragma warning disable CS0612
-            if (Configuration.Profiles == null || !Configuration.Profiles.Any())
-            {
-                _logger.Info("[EmbyIcons] No profiles found. Attempting to migrate old settings.");
-
-                var defaultProfileSettings = new ProfileSettings
-                {
-                    ShowOverlaysForEpisodes = Configuration.ShowOverlaysForEpisodes,
-                    ShowSeriesIconsIfAllEpisodesHaveLanguage = Configuration.ShowSeriesIconsIfAllEpisodesHaveLanguage,
-
-                    AudioIconAlignment = Configuration.ShowAudioIcons ? Configuration.AudioIconAlignment : IconAlignment.Disabled,
-                    SubtitleIconAlignment = Configuration.ShowSubtitleIcons ? Configuration.SubtitleIconAlignment : IconAlignment.Disabled,
-                    ChannelIconAlignment = Configuration.ShowAudioChannelIcons ? Configuration.ChannelIconAlignment : IconAlignment.Disabled,
-                    AudioCodecIconAlignment = Configuration.ShowAudioCodecIcons ? Configuration.AudioCodecIconAlignment : IconAlignment.Disabled,
-                    VideoFormatIconAlignment = Configuration.ShowVideoFormatIcons ? Configuration.VideoFormatIconAlignment : IconAlignment.Disabled,
-                    VideoCodecIconAlignment = Configuration.ShowVideoCodecIcons ? Configuration.VideoCodecIconAlignment : IconAlignment.Disabled,
-                    TagIconAlignment = Configuration.ShowTagIcons ? Configuration.TagIconAlignment : IconAlignment.Disabled,
-                    ResolutionIconAlignment = Configuration.ShowResolutionIcons ? Configuration.ResolutionIconAlignment : IconAlignment.Disabled,
-                    CommunityScoreIconAlignment = Configuration.ShowCommunityScoreIcon ? Configuration.CommunityScoreIconAlignment : IconAlignment.Disabled,
-                    AspectRatioIconAlignment = Configuration.ShowAspectRatioIcons ? Configuration.AspectRatioIconAlignment : IconAlignment.Disabled,
-
-                    AudioOverlayHorizontal = Configuration.AudioOverlayHorizontal,
-                    SubtitleOverlayHorizontal = Configuration.SubtitleOverlayHorizontal,
-                    ChannelOverlayHorizontal = Configuration.ChannelOverlayHorizontal,
-                    AudioCodecOverlayHorizontal = Configuration.AudioCodecOverlayHorizontal,
-                    VideoFormatOverlayHorizontal = Configuration.VideoFormatOverlayHorizontal,
-                    VideoCodecOverlayHorizontal = Configuration.VideoCodecOverlayHorizontal,
-                    TagOverlayHorizontal = Configuration.TagOverlayHorizontal,
-                    ResolutionOverlayHorizontal = Configuration.ResolutionOverlayHorizontal,
-                    CommunityScoreOverlayHorizontal = Configuration.CommunityScoreOverlayHorizontal,
-                    AspectRatioOverlayHorizontal = Configuration.AspectRatioOverlayHorizontal,
-                    CommunityScoreBackgroundShape = Configuration.CommunityScoreBackgroundShape,
-                    CommunityScoreBackgroundColor = Configuration.CommunityScoreBackgroundColor,
-                    CommunityScoreBackgroundOpacity = Configuration.CommunityScoreBackgroundOpacity,
-                    IconSize = Configuration.IconSize,
-                    UseSeriesLiteMode = Configuration.UseSeriesLiteMode
-                };
-
-                var defaultProfile = new IconProfile
-                {
-                    Name = "Default",
-                    Id = Guid.NewGuid(),
-                    Settings = defaultProfileSettings
-                };
-
-                if (Configuration.Profiles == null)
-                {
-                    Configuration.Profiles = new List<IconProfile>();
-                }
-                Configuration.Profiles.Add(defaultProfile);
-
-                var oldSelectedLibsSet = new HashSet<string>((Configuration.SelectedLibraries ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
-                oldSelectedLibsSet.RemoveWhere(string.IsNullOrWhiteSpace);
-
-                var virtualFolders = _libraryManager.GetVirtualFolders();
-                var libraryNameMap = virtualFolders
-                    .GroupBy(lib => lib.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(g => g.Key, g => g.First().Id.ToString(), StringComparer.OrdinalIgnoreCase);
-
-                if (oldSelectedLibsSet.Any())
-                {
-                    foreach (var libName in oldSelectedLibsSet)
+                    var defaultProfileSettings = new ProfileSettings
                     {
-                        if (libraryNameMap.TryGetValue(libName, out var libId))
+                        ShowOverlaysForEpisodes = Configuration.ShowOverlaysForEpisodes,
+                        ShowSeriesIconsIfAllEpisodesHaveLanguage = Configuration.ShowSeriesIconsIfAllEpisodesHaveLanguage,
+
+                        AudioIconAlignment = Configuration.ShowAudioIcons ? Configuration.AudioIconAlignment : IconAlignment.Disabled,
+                        SubtitleIconAlignment = Configuration.ShowSubtitleIcons ? Configuration.SubtitleIconAlignment : IconAlignment.Disabled,
+                        ChannelIconAlignment = Configuration.ShowAudioChannelIcons ? Configuration.ChannelIconAlignment : IconAlignment.Disabled,
+                        AudioCodecIconAlignment = Configuration.ShowAudioCodecIcons ? Configuration.AudioCodecIconAlignment : IconAlignment.Disabled,
+                        VideoFormatIconAlignment = Configuration.ShowVideoFormatIcons ? Configuration.VideoFormatIconAlignment : IconAlignment.Disabled,
+                        VideoCodecIconAlignment = Configuration.ShowVideoCodecIcons ? Configuration.VideoCodecIconAlignment : IconAlignment.Disabled,
+                        TagIconAlignment = Configuration.ShowTagIcons ? Configuration.TagIconAlignment : IconAlignment.Disabled,
+                        ResolutionIconAlignment = Configuration.ShowResolutionIcons ? Configuration.ResolutionIconAlignment : IconAlignment.Disabled,
+                        CommunityScoreIconAlignment = Configuration.ShowCommunityScoreIcon ? Configuration.CommunityScoreIconAlignment : IconAlignment.Disabled,
+                        AspectRatioIconAlignment = Configuration.ShowAspectRatioIcons ? Configuration.AspectRatioIconAlignment : IconAlignment.Disabled,
+
+                        AudioOverlayHorizontal = Configuration.AudioOverlayHorizontal,
+                        SubtitleOverlayHorizontal = Configuration.SubtitleOverlayHorizontal,
+                        ChannelOverlayHorizontal = Configuration.ChannelOverlayHorizontal,
+                        AudioCodecOverlayHorizontal = Configuration.AudioCodecOverlayHorizontal,
+                        VideoFormatOverlayHorizontal = Configuration.VideoFormatOverlayHorizontal,
+                        VideoCodecOverlayHorizontal = Configuration.VideoCodecOverlayHorizontal,
+                        TagOverlayHorizontal = Configuration.TagOverlayHorizontal,
+                        ResolutionOverlayHorizontal = Configuration.ResolutionOverlayHorizontal,
+                        CommunityScoreOverlayHorizontal = Configuration.CommunityScoreOverlayHorizontal,
+                        AspectRatioOverlayHorizontal = Configuration.AspectRatioOverlayHorizontal,
+                        CommunityScoreBackgroundShape = Configuration.CommunityScoreBackgroundShape,
+                        CommunityScoreBackgroundColor = Configuration.CommunityScoreBackgroundColor,
+                        CommunityScoreBackgroundOpacity = Configuration.CommunityScoreBackgroundOpacity,
+                        IconSize = Configuration.IconSize,
+                        UseSeriesLiteMode = Configuration.UseSeriesLiteMode
+                    };
+
+                    var defaultProfile = new IconProfile
+                    {
+                        Name = "Default",
+                        Id = Guid.NewGuid(),
+                        Settings = defaultProfileSettings
+                    };
+
+                    if (Configuration.Profiles == null)
+                    {
+                        Configuration.Profiles = new List<IconProfile>();
+                    }
+                    Configuration.Profiles.Add(defaultProfile);
+
+                    var oldSelectedLibsSet = new HashSet<string>((Configuration.SelectedLibraries ?? "").Split(','), StringComparer.OrdinalIgnoreCase);
+                    oldSelectedLibsSet.RemoveWhere(string.IsNullOrWhiteSpace);
+
+                    var virtualFolders = _libraryManager.GetVirtualFolders();
+                    var libraryNameMap = virtualFolders
+                        .GroupBy(lib => lib.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Id.ToString(), StringComparer.OrdinalIgnoreCase);
+
+                    if (oldSelectedLibsSet.Any())
+                    {
+                        foreach (var libName in oldSelectedLibsSet)
                         {
+                            if (libraryNameMap.TryGetValue(libName, out var libId))
+                            {
+                                if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
+                                {
+                                    Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var lib in virtualFolders)
+                        {
+                            var libId = lib.Id.ToString();
                             if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
                             {
                                 Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
                             }
                         }
                     }
-                }
-                else
-                {
-                    foreach (var lib in virtualFolders)
+#pragma warning restore CS0612
+
+                    _logger.Info($"[EmbyIcons] Background migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
+                    SaveConfiguration();
+
+                    lock (_migrationLock)
                     {
-                        var libId = lib.Id.ToString();
-                        if (Configuration.LibraryProfileMappings.All(m => m.LibraryId != libId))
-                        {
-                            Configuration.LibraryProfileMappings.Add(new LibraryMapping { LibraryId = libId, ProfileId = defaultProfile.Id });
-                        }
+                        _migrationPerformed = true;
                     }
                 }
-
-                _logger.Info($"[EmbyIcons] Migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
-                SaveConfiguration();
-            }
-#pragma warning restore CS0612
-            _migrationPerformed = true;
+                catch (Exception ex)
+                {
+                    _logger.ErrorException("[EmbyIcons] A critical error occurred during background configuration migration.", ex);
+                }
+            });
         }
 
         public IconProfile? GetProfileForItem(BaseItem item)
@@ -298,6 +325,7 @@ namespace EmbyIcons
             var name = $"{GetType().Namespace}.Images.logo.png";
             return asm.GetManifestResourceStream(name) ?? Stream.Null;
         }
+
 
         public ImageFormat ThumbImageFormat => ImageFormat.Png;
 

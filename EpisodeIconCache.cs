@@ -8,7 +8,7 @@ namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal static MemoryCache _episodeIconCache;
+        internal static MemoryCache? _episodeIconCache;
 
         private const int MaxEpisodeCacheSize = 2000;
 
@@ -32,7 +32,7 @@ namespace EmbyIcons
         {
             if (episodeId == Guid.Empty) return;
 
-            _episodeIconCache.Remove(episodeId);
+            _episodeIconCache?.Remove(episodeId);
             if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
             {
                 _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");

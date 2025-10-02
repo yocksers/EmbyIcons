@@ -90,7 +90,7 @@ namespace EmbyIcons.Services
                 return CreateOverlayDataFromAggregate(aggResult, collectionItem);
             }
 
-            if (EmbyIconsEnhancer._episodeIconCache.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo cachedInfo) && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
+            if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
             {
                 if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
                 return new OverlayData
@@ -133,7 +133,7 @@ namespace EmbyIcons.Services
                 .SetSize(1)
                 .SetSlidingExpiration(TimeSpan.FromHours(6));
 
-            EmbyIconsEnhancer._episodeIconCache.Set(item.Id, newInfo, cacheEntryOptions);
+            EmbyIconsEnhancer._episodeIconCache?.Set(item.Id, newInfo, cacheEntryOptions);
 
             return overlayData;
         }

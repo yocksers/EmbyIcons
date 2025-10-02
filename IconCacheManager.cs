@@ -15,8 +15,9 @@ namespace EmbyIcons.Helpers
     public class IconCacheManager : IDisposable
     {
         private readonly ILogger _logger;
-        private MemoryCache _iconImageCache; // Removed readonly to allow re-creation
+        private MemoryCache _iconImageCache;
         private readonly long _cacheSizeLimitInBytes;
+        private readonly object _cacheInstanceLock = new object(); // Lock for cache instance safety
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
         private static readonly object _embeddedCacheLock = new object();
@@ -39,10 +40,8 @@ namespace EmbyIcons.Helpers
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            // Define the cache size limit.
             _cacheSizeLimitInBytes = 250 * 1024 * 1024; // 250 MB
 
-            // Initialize the cache with the size limit.
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
                 SizeLimit = _cacheSizeLimitInBytes
@@ -51,8 +50,15 @@ namespace EmbyIcons.Helpers
 
         public Dictionary<IconType, List<string>> GetAllAvailableIconKeys(string iconsFolder)
         {
-            if (string.IsNullOrEmpty(iconsFolder) || !Directory.Exists(iconsFolder))
+            if (string.IsNullOrEmpty(iconsFolder))
             {
+                return CreateEmptyIconKeyMap();
+            }
+
+            // More robust check for invalid/inaccessible paths
+            if (!Directory.Exists(iconsFolder))
+            {
+                _logger.Warn($"[EmbyIcons] Custom icons folder does not exist: '{iconsFolder}'. No custom icons will be loaded.");
                 return CreateEmptyIconKeyMap();
             }
 
@@ -68,6 +74,7 @@ namespace EmbyIcons.Helpers
                 var allKeys = CreateEmptyIconKeyMap();
                 try
                 {
+                    _logger.Debug($"[EmbyIcons] Scanning for icon keys in folder: '{iconsFolder}'");
                     foreach (var file in Directory.GetFiles(iconsFolder))
                     {
                         var ext = Path.GetExtension(file);
@@ -79,6 +86,7 @@ namespace EmbyIcons.Helpers
                             allKeys[iconType].Add(parts[1].ToLowerInvariant());
                         }
                     }
+                    _logger.Debug($"[EmbyIcons] Finished scanning. Found keys for {allKeys.Count(kv => kv.Value.Any())} icon types.");
 
                     if (allKeys.ContainsKey(IconType.Resolution))
                     {
@@ -87,7 +95,7 @@ namespace EmbyIcons.Helpers
                 }
                 catch (Exception ex)
                 {
-                    _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan.", ex);
+                    _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan. This may be due to a permissions issue or an inaccessible path.", ex);
                 }
 
                 _customKeysFolder = iconsFolder;
@@ -145,12 +153,14 @@ namespace EmbyIcons.Helpers
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
 
-            // *** FIX: The correct way to clear a MemoryCache is to dispose the old one and create a new one.
-            _iconImageCache.Dispose();
-            _iconImageCache = new MemoryCache(new MemoryCacheOptions
+            lock (_cacheInstanceLock)
             {
-                SizeLimit = _cacheSizeLimitInBytes
-            });
+                _iconImageCache.Dispose();
+                _iconImageCache = new MemoryCache(new MemoryCacheOptions
+                {
+                    SizeLimit = _cacheSizeLimitInBytes
+                });
+            }
 
             lock (_customKeysLock)
             {
@@ -163,6 +173,14 @@ namespace EmbyIcons.Helpers
 
         public async Task<byte[]?> GetIconBytesAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
         {
+            // Get a stable reference to the current cache instance to prevent ObjectDisposedException
+            // if a refresh happens while this async method is running.
+            MemoryCache currentCache;
+            lock (_cacheInstanceLock)
+            {
+                currentCache = _iconImageCache;
+            }
+
             var loadingMode = options.IconLoadingMode;
             var prefix = Constants.PrefixMap[iconType];
             var lowerIconNameKey = iconNameKey.ToLowerInvariant();
@@ -173,23 +191,23 @@ namespace EmbyIcons.Helpers
 
             if (loadingMode == IconLoadingMode.CustomOnly)
             {
-                return await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken);
+                return await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
             }
 
             if (loadingMode == IconLoadingMode.BuiltInOnly)
             {
-                return await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken);
+                return await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken, currentCache);
             }
 
-            var customIconBytes = await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken);
-            return customIconBytes ?? await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken);
+            var customIconBytes = await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
+            return customIconBytes ?? await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken, currentCache);
         }
 
-        private async Task<byte[]?> LoadCustomIconBytesAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken)
+        private async Task<byte[]?> LoadCustomIconBytesAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken, MemoryCache cache)
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (_iconImageCache.TryGetValue(baseFileName, out byte[]? cachedData))
+            if (cache.TryGetValue(baseFileName, out byte[]? cachedData))
             {
                 return cachedData;
             }
@@ -197,16 +215,16 @@ namespace EmbyIcons.Helpers
             foreach (var ext in SupportedCustomIconExtensions)
             {
                 var fullPath = Path.Combine(iconsFolder, baseFileName + ext);
-                if (File.Exists(fullPath)) return await TryLoadAndCacheIconBytesAsync(fullPath, baseFileName, cancellationToken);
+                if (File.Exists(fullPath)) return await TryLoadAndCacheIconBytesAsync(fullPath, baseFileName, cancellationToken, cache);
             }
 
             return null;
         }
 
-        private async Task<byte[]?> LoadEmbeddedIconBytesAsync(string baseFileName, CancellationToken cancellationToken)
+        private async Task<byte[]?> LoadEmbeddedIconBytesAsync(string baseFileName, CancellationToken cancellationToken, MemoryCache cache)
         {
             var cacheKey = $"embedded_{baseFileName}";
-            if (_iconImageCache.TryGetValue(cacheKey, out byte[]? cachedData))
+            if (cache.TryGetValue(cacheKey, out byte[]? cachedData))
             {
                 return cachedData;
             }
@@ -220,15 +238,15 @@ namespace EmbyIcons.Helpers
             var bytes = memoryStream.ToArray();
 
             var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSize(bytes.Length) // This is crucial for the size limit to work
+                .SetSize(bytes.Length)
                 .SetSlidingExpiration(TimeSpan.FromHours(12));
 
-            _iconImageCache.Set(cacheKey, bytes, cacheEntryOptions);
+            cache.Set(cacheKey, bytes, cacheEntryOptions);
 
             return bytes;
         }
 
-        private async Task<byte[]?> TryLoadAndCacheIconBytesAsync(string iconPath, string cacheKey, CancellationToken cancellationToken)
+        private async Task<byte[]?> TryLoadAndCacheIconBytesAsync(string iconPath, string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
         {
             try
             {
@@ -238,10 +256,10 @@ namespace EmbyIcons.Helpers
                 if (bytes.Length == 0) return null;
 
                 var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetSize(bytes.Length) // Set the "size" of this entry
-                    .SetSlidingExpiration(TimeSpan.FromHours(12)); // Evict if not used for 12 hours
+                    .SetSize(bytes.Length)
+                    .SetSlidingExpiration(TimeSpan.FromHours(12));
 
-                _iconImageCache.Set(cacheKey, bytes, cacheEntryOptions);
+                cache.Set(cacheKey, bytes, cacheEntryOptions);
                 return bytes;
             }
             catch (Exception ex)
@@ -253,7 +271,10 @@ namespace EmbyIcons.Helpers
 
         public void Dispose()
         {
-            _iconImageCache.Dispose();
+            lock (_cacheInstanceLock)
+            {
+                _iconImageCache.Dispose();
+            }
 
             lock (_customKeysLock)
             {

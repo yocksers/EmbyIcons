@@ -43,16 +43,33 @@ namespace EmbyIcons
 
         static EmbyIconsEnhancer()
         {
-            _episodeIconCache = new MemoryCache(new MemoryCacheOptions
+            try
             {
-                SizeLimit = MaxEpisodeCacheSize
-            });
+                _episodeIconCache = new MemoryCache(new MemoryCacheOptions
+                {
+                    SizeLimit = MaxEpisodeCacheSize
+                });
+            }
+            catch (Exception ex)
+            {
+                // If this fails, the plugin can't function, but it shouldn't crash the server.
+                // We don't have a logger instance here, so write to the console, which might be visible in startup logs.
+                Console.WriteLine($"[EmbyIcons] CRITICAL FAILURE in static constructor: {ex.Message}");
+                // The cache will remain null, and the main constructor must handle this.
+            }
         }
 
         public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
+
+            // Add a null check to handle the case where the static constructor failed.
+            if (_episodeIconCache == null)
+            {
+                _logger.Fatal("[EmbyIcons] The episode icon cache failed to initialize. The plugin will not function correctly.");
+                throw new InvalidOperationException("EmbyIcons episode cache could not be created.");
+            }
 
             _logger.Info("[EmbyIcons] Session started.");
 
@@ -72,7 +89,7 @@ namespace EmbyIcons
         {
             _seriesAggregationCache.Clear();
 
-            _episodeIconCache.Dispose();
+            _episodeIconCache?.Dispose();
             _episodeIconCache = new MemoryCache(new MemoryCacheOptions
             {
                 SizeLimit = MaxEpisodeCacheSize
@@ -99,7 +116,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // *** FIX: Use the seriesItem's InternalId (long) which is the correct type for ParentIds. ***
             var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentIds = new[] { seriesItem.InternalId },
@@ -400,7 +416,7 @@ namespace EmbyIcons
             _locks.Clear();
             _iconCacheManager.Dispose();
             _globalConcurrencyLock.Dispose();
-            _episodeIconCache.Dispose();
+            _episodeIconCache?.Dispose();
             FontHelper.Dispose();
         }
     }
