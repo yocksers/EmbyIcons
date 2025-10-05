@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.38.70</Version>
-		<AssemblyVersion>5.38.7.0</AssemblyVersion>
-		<FileVersion>5.38.7.0</FileVersion>
+		<Version>5.38.90</Version>
+		<AssemblyVersion>5.38.9.0</AssemblyVersion>
+		<FileVersion>5.38.9.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -118,22 +118,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="MediaBrowser.Common" Version="4.9.1.80" />
+		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.80" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Reference Include="MediaBrowser.Common">
-	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\MediaBrowser.Common.dll</HintPath>
-	  </Reference>
-	  <Reference Include="MediaBrowser.Controller">
-	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\MediaBrowser.Controller.dll</HintPath>
-	  </Reference>
-	  <Reference Include="MediaBrowser.Model">
-	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\MediaBrowser.Model.dll</HintPath>
-	  </Reference>
-	  <Reference Include="SkiaSharp">
-	    <HintPath>..\..\AppData\Roaming\Emby-Server\system\SkiaSharp.dll</HintPath>
-	  </Reference>
+		<PackageReference Include="SkiaSharp" Version="2.88.6" />
 	</ItemGroup>
 
 </Project>
