@@ -39,8 +39,6 @@ namespace EmbyIcons.Services
             var config = plugin.Configuration;
             var iconsFolder = config.IconsFolder;
 
-            // Run the potentially long-running cache refresh in the background so the HTTP request
-            // isn't blocked by cache compaction and native image disposal work which can be slow.
             _ = Task.Run(async () =>
             {
                 try
@@ -54,7 +52,6 @@ namespace EmbyIcons.Services
                 }
             });
 
-            // Immediately bump the persisted version so clients will see the new cache-busting key.
             config.PersistedVersion = Guid.NewGuid().ToString("N");
             plugin.SaveCurrentConfiguration();
             _logger.Info($"[EmbyIcons] Cache clear requested. New cache-busting version is '{config.PersistedVersion}'. Cache refresh running in background.");

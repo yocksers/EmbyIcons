@@ -115,9 +115,6 @@ namespace EmbyIcons
             await _imageOverlayService.ApplyOverlaysToStreamAsync(originalBitmap, previewData, profileSettings, globalOptions, resultStream, CancellationToken.None, injectedIcons);
             resultStream.Position = 0;
 
-            // Note: `ImageOverlayService` will dispose any SKImage instances that were
-            // provided for this rendering pass (including injected icons), so we should
-            // not dispose them here to avoid double-dispose.
 
             return resultStream;
         }

@@ -39,7 +39,6 @@ namespace EmbyIcons.Services
             long privateBytes = 0;
             try
             {
-                // Not all platforms expose PrivateMemorySize64; wrap in try
                 privateBytes = proc.PrivateMemorySize64;
             }
             catch { }
@@ -50,7 +49,6 @@ namespace EmbyIcons.Services
             try
             {
                 var icmType = typeof(EmbyIcons.EmbyIconsEnhancer).Assembly.GetType("EmbyIcons.Helpers.IconCacheManager");
-                // Try to access the IconCacheManager instance via Plugin.Instance if present
                 var plugin = EmbyIcons.Plugin.Instance;
                 if (plugin != null)
                 {
@@ -65,8 +63,6 @@ namespace EmbyIcons.Services
                         {
                             try
                             {
-                                // Try to sum estimated sizes stored in entries via reflection of internal entries; fallback to 0 if unavailable.
-                                // MemoryCache does not expose entries publicly; so we can't reliably reflect them across versions. Keep estimate 0 if not available.
                                 iconCacheEstimate = 0;
                             }
                             catch { }

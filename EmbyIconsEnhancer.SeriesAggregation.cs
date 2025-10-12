@@ -77,7 +77,7 @@ namespace EmbyIcons
             }
             else if (parent is Season)
             {
-                useLiteMode = profileOptions.UseSeriesLiteMode; // Seasons should probably follow series settings for lite mode
+                useLiteMode = profileOptions.UseSeriesLiteMode; 
                 requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
                 query = new InternalItemsQuery
                 {
@@ -124,7 +124,6 @@ namespace EmbyIcons
                 return new AggregatedSeriesResult();
             }
 
-            // Determine which checks are enabled to avoid unnecessary work
             bool checkAudioLangs = profileOptions.AudioIconAlignment != IconAlignment.Disabled;
             bool checkSubLangs = profileOptions.SubtitleIconAlignment != IconAlignment.Disabled;
             bool checkAudioCodecs = profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled;

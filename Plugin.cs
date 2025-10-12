@@ -41,8 +41,8 @@ namespace EmbyIcons
         private ConfigurationMonitor? _configMonitor;
 
         private bool _migrationPerformed = false;
-        private static bool _migrationAttempted = false; // Add a static flag to ensure it only runs once per server start
-        private static readonly object _migrationLock = new object(); // Add a lock for thread safety
+        private static bool _migrationAttempted = false; 
+        private static readonly object _migrationLock = new object(); 
 
 
         public static Plugin? Instance { get; private set; }
@@ -87,7 +87,6 @@ namespace EmbyIcons
 
         private void EnsureConfigurationMigrated()
         {
-            // This method is now thread-safe and non-blocking.
             lock (_migrationLock)
             {
                 if (_migrationPerformed || _migrationAttempted) return;
@@ -101,7 +100,6 @@ namespace EmbyIcons
                 _migrationAttempted = true;
             }
 
-            // Run the potentially blocking logic in the background.
             Task.Run(() =>
             {
                 try
@@ -337,7 +335,6 @@ namespace EmbyIcons
             _enhancer = null;
             try { _profileManager?.Dispose(); } catch { }
             _profileManager = null;
-            // ConfigurationMonitor does not implement IDisposable. Just null it out.
             _configMonitor = null;
             Instance = null;
             _logger.Debug("EmbyIcons plugin disposed.");

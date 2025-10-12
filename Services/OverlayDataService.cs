@@ -20,8 +20,6 @@ namespace EmbyIcons.Services
     {
         private readonly EmbyIconsEnhancer _enhancer;
         private readonly ILibraryManager _libraryManager;
-    // Cache mapping providerIdKey:providerIdValue -> string[] of lowercased file paths
-    // Avoids repeated GetItemList queries for the same provider id when Source Icons are enabled
     private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
     private Timer? _cacheMaintenanceTimer;
 
@@ -55,7 +53,6 @@ namespace EmbyIcons.Services
             try { _cacheMaintenanceTimer?.Dispose(); } catch { }
         }
 
-        // OPTIMIZATION: Replaced Regex with a faster StringBuilder implementation.
         private static string NormalizeTag(string tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
@@ -204,8 +201,6 @@ namespace EmbyIcons.Services
 
             if (profileOptions.SourceIconAlignment != IconAlignment.Disabled && item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
             {
-                // Determine file paths to inspect for filename-based icons.
-                // Use a short-lived cache keyed by provider id to avoid repeating the InternalItemsQuery for the same movie across scans.
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 var providerIdKey = movieItem.ProviderIds.Keys.FirstOrDefault(k => k.Equals("Imdb", StringComparison.OrdinalIgnoreCase) || k.Equals("Tmdb", StringComparison.OrdinalIgnoreCase));
 
@@ -214,7 +209,6 @@ namespace EmbyIcons.Services
                     var cacheKey = $"{providerIdKey}:{providerIdValue}";
                     if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
                     {
-                        // OPTIMIZATION: Use a highly-targeted query; cache the resulting file paths (lowercased) for later use.
                         var query = new InternalItemsQuery
                         {
                             IncludeItemTypes = new[] { "Movie" },
@@ -254,7 +248,6 @@ namespace EmbyIcons.Services
                 }
                 else
                 {
-                    // Fallback for movies without a strong provider ID: only inspect the current movie's path
                     allPaths = string.IsNullOrEmpty(movieItem.Path) ? Array.Empty<string>() : new[] { movieItem.Path!.ToLowerInvariant() };
                 }
 
@@ -291,7 +284,6 @@ namespace EmbyIcons.Services
             MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
             MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
-            // Only loop through streams if any stream-based icon is enabled
             if (profileOptions.AudioIconAlignment != IconAlignment.Disabled || profileOptions.SubtitleIconAlignment != IconAlignment.Disabled ||
                 profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled || profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled)
             {

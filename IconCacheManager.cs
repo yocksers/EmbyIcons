@@ -325,7 +325,6 @@ namespace EmbyIcons.Helpers
             {
                 try
                 {
-                    // Try to compact first so PostEvictionCallbacks fire and native SKImage instances can be disposed.
                     try { _iconImageCache.Compact(1.0); } catch { }
                     _iconImageCache.Dispose();
                 }

@@ -20,7 +20,6 @@ namespace EmbyIcons.Services
         private record RatingOverlayInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, float Score, SKImage? Icon) : IOverlayInfo;
         private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int EdgePadding, int InterIconPadding, int CanvasWidth, int CanvasHeight);
 
-        // REFACTOR: Use a clean record for definitions instead of complex tuples.
         private record IconGroupDefinition(
             Func<ProfileSettings, IconAlignment> GetAlignment,
             Func<ProfileSettings, int> GetPriority,
@@ -52,7 +51,6 @@ namespace EmbyIcons.Services
 
         public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
-            // This is now a helper for the preview service which still needs a MemoryStream
             var outputStream = new MemoryStream();
             await ApplyOverlaysToStreamAsync(sourceBitmap, data, profileOptions, globalOptions, outputStream, cancellationToken, null);
             outputStream.Position = 0;
@@ -110,7 +108,6 @@ namespace EmbyIcons.Services
 
             encodedData.SaveTo(outputStream);
 
-            // Dispose any SKImage instances we created for this rendering pass to free native memory.
             try
             {
                 foreach (var group in iconGroups)

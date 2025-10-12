@@ -21,8 +21,6 @@ namespace EmbyIcons.Services
 
         private const int MaxItemToProfileCacheSize = 20000;
         private MemoryCache _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
-    // Cache mapping from collection InternalId -> ProfileId (Guid.Empty means no profile)
-    // This reduces repeated InternalItemsQuery calls for collections during a full scan.
     private MemoryCache _collectionToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
     private Timer? _cacheMaintenanceTimer;
 
@@ -32,7 +30,6 @@ namespace EmbyIcons.Services
             _logger = logger;
             _configuration = configuration;
             _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
-            // Periodic maintenance to prevent cache buildup in long-running plugin instances
             _cacheMaintenanceTimer = new Timer(_ => CompactCaches(), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
         }
 
@@ -155,7 +152,6 @@ namespace EmbyIcons.Services
                 }
                 else if (_configuration.EnableCollectionProfileLookup)
                 {
-                    // Try collection-level cache first to avoid repeated expensive queries when scanning collections
                     if (_collectionToProfileIdCache.TryGetValue(boxSet.InternalId, out Guid cachedCollectionProfileId))
                     {
                         foundProfile = cachedCollectionProfileId == Guid.Empty ? null : _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedCollectionProfileId);

@@ -8,7 +8,6 @@ namespace EmbyIcons.Services
     public class GetScanProgress : IReturn<ScanProgress>
     {
         [ApiMember(Name = "ScanType", Description = "The type of scan to get progress for (e.g., 'IconManager', 'FullSeriesScan').", IsRequired = true, DataType = "string", ParameterType = "query")]
-        // FIX: Initialize non-nullable property.
         public string ScanType { get; set; } = string.Empty;
     }
 
@@ -16,7 +15,6 @@ namespace EmbyIcons.Services
     {
         public int Current { get; set; }
         public int Total { get; set; }
-        // FIX: Initialize non-nullable property.
         public string Message { get; set; } = string.Empty;
         public bool IsComplete { get; set; }
     }

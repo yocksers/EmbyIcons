@@ -52,10 +52,7 @@ namespace EmbyIcons
             }
             catch (Exception ex)
             {
-                // If this fails, the plugin can't function, but it shouldn't crash the server.
-                // We don't have a logger instance here, so write to the console, which might be visible in startup logs.
                 Console.WriteLine($"[EmbyIcons] CRITICAL FAILURE in static constructor: {ex.Message}");
-                // The cache will remain null, and the main constructor must handle this.
             }
         }
 
@@ -64,7 +61,6 @@ namespace EmbyIcons
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
 
-            // Add a null check to handle the case where the static constructor failed.
             if (_episodeIconCache == null)
             {
                 _logger.Fatal("[EmbyIcons] The episode icon cache failed to initialize. The plugin will not function correctly.");
@@ -108,7 +104,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // First, get the series item to access its InternalId.
             var seriesItem = _libraryManager.GetItemById(seriesId);
             if (seriesItem == null)
             {
@@ -417,7 +412,6 @@ namespace EmbyIcons
             _locks.Clear();
             _iconCacheManager.Dispose();
             try { _overlayDataService?.Dispose(); } catch { }
-                // Removed disposing of _imageOverlayService as it doesn't implement IDisposable
             _globalConcurrencyLock.Dispose();
             _episodeIconCache?.Dispose();
             FontHelper.Dispose();
