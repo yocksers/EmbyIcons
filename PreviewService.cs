@@ -95,32 +95,31 @@ namespace EmbyIcons
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13")
             };
 
-            SKImage? tagIcon = null;
-            try
+            var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
+            var asm = Assembly.GetExecutingAssembly();
+            var resourceName = $"{GetType().Namespace}.Images.tag.png";
+            await using (var stream = asm.GetManifestResourceStream(resourceName))
             {
-                var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
-                var asm = Assembly.GetExecutingAssembly();
-                var resourceName = $"{GetType().Namespace}.Images.tag.png";
-                await using (var stream = asm.GetManifestResourceStream(resourceName))
+                if (stream != null && stream.Length > 0)
                 {
-                    if (stream != null && stream.Length > 0)
+                    using var data = SKData.Create(stream);
+                    var tagIcon = SKImage.FromEncodedData(data);
+                    if (tagIcon != null)
                     {
-                        using var data = SKData.Create(stream);
-                        tagIcon = SKImage.FromEncodedData(data);
-                        if (tagIcon != null)
-                        {
-                            injectedIcons[IconCacheManager.IconType.Tag] = new List<SKImage> { tagIcon };
-                        }
+                        injectedIcons[IconCacheManager.IconType.Tag] = new List<SKImage> { tagIcon };
                     }
                 }
+            }
 
-                var resultStream = await _imageOverlayService.ApplyOverlaysAsync(originalBitmap, previewData, profileSettings, globalOptions, CancellationToken.None, injectedIcons);
-                return resultStream;
-            }
-            finally
-            {
-                tagIcon?.Dispose();
-            }
+            var resultStream = new MemoryStream();
+            await _imageOverlayService.ApplyOverlaysToStreamAsync(originalBitmap, previewData, profileSettings, globalOptions, resultStream, CancellationToken.None, injectedIcons);
+            resultStream.Position = 0;
+
+            // Note: `ImageOverlayService` will dispose any SKImage instances that were
+            // provided for this rendering pass (including injected icons), so we should
+            // not dispose them here to avoid double-dispose.
+
+            return resultStream;
         }
     }
 }

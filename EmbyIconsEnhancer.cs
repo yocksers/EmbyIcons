@@ -352,13 +352,11 @@ namespace EmbyIcons
                         return;
                     }
 
-                    await using var outputStream = await _imageOverlayService.ApplyOverlaysAsync(
-                        sourceBitmap, overlayData, profileOptions, globalOptions, cancellationToken);
-
                     string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                     await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                     {
-                        await outputStream.CopyToAsync(fsOut, cancellationToken);
+                        await _imageOverlayService.ApplyOverlaysToStreamAsync(
+                            sourceBitmap, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
                     }
 
                     try
@@ -380,8 +378,11 @@ namespace EmbyIcons
                 }
                 finally
                 {
-                    sem.Release();
-                    _locks.TryRemove(item.Id.ToString(), out _);
+                    try { sem.Release(); } catch { }
+                    if (_locks.TryRemove(item.Id.ToString(), out var removedSem))
+                    {
+                        try { removedSem.Dispose(); } catch { }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -415,6 +416,8 @@ namespace EmbyIcons
                 sem.Dispose();
             _locks.Clear();
             _iconCacheManager.Dispose();
+            try { _overlayDataService?.Dispose(); } catch { }
+                // Removed disposing of _imageOverlayService as it doesn't implement IDisposable
             _globalConcurrencyLock.Dispose();
             _episodeIconCache?.Dispose();
             FontHelper.Dispose();

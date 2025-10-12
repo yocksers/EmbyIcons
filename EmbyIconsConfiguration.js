@@ -28,6 +28,7 @@
             this.libraryMap = new Map();
             this.profileMap = new Map();
             this.apiRoutes = null;
+            this.progressPollInterval = null;
 
             this.getDomElements(view);
             this.bindEvents();
@@ -65,6 +66,8 @@
                 btnRunFullSeriesScan: view.querySelector('#btnRunFullSeriesScan'),
                 seriesReportContainer: view.querySelector('#seriesReportContainer'),
                 troubleshooterChecks: view.querySelectorAll('#troubleshooterChecksContainer input[type=checkbox]'),
+                btnRefreshMemoryUsage: view.querySelector('#btnRefreshMemoryUsage'),
+                memoryUsageReport: view.querySelector('#memoryUsageReport'),
                 btnCalculateAspectRatio: view.querySelector('#btnCalculateAspectRatio'),
                 txtAspectRatioWidth: view.querySelector('#txtAspectRatioWidth'),
                 txtAspectRatioHeight: view.querySelector('#txtAspectRatioHeight'),
@@ -78,52 +81,94 @@
         }
 
         bindEvents() {
-            this.dom.form.addEventListener('change', this.onFormChange.bind(this));
-            this.dom.opacitySlider.addEventListener('input', this.onFormChange.bind(this));
+            if (this.dom.form) {
+                this.dom.form.addEventListener('change', this.onFormChange.bind(this));
+                this.dom.form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveData();
+                    return false;
+                });
+            }
 
-            this.dom.navButtons.forEach(navButton => {
-                navButton.addEventListener('click', this.onTabChange.bind(this));
-            });
+            if (this.dom.opacitySlider) {
+                this.dom.opacitySlider.addEventListener('input', this.onFormChange.bind(this));
+            }
 
-            this.dom.previewImage.addEventListener('error', () => {
-                this.dom.previewImage.src = transparentPixel;
-                toast({ type: 'error', text: 'Preview generation failed.' });
-            });
+            if (this.dom.navButtons && this.dom.navButtons.length) {
+                this.dom.navButtons.forEach(navButton => {
+                    navButton.addEventListener('click', this.onTabChange.bind(this));
+                });
+            }
 
-            this.dom.profileSelector.addEventListener('change', this.onProfileSelected.bind(this));
-            this.dom.btnAddProfile.addEventListener('click', this.addProfile.bind(this));
-            this.dom.btnRenameProfile.addEventListener('click', this.renameProfile.bind(this));
-            this.dom.btnDeleteProfile.addEventListener('click', this.deleteProfile.bind(this));
-            this.dom.btnSelectIconsFolder.addEventListener('click', this.selectIconsFolder.bind(this));
-            this.dom.btnClearCache.addEventListener('click', this.clearCache.bind(this));
-            this.dom.btnRunIconScan.addEventListener('click', this.runIconScan.bind(this));
-            this.dom.txtIconsFolder.addEventListener('input', debounce(this.validateIconsFolder.bind(this), 500));
-            this.dom.prioritySelects.forEach(select => {
-                select.addEventListener('change', this.onPriorityChange.bind(this));
-            });
+            if (this.dom.previewImage) {
+                this.dom.previewImage.addEventListener('error', () => {
+                    this.dom.previewImage.src = transparentPixel;
+                    toast({ type: 'error', text: 'Preview generation failed.' });
+                });
+            }
 
-            this.dom.txtSeriesSearch.addEventListener('input', debounce(this.searchForSeries.bind(this), 300));
-            this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
-            this.dom.btnRunSeriesScan.addEventListener('click', this.runSeriesScan.bind(this));
-            this.dom.btnRunFullSeriesScan.addEventListener('click', this.runFullSeriesScan.bind(this));
-            this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
+            if (this.dom.profileSelector) this.dom.profileSelector.addEventListener('change', this.onProfileSelected.bind(this));
+            if (this.dom.btnAddProfile) this.dom.btnAddProfile.addEventListener('click', this.addProfile.bind(this));
+            if (this.dom.btnRenameProfile) this.dom.btnRenameProfile.addEventListener('click', this.renameProfile.bind(this));
+            if (this.dom.btnDeleteProfile) this.dom.btnDeleteProfile.addEventListener('click', this.deleteProfile.bind(this));
+            if (this.dom.btnSelectIconsFolder) this.dom.btnSelectIconsFolder.addEventListener('click', this.selectIconsFolder.bind(this));
+            if (this.dom.btnClearCache) this.dom.btnClearCache.addEventListener('click', this.clearCache.bind(this));
+            if (this.dom.btnRunIconScan) this.dom.btnRunIconScan.addEventListener('click', this.runIconScan.bind(this));
+            if (this.dom.txtIconsFolder) this.dom.txtIconsFolder.addEventListener('input', debounce(this.validateIconsFolder.bind(this), 500));
 
-            this.dom.btnCalculateAspectRatio.addEventListener('click', this.calculateAspectRatio.bind(this));
+            if (this.dom.prioritySelects && this.dom.prioritySelects.length) {
+                this.dom.prioritySelects.forEach(select => {
+                    select.addEventListener('change', this.onPriorityChange.bind(this));
+                });
+            }
 
-            this.dom.btnAddFilenameMapping.addEventListener('click', this.addFilenameMappingRow.bind(this, null));
-            this.dom.filenameMappingsContainer.addEventListener('click', this.onFilenameMappingButtonClick.bind(this));
+            if (this.dom.txtSeriesSearch) this.dom.txtSeriesSearch.addEventListener('input', debounce(this.searchForSeries.bind(this), 300));
+            if (this.dom.seriesSearchResults) this.dom.seriesSearchResults.addEventListener('click', this.onSeriesSearchResultClick.bind(this));
+            if (this.dom.btnRunSeriesScan) this.dom.btnRunSeriesScan.addEventListener('click', this.runSeriesScan.bind(this));
+            if (this.dom.btnRunFullSeriesScan) this.dom.btnRunFullSeriesScan.addEventListener('click', this.runFullSeriesScan.bind(this));
+            if (this.dom.seriesReportContainer) this.dom.seriesReportContainer.addEventListener('click', this.onSeriesReportHeaderClick.bind(this));
+            if (this.dom.btnRefreshMemoryUsage) this.dom.btnRefreshMemoryUsage.addEventListener('click', this.refreshMemoryUsage.bind(this));
 
-            this.dom.form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveData();
-                return false;
-            });
+            if (this.dom.btnCalculateAspectRatio) this.dom.btnCalculateAspectRatio.addEventListener('click', this.calculateAspectRatio.bind(this));
+
+            if (this.dom.btnAddFilenameMapping) this.dom.btnAddFilenameMapping.addEventListener('click', this.addFilenameMappingRow.bind(this, null));
+            if (this.dom.filenameMappingsContainer) this.dom.filenameMappingsContainer.addEventListener('click', this.onFilenameMappingButtonClick.bind(this));
 
             document.addEventListener('click', (e) => {
-                if (!this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
+                if (this.dom.seriesSearchResults && this.dom.txtSeriesSearch && !this.dom.seriesSearchResults.contains(e.target) && !this.dom.txtSeriesSearch.contains(e.target)) {
                     this.dom.seriesSearchResults.style.display = 'none';
                 }
             });
+        }
+
+        // UX IMPROVEMENT: Poll for scan progress and provide live feedback.
+        pollScanProgress(scanType, button, container) {
+            clearInterval(this.progressPollInterval);
+
+            this.progressPollInterval = setInterval(async () => {
+                try {
+                    const progress = await ApiClient.ajax({
+                        type: "GET",
+                        url: ApiClient.getUrl(this.apiRoutes.ScanProgress, { ScanType: scanType }),
+                        dataType: "json"
+                    });
+
+                    if (progress.IsComplete) {
+                        clearInterval(this.progressPollInterval);
+                        return;
+                    }
+
+                    const percent = progress.Total > 0 ? Math.round((progress.Current / progress.Total) * 100) : 0;
+                    const message = `${percent}% - ${progress.Message}`;
+
+                    if (button) button.querySelector('span').textContent = message;
+                    if (container) container.innerHTML = `<p>${message}</p>`;
+
+                } catch (err) {
+                    console.error('Error polling for scan progress', err);
+                    clearInterval(this.progressPollInterval);
+                }
+            }, 2000);
         }
 
         async calculateAspectRatio() {
@@ -242,6 +287,11 @@
             });
         }
 
+        onPause() {
+            super.onPause();
+            clearInterval(this.progressPollInterval);
+        }
+
         async onResume(options) {
             super.onResume(options);
             loading.show();
@@ -287,10 +337,31 @@
                 this.populateProfileSelector();
                 this.loadProfileSettings(this.dom.profileSelector.value);
                 this.validateIconsFolder();
+                this.refreshMemoryUsage().catch(err => { /* ignore */ });
             } catch (error) {
                 console.error('Failed to load EmbyIcons configuration', error);
                 toast({ type: 'error', text: 'Error loading configuration.' });
                 throw error;
+            }
+        }
+
+        async refreshMemoryUsage() {
+            if (!this.apiRoutes) await this.fetchApiRoutes();
+            if (!this.dom.memoryUsageReport) return;
+            try {
+                this.dom.memoryUsageReport.textContent = 'Loading...';
+                const stats = await ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl(this.apiRoutes.MemoryUsage), dataType: 'json' });
+                const fmt = (v) => (v / 1024 / 1024).toFixed(2) + ' MB';
+                const lines = [];
+                lines.push('Working Set: ' + fmt(stats.ProcessWorkingSetBytes));
+                lines.push('Private Bytes: ' + fmt(stats.ProcessPrivateBytes));
+                lines.push('Managed Heap: ' + fmt(stats.ManagedHeapBytes));
+                if (stats.IconCacheEstimatedBytes && stats.IconCacheEstimatedBytes > 0) lines.push('Icon Cache (est): ' + fmt(stats.IconCacheEstimatedBytes));
+                lines.push('As of: ' + (stats.TimestampUtc || '')); 
+                this.dom.memoryUsageReport.innerHTML = lines.map(l => '<div>' + l + '</div>').join('');
+            } catch (err) {
+                console.error('Failed to fetch memory usage', err);
+                this.dom.memoryUsageReport.textContent = 'Error fetching memory usage.';
             }
         }
 
@@ -474,22 +545,52 @@
         }
 
         deleteProfile() {
+            console.log('[EmbyIcons] deleteProfile invoked. currentProfileId:', this.currentProfileId);
+
+            if (!this.pluginConfiguration || !Array.isArray(this.pluginConfiguration.Profiles)) {
+                console.error('[EmbyIcons] pluginConfiguration.Profiles is missing or invalid', this.pluginConfiguration);
+                toast({ type: 'error', text: 'Configuration error: profiles missing.' });
+                return;
+            }
+
             if (this.pluginConfiguration.Profiles.length <= 1) {
                 toast({ type: 'error', text: 'Cannot delete the last profile.' });
                 return;
             }
-            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
-            if (!profile) return;
 
-            dialogHelper.confirm(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile').then(result => {
-                if (result) {
-                    this.pluginConfiguration.Profiles = this.pluginConfiguration.Profiles.filter(p => p.Id !== this.currentProfileId);
-                    this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
-                    this.populateProfileSelector();
-                    this.loadProfileSettings(this.dom.profileSelector.value);
-                    this.triggerConfigSave();
-                }
-            });
+            const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
+            if (!profile) {
+                console.error('[EmbyIcons] profile not found for id:', this.currentProfileId);
+                toast({ type: 'error', text: 'Profile not found.' });
+                return;
+            }
+
+            const confirmFn = (typeof dialogHelper !== 'undefined' && dialogHelper && typeof dialogHelper.confirm === 'function')
+                ? (msg, title) => dialogHelper.confirm(msg, title)
+                : (msg) => Promise.resolve(window.confirm(msg));
+
+            confirmFn(`Are you sure you want to delete the profile "${profile.Name}"?`, 'Delete Profile')
+                .then(result => {
+                    try {
+                        if (result) {
+                            this.pluginConfiguration.Profiles = this.pluginConfiguration.Profiles.filter(p => p.Id !== this.currentProfileId);
+                            if (Array.isArray(this.pluginConfiguration.LibraryProfileMappings)) {
+                                this.pluginConfiguration.LibraryProfileMappings = this.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== this.currentProfileId);
+                            }
+                            this.populateProfileSelector();
+                            const newProfileId = this.dom.profileSelector ? this.dom.profileSelector.value : (this.pluginConfiguration.Profiles[0] && this.pluginConfiguration.Profiles[0].Id);
+                            if (newProfileId) this.loadProfileSettings(newProfileId);
+                            this.triggerConfigSave();
+                            toast('Profile deleted.');
+                        }
+                    } catch (innerErr) {
+                        console.error('[EmbyIcons] error while processing delete result', innerErr);
+                        toast({ type: 'error', text: 'Error deleting profile.' });
+                    }
+                }).catch(err => {
+                    console.error('[EmbyIcons] confirm function failed', err);
+                    toast({ type: 'error', text: 'Error displaying confirmation dialog.' });
+                });
         }
 
         async saveData() {
@@ -610,10 +711,12 @@
         async runIconScan() {
             loading.show();
             this.dom.btnRunIconScan.disabled = true;
-            this.dom.btnRunIconScan.querySelector('span').textContent = 'Scanning...';
+            this.dom.btnRunIconScan.querySelector('span').textContent = 'Starting Scan...';
 
             const container = this.dom.iconManagerReportContainer;
             container.innerHTML = '<p>Scanning your library... This may take several minutes on the first run.</p>';
+
+            this.pollScanProgress("IconManager", this.dom.btnRunIconScan, container);
 
             try {
                 const report = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(this.apiRoutes.IconManagerReport), dataType: "json" });
@@ -623,6 +726,7 @@
                 container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
             } finally {
                 loading.hide();
+                clearInterval(this.progressPollInterval);
                 this.dom.btnRunIconScan.disabled = false;
                 this.dom.btnRunIconScan.querySelector('span').textContent = 'Scan Library & Icons';
             }
@@ -766,6 +870,8 @@
             const container = this.dom.seriesReportContainer;
             container.innerHTML = '<p>Scanning all TV shows in your library... This can take several minutes.</p>';
 
+            this.pollScanProgress("FullSeriesScan", this.dom.btnRunFullSeriesScan, container);
+
             try {
                 const reports = await ApiClient.ajax({
                     type: "GET",
@@ -778,6 +884,7 @@
                 container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
             } finally {
                 loading.hide();
+                clearInterval(this.progressPollInterval);
                 this.dom.btnRunFullSeriesScan.disabled = false;
             }
         }

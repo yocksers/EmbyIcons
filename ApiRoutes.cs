@@ -10,5 +10,7 @@
         public const string SeriesTroubleshooter = "/EmbyIcons/SeriesTroubleshooter";
         public const string AspectRatio = "/EmbyIcons/AspectRatio";
         public const string GetApiRoutes = "/EmbyIcons/ApiRoutes";
+        public const string ScanProgress = "/EmbyIcons/ScanProgress";
+        public const string MemoryUsage = "/EmbyIcons/MemoryUsage";
     }
 }

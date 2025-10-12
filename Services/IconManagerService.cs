@@ -53,12 +53,15 @@ namespace EmbyIcons.Services
                 }
             }
 
+            ScanProgressService.ClearProgress("IconManager");
             var report = GenerateReport();
+
             lock (_cacheLock)
             {
                 _cachedReport = report;
             }
 
+            ScanProgressService.ClearProgress("IconManager");
             return report;
         }
 
@@ -102,6 +105,10 @@ namespace EmbyIcons.Services
                 IsVirtualItem = false,
                 Recursive = true
             });
+
+            // FIX: Invoke Count() as a method.
+            int totalItems = allItems.Count();
+            int processedCount = 0;
 
             var customIcons = _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
             customIcons.TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutions);
@@ -157,6 +164,13 @@ namespace EmbyIcons.Services
                                 break;
                         }
                     }
+
+                    var newCount = System.Threading.Interlocked.Increment(ref processedCount);
+                    if (newCount % 200 == 0) // Update progress every 200 items
+                    {
+                        ScanProgressService.UpdateProgress("IconManager", newCount, totalItems, $"Scanning item {newCount} of {totalItems}...");
+                    }
+
                     return localReport;
                 })
                 .Aggregate(

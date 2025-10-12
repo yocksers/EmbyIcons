@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.38.90</Version>
-		<AssemblyVersion>5.38.9.0</AssemblyVersion>
-		<FileVersion>5.38.9.0</FileVersion>
+		<Version>5.39.60</Version>
+		<AssemblyVersion>5.39.6.0</AssemblyVersion>
+		<FileVersion>5.39.6.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -29,6 +29,7 @@
 	  <None Remove="EmbeddedIcons\lang.german.jpg" />
 	  <None Remove="EmbeddedIcons\lang.indian.jpg" />
 	  <None Remove="EmbeddedIcons\lang.japanese.jpg" />
+	  <None Remove="EmbeddedIcons\lang_norwegian.png" />
 	  <None Remove="EmbeddedIcons\pr_g.png" />
 	  <None Remove="EmbeddedIcons\pr_nc-17.png" />
 	  <None Remove="EmbeddedIcons\pr_pg-13.png" />
@@ -43,6 +44,7 @@
 	  <None Remove="EmbeddedIcons\sub.german.jpg" />
 	  <None Remove="EmbeddedIcons\sub.indian.jpg" />
 	  <None Remove="EmbeddedIcons\sub.japanese.jpg" />
+	  <None Remove="EmbeddedIcons\sub_norwegian.png" />
 	  <None Remove="EmbeddedIcons\tag.bob.jpg" />
 	  <None Remove="Images\preview.png" />
 	  <None Remove="Images\tag.png" />
@@ -77,6 +79,7 @@
 		<EmbeddedResource Include="EmbeddedIcons\lang_german.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_indian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_norwegian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_swedish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_g.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_nc-17.png" />
@@ -99,6 +102,7 @@
 		<EmbeddedResource Include="EmbeddedIcons\sub_german.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_indian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_norwegian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_swedish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\tag_bob.png" />
 		<EmbeddedResource Include="EmbeddedIcons\vc_av1.png" />

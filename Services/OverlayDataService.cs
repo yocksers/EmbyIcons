@@ -11,26 +11,76 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
+using System.Threading;
 
 namespace EmbyIcons.Services
 {
-    internal class OverlayDataService
+    internal class OverlayDataService : IDisposable
     {
         private readonly EmbyIconsEnhancer _enhancer;
         private readonly ILibraryManager _libraryManager;
+    // Cache mapping providerIdKey:providerIdValue -> string[] of lowercased file paths
+    // Avoids repeated GetItemList queries for the same provider id when Source Icons are enabled
+    private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
+    private Timer? _cacheMaintenanceTimer;
 
         public OverlayDataService(EmbyIconsEnhancer enhancer, ILibraryManager libraryManager)
         {
             _enhancer = enhancer;
             _libraryManager = libraryManager;
+            _cacheMaintenanceTimer = new Timer(_ => CompactProviderCache(), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
         }
 
+        private void CompactProviderCache()
+        {
+            try
+            {
+                _providerPathCache?.Compact(0.1);
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug("[EmbyIcons] Performed cache compaction for provider path cache.");
+            }
+            catch (Exception ex)
+            {
+                _enhancer.Logger.ErrorException("[EmbyIcons] Error during provider cache compaction.", ex);
+            }
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                _providerPathCache?.Dispose();
+            }
+            catch { }
+            try { _cacheMaintenanceTimer?.Dispose(); } catch { }
+        }
+
+        // OPTIMIZATION: Replaced Regex with a faster StringBuilder implementation.
         private static string NormalizeTag(string tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
-            var t = tag.Trim().ToLowerInvariant();
-            t = System.Text.RegularExpressions.Regex.Replace(t, "\\s+", "-");
-            return t;
+
+            var sb = new StringBuilder(tag.Length);
+            bool lastWasWhitespace = false;
+
+            foreach (char c in tag.Trim())
+            {
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!lastWasWhitespace)
+                    {
+                        sb.Append('-');
+                        lastWasWhitespace = true;
+                    }
+                }
+                else
+                {
+                    sb.Append(char.ToLowerInvariant(c));
+                    lastWasWhitespace = false;
+                }
+            }
+
+            return sb.ToString();
         }
 
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
@@ -140,47 +190,75 @@ namespace EmbyIcons.Services
 
         private OverlayData ProcessMediaStreams(BaseItem item, ProfileSettings profileOptions, PluginOptions options)
         {
-            var data = new OverlayData
-            {
-                CommunityRating = item.CommunityRating,
-                ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
-            };
+            var data = new OverlayData();
 
-            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled)
             {
-                var allPaths = new List<string>();
-                var allVersions = new List<Movie> { movieItem };
+                data.CommunityRating = item.CommunityRating;
+            }
 
+            if (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled)
+            {
+                data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
+            }
+
+            if (profileOptions.SourceIconAlignment != IconAlignment.Disabled && item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            {
+                // Determine file paths to inspect for filename-based icons.
+                // Use a short-lived cache keyed by provider id to avoid repeating the InternalItemsQuery for the same movie across scans.
+                IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 var providerIdKey = movieItem.ProviderIds.Keys.FirstOrDefault(k => k.Equals("Imdb", StringComparison.OrdinalIgnoreCase) || k.Equals("Tmdb", StringComparison.OrdinalIgnoreCase));
 
                 if (!string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
                 {
-                    var query = new InternalItemsQuery
+                    var cacheKey = $"{providerIdKey}:{providerIdValue}";
+                    if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
                     {
-                        IncludeItemTypes = new[] { "Movie" },
-                        Recursive = true
-                    };
-
-                    var itemsInLibrary = _libraryManager.GetItemList(query).OfType<Movie>();
-
-                    foreach (var libraryMovie in itemsInLibrary)
-                    {
-                        if (libraryMovie.ProviderIds.TryGetValue(providerIdKey, out var value) && value == providerIdValue)
+                        // OPTIMIZATION: Use a highly-targeted query; cache the resulting file paths (lowercased) for later use.
+                        var query = new InternalItemsQuery
                         {
-                            allVersions.Add(libraryMovie);
+                            IncludeItemTypes = new[] { "Movie" },
+                            Recursive = true,
+                            AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) }
+                        };
+                        try
+                        {
+                            cachedPaths = _libraryManager.GetItemList(query)
+                                .OfType<Movie>()
+                                .Where(v => !string.IsNullOrEmpty(v.Path))
+                                .Select(v => v.Path!.ToLowerInvariant())
+                                .Distinct()
+                                .ToArray();
                         }
-                    }
-                }
+                        catch (Exception ex)
+                        {
+                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
+                            cachedPaths = Array.Empty<string>();
+                        }
 
-                foreach (var version in allVersions.Distinct(new BaseItemComparer()))
+                        var cacheEntryOptions = new MemoryCacheEntryOptions()
+                            .SetSize(1)
+                            .SetSlidingExpiration(TimeSpan.FromHours(6))
+                            .RegisterPostEvictionCallback((key, value, reason, state) =>
+                            {
+                                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                                {
+                                    _enhancer.Logger.Debug($"[EmbyIcons] Provider path cache entry evicted: {key} Reason: {reason}");
+                                }
+                            });
+
+                        _providerPathCache.Set(cacheKey, cachedPaths ?? Array.Empty<string>(), cacheEntryOptions);
+                    }
+
+                    allPaths = cachedPaths ?? Array.Empty<string>();
+                }
+                else
                 {
-                    if (!string.IsNullOrEmpty(version.Path))
-                    {
-                        allPaths.Add(version.Path.ToLowerInvariant());
-                    }
+                    // Fallback for movies without a strong provider ID: only inspect the current movie's path
+                    allPaths = string.IsNullOrEmpty(movieItem.Path) ? Array.Empty<string>() : new[] { movieItem.Path!.ToLowerInvariant() };
                 }
 
-                foreach (var path in allPaths.Distinct())
+                foreach (var path in allPaths)
                 {
                     foreach (var mapping in profileOptions.FilenameBasedIcons)
                     {
@@ -194,7 +272,7 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (item.Tags != null && item.Tags.Length > 0)
+            if (profileOptions.TagIconAlignment != IconAlignment.Disabled && item.Tags != null && item.Tags.Length > 0)
             {
                 foreach (var tag in item.Tags)
                 {
@@ -205,35 +283,62 @@ namespace EmbyIcons.Services
 
             var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
 
+            if (!mainItemStreams.Any())
+            {
+                return data;
+            }
+
             MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
             MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
-            foreach (var stream in mainItemStreams)
+            // Only loop through streams if any stream-based icon is enabled
+            if (profileOptions.AudioIconAlignment != IconAlignment.Disabled || profileOptions.SubtitleIconAlignment != IconAlignment.Disabled ||
+                profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled || profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled)
             {
-                if (stream.Type == MediaStreamType.Audio)
+                foreach (var stream in mainItemStreams)
                 {
-                    if (!string.IsNullOrEmpty(stream.DisplayLanguage)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
-                    var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream);
-                    if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
-                }
-                else if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
-                {
-                    data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
-                }
-                else if (stream.Type == MediaStreamType.Video)
-                {
-                    var codecIcon = MediaStreamHelper.GetVideoCodecIconName(stream);
-                    if (codecIcon != null) data.VideoCodecs.Add(codecIcon);
+                    if (stream.Type == MediaStreamType.Audio)
+                    {
+                        if (profileOptions.AudioIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                        if (profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled)
+                        {
+                            var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream);
+                            if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
+                        }
+                    }
+                    else if (stream.Type == MediaStreamType.Subtitle && profileOptions.SubtitleIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                    {
+                        data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                    }
+                    else if (stream.Type == MediaStreamType.Video && profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled)
+                    {
+                        var codecIcon = MediaStreamHelper.GetVideoCodecIconName(stream);
+                        if (codecIcon != null) data.VideoCodecs.Add(codecIcon);
+                    }
                 }
             }
 
-            _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
-                .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
+            if (profileOptions.ChannelIconAlignment != IconAlignment.Disabled && primaryAudioStream != null)
+            {
+                data.ChannelIconName = MediaStreamHelper.GetChannelIconName(primaryAudioStream);
+            }
 
-            if (primaryAudioStream != null) data.ChannelIconName = MediaStreamHelper.GetChannelIconName(primaryAudioStream);
-            data.VideoFormatIconName = MediaStreamHelper.GetVideoFormatIconName(item, mainItemStreams);
-            data.ResolutionIconName = primaryVideoStream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>()) : null;
-            data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
+            if (profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled)
+            {
+                data.VideoFormatIconName = MediaStreamHelper.GetVideoFormatIconName(item, mainItemStreams);
+            }
+
+            if (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && primaryVideoStream != null)
+            {
+                _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
+                    .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
+                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>());
+            }
+
+            if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)
+            {
+                data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
+            }
 
             return data;
         }

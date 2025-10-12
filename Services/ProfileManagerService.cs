@@ -7,10 +7,11 @@ using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Linq;
+using System.Threading;
 
 namespace EmbyIcons.Services
 {
-    public class ProfileManagerService
+    public class ProfileManagerService : IDisposable
     {
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger _logger;
@@ -20,6 +21,10 @@ namespace EmbyIcons.Services
 
         private const int MaxItemToProfileCacheSize = 20000;
         private MemoryCache _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
+    // Cache mapping from collection InternalId -> ProfileId (Guid.Empty means no profile)
+    // This reduces repeated InternalItemsQuery calls for collections during a full scan.
+    private MemoryCache _collectionToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
+    private Timer? _cacheMaintenanceTimer;
 
         public ProfileManagerService(ILibraryManager libraryManager, ILogger logger, PluginOptions configuration)
         {
@@ -27,6 +32,8 @@ namespace EmbyIcons.Services
             _logger = logger;
             _configuration = configuration;
             _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
+            // Periodic maintenance to prevent cache buildup in long-running plugin instances
+            _cacheMaintenanceTimer = new Timer(_ => CompactCaches(), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
         }
 
         public void InvalidateLibraryCache()
@@ -37,7 +44,42 @@ namespace EmbyIcons.Services
             _itemToProfileIdCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxItemToProfileCacheSize });
             oldCache.Dispose();
 
+            var oldCollectionCache = _collectionToProfileIdCache;
+            _collectionToProfileIdCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 5000 });
+            oldCollectionCache.Dispose();
+
             _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                _itemToProfileIdCache?.Dispose();
+            }
+            catch { }
+
+            try
+            {
+                _collectionToProfileIdCache?.Dispose();
+            }
+            catch { }
+            try { _cacheMaintenanceTimer?.Dispose(); } catch { }
+        }
+
+        private void CompactCaches()
+        {
+            try
+            {
+                // Compact a small percentage to free unused entries; sizes are small so we use conservative values
+                _collectionToProfileIdCache?.Compact(0.1);
+                _itemToProfileIdCache?.Compact(0.05);
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug("[EmbyIcons] Performed cache compaction for profile/collection caches.");
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("[EmbyIcons] Error during cache compaction.", ex);
+            }
         }
 
         private Trie<string> CreateLibraryPathTrie()
@@ -113,23 +155,37 @@ namespace EmbyIcons.Services
                 }
                 else if (_configuration.EnableCollectionProfileLookup)
                 {
-                    var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                    // Try collection-level cache first to avoid repeated expensive queries when scanning collections
+                    if (_collectionToProfileIdCache.TryGetValue(boxSet.InternalId, out Guid cachedCollectionProfileId))
                     {
-                        CollectionIds = new[] { boxSet.InternalId },
-                        Limit = 1,
-                        Recursive = true,
-                        IncludeItemTypes = new[] { "Movie", "Episode" }
-                    }).FirstOrDefault();
-
-                    if (firstChild != null)
-                    {
-                        foundProfile = GetProfileForPath(firstChild.Path);
+                        foundProfile = cachedCollectionProfileId == Guid.Empty ? null : _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedCollectionProfileId);
                     }
                     else
                     {
-                        if (_configuration.EnableDebugLogging)
-                            _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
-                        foundProfile = null;
+                        var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                        {
+                            CollectionIds = new[] { boxSet.InternalId },
+                            Limit = 1,
+                            Recursive = true,
+                            IncludeItemTypes = new[] { "Movie", "Episode" }
+                        }).FirstOrDefault();
+
+                        if (firstChild != null)
+                        {
+                            foundProfile = GetProfileForPath(firstChild.Path);
+                        }
+                        else
+                        {
+                            if (_configuration.EnableDebugLogging)
+                                _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
+                            foundProfile = null;
+                        }
+
+                        var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
+                        var cacheEntryOptions = new MemoryCacheEntryOptions()
+                            .SetSize(1)
+                            .SetSlidingExpiration(TimeSpan.FromHours(6));
+                        _collectionToProfileIdCache.Set(boxSet.InternalId, profileIdToCache, cacheEntryOptions);
                     }
                 }
                 else

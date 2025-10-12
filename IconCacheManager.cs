@@ -17,6 +17,7 @@ namespace EmbyIcons.Helpers
         private readonly ILogger _logger;
         private MemoryCache _iconImageCache;
         private readonly long _cacheSizeLimitInBytes;
+        private Timer? _cacheMaintenanceTimer;
         private readonly object _cacheInstanceLock = new object(); // Lock for cache instance safety
 
         private static Dictionary<IconType, List<string>>? _embeddedIconKeysCache;
@@ -40,12 +41,23 @@ namespace EmbyIcons.Helpers
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _cacheSizeLimitInBytes = 250 * 1024 * 1024; // 250 MB
+            // Use a smaller default cache size to avoid long-lived large heaps on constrained servers.
+            _cacheSizeLimitInBytes = 100 * 1024 * 1024; // 100 MB
 
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
                 SizeLimit = _cacheSizeLimitInBytes
             });
+
+            // Periodic maintenance: compact the cache a little every hour to avoid unbounded retention
+            try
+            {
+                _cacheMaintenanceTimer = new Timer(_ => CompactCache(), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+            }
+            catch
+            {
+                // If timers fail for any reason, continue without maintenance but don't crash plugin init.
+            }
         }
 
         public Dictionary<IconType, List<string>> GetAllAvailableIconKeys(string iconsFolder)
@@ -155,11 +167,26 @@ namespace EmbyIcons.Helpers
 
             lock (_cacheInstanceLock)
             {
-                _iconImageCache.Dispose();
+                // Try to evict all entries from the old cache so any registered
+                // PostEvictionCallbacks run and dispose native SKImage instances.
+                var oldCache = _iconImageCache;
+                // Create the new cache first so callers can continue using it.
                 _iconImageCache = new MemoryCache(new MemoryCacheOptions
                 {
                     SizeLimit = _cacheSizeLimitInBytes
                 });
+
+                if (oldCache != null)
+                {
+                    try
+                    {
+                        // Compact with 100% to evict all entries and trigger callbacks.
+                        oldCache.Compact(1.0);
+                    }
+                    catch { }
+
+                    try { oldCache.Dispose(); } catch { }
+                }
             }
 
             lock (_customKeysLock)
@@ -171,10 +198,8 @@ namespace EmbyIcons.Helpers
             return Task.CompletedTask;
         }
 
-        public async Task<byte[]?> GetIconBytesAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
+        public async Task<SKImage?> GetIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
         {
-            // Get a stable reference to the current cache instance to prevent ObjectDisposedException
-            // if a refresh happens while this async method is running.
             MemoryCache currentCache;
             lock (_cacheInstanceLock)
             {
@@ -186,50 +211,88 @@ namespace EmbyIcons.Helpers
             var lowerIconNameKey = iconNameKey.ToLowerInvariant();
 
             var customIconFileName = $"{prefix}.{lowerIconNameKey}";
-            var embeddedIconFileName = $"{prefix}_{lowerIconNameKey}";
+            var embeddedIconFileName = $"embedded_{prefix}_{lowerIconNameKey}";
             var customIconsFolder = options.IconsFolder;
 
-            if (loadingMode == IconLoadingMode.CustomOnly)
+            switch (loadingMode)
             {
-                return await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
+                case IconLoadingMode.CustomOnly:
+                    return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
+                case IconLoadingMode.BuiltInOnly:
+                    return await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken, currentCache);
+                default: // Hybrid mode
+                    var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
+                    return customIcon ?? await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken, currentCache);
             }
-
-            if (loadingMode == IconLoadingMode.BuiltInOnly)
-            {
-                return await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken, currentCache);
-            }
-
-            var customIconBytes = await LoadCustomIconBytesAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
-            return customIconBytes ?? await LoadEmbeddedIconBytesAsync(embeddedIconFileName, cancellationToken, currentCache);
         }
 
-        private async Task<byte[]?> LoadCustomIconBytesAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken, MemoryCache cache)
+        private async Task<SKImage?> LoadCustomIconAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken, MemoryCache cache)
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (cache.TryGetValue(baseFileName, out byte[]? cachedData))
+            if (cache.TryGetValue(baseFileName, out byte[]? cachedBytes) && cachedBytes != null)
             {
-                return cachedData;
+                try
+                {
+                    using var ms = new MemoryStream(cachedBytes);
+                    using var bmp = SKBitmap.Decode(ms);
+                    if (bmp != null)
+                    {
+                        var img = SKImage.FromBitmap(bmp);
+                        return img;
+                    }
+                }
+                catch { }
             }
 
             foreach (var ext in SupportedCustomIconExtensions)
             {
                 var fullPath = Path.Combine(iconsFolder, baseFileName + ext);
-                if (File.Exists(fullPath)) return await TryLoadAndCacheIconBytesAsync(fullPath, baseFileName, cancellationToken, cache);
+                if (File.Exists(fullPath))
+                {
+                    var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken);
+                    if (bytes.Length == 0) return null;
+
+                    // Cache raw bytes so callers receive their own SKImage instances.
+                    var cacheEntryOptions = new MemoryCacheEntryOptions()
+                        .SetSize(bytes.LongLength)
+                        .SetSlidingExpiration(TimeSpan.FromHours(2))
+                        .RegisterPostEvictionCallback((key, value, reason, state) => { /* no-op */ });
+
+                    try { cache.Set(baseFileName, bytes, cacheEntryOptions); } catch { }
+
+                    try
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        using var bmp = SKBitmap.Decode(ms);
+                        if (bmp != null)
+                        {
+                            var image = SKImage.FromBitmap(bmp);
+                            return image;
+                        }
+                    }
+                    catch { }
+                }
             }
 
             return null;
         }
 
-        private async Task<byte[]?> LoadEmbeddedIconBytesAsync(string baseFileName, CancellationToken cancellationToken, MemoryCache cache)
+        private async Task<SKImage?> LoadEmbeddedIconAsync(string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
         {
-            var cacheKey = $"embedded_{baseFileName}";
-            if (cache.TryGetValue(cacheKey, out byte[]? cachedData))
+            if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
             {
-                return cachedData;
+                try
+                {
+                    using var ms = new MemoryStream(cachedBytes);
+                    using var bmp = SKBitmap.Decode(ms);
+                    if (bmp != null) return SKImage.FromBitmap(bmp);
+                }
+                catch { }
             }
 
-            var resourceName = $"EmbyIcons.EmbeddedIcons.{baseFileName}.png";
+            var resourceName = $"EmbyIcons.EmbeddedIcons.{cacheKey.Substring("embedded_".Length)}.png";
+
             await using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
             if (stream == null) return null;
 
@@ -237,49 +300,62 @@ namespace EmbyIcons.Helpers
             await stream.CopyToAsync(memoryStream, cancellationToken);
             var bytes = memoryStream.ToArray();
 
+            // Cache raw bytes and return a fresh SKImage for this caller.
             var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSize(bytes.Length)
-                .SetSlidingExpiration(TimeSpan.FromHours(12));
+                .SetSize(bytes.LongLength)
+                .SetSlidingExpiration(TimeSpan.FromHours(2))
+                .RegisterPostEvictionCallback((key, value, reason, state) => { /* no-op */ });
 
-            cache.Set(cacheKey, bytes, cacheEntryOptions);
+            try { cache.Set(cacheKey, bytes, cacheEntryOptions); } catch { }
 
-            return bytes;
-        }
-
-        private async Task<byte[]?> TryLoadAndCacheIconBytesAsync(string iconPath, string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
-        {
             try
             {
-                if (new FileInfo(iconPath).Length < 50) return null;
-
-                var bytes = await File.ReadAllBytesAsync(iconPath, cancellationToken);
-                if (bytes.Length == 0) return null;
-
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetSize(bytes.Length)
-                    .SetSlidingExpiration(TimeSpan.FromHours(12));
-
-                cache.Set(cacheKey, bytes, cacheEntryOptions);
-                return bytes;
+                using var ms = new MemoryStream(bytes);
+                using var bmp = SKBitmap.Decode(ms);
+                if (bmp != null) return SKImage.FromBitmap(bmp);
             }
-            catch (Exception ex)
-            {
-                _logger.ErrorException($"[EmbyIcons] A critical error occurred while loading icon '{iconPath}'.", ex);
-                return null;
-            }
+            catch { }
+
+            return null;
         }
 
         public void Dispose()
         {
             lock (_cacheInstanceLock)
             {
-                _iconImageCache.Dispose();
+                try
+                {
+                    // Try to compact first so PostEvictionCallbacks fire and native SKImage instances can be disposed.
+                    try { _iconImageCache.Compact(1.0); } catch { }
+                    _iconImageCache.Dispose();
+                }
+                catch { }
             }
 
             lock (_customKeysLock)
             {
                 _customIconKeys = null;
                 _customKeysFolder = null;
+            }
+            try { _cacheMaintenanceTimer?.Dispose(); } catch { }
+            _cacheMaintenanceTimer = null;
+        }
+
+        private void CompactCache()
+        {
+            try
+            {
+                lock (_cacheInstanceLock)
+                {
+                    _iconImageCache?.Compact(0.1);
+                }
+
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    _logger.Debug("[EmbyIcons] Performed cache compaction for icon image cache.");
+            }
+            catch (Exception ex)
+            {
+                try { _logger.ErrorException("[EmbyIcons] Error during icon cache compaction.", ex); } catch { }
             }
         }
 

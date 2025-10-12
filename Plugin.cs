@@ -335,6 +335,10 @@ namespace EmbyIcons
             _pruningTimer?.Dispose();
             _enhancer?.Dispose();
             _enhancer = null;
+            try { _profileManager?.Dispose(); } catch { }
+            _profileManager = null;
+            // ConfigurationMonitor does not implement IDisposable. Just null it out.
+            _configMonitor = null;
             Instance = null;
             _logger.Debug("EmbyIcons plugin disposed.");
         }
