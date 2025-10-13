@@ -6,49 +6,49 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.39.60</Version>
-		<AssemblyVersion>5.39.6.0</AssemblyVersion>
-		<FileVersion>5.39.6.0</FileVersion>
+		<Version>5.39.70</Version>
+		<AssemblyVersion>5.39.7.0</AssemblyVersion>
+		<FileVersion>5.39.7.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="Settings\**" />
-	  <EmbeddedResource Remove="Settings\**" />
-	  <None Remove="Settings\**" />
+		<Compile Remove="Settings\**" />
+		<EmbeddedResource Remove="Settings\**" />
+		<None Remove="Settings\**" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="EmbeddedIcons\ar..4x3.png" />
-	  <None Remove="EmbeddedIcons\ch.5.1.jpg" />
-	  <None Remove="EmbeddedIcons\ch.7.1.jpg" />
-	  <None Remove="EmbeddedIcons\ch.Mono.jpg" />
-	  <None Remove="EmbeddedIcons\ch.stereo.jpg" />
-	  <None Remove="EmbeddedIcons\lang.chinese.jpg" />
-	  <None Remove="EmbeddedIcons\lang.danish.jpg" />
-	  <None Remove="EmbeddedIcons\lang.english.jpg" />
-	  <None Remove="EmbeddedIcons\lang.german.jpg" />
-	  <None Remove="EmbeddedIcons\lang.indian.jpg" />
-	  <None Remove="EmbeddedIcons\lang.japanese.jpg" />
-	  <None Remove="EmbeddedIcons\lang_norwegian.png" />
-	  <None Remove="EmbeddedIcons\pr_g.png" />
-	  <None Remove="EmbeddedIcons\pr_nc-17.png" />
-	  <None Remove="EmbeddedIcons\pr_pg-13.png" />
-	  <None Remove="EmbeddedIcons\pr_pg.png" />
-	  <None Remove="EmbeddedIcons\pr_r.png" />
-	  <None Remove="EmbeddedIcons\pr_tv-14.png" />
-	  <None Remove="EmbeddedIcons\pr_tv-ma.png" />
-	  <None Remove="EmbeddedIcons\pr_tv-pg.png" />
-	  <None Remove="EmbeddedIcons\sub.chinese.jpg" />
-	  <None Remove="EmbeddedIcons\sub.danish.jpg" />
-	  <None Remove="EmbeddedIcons\sub.english.jpg" />
-	  <None Remove="EmbeddedIcons\sub.german.jpg" />
-	  <None Remove="EmbeddedIcons\sub.indian.jpg" />
-	  <None Remove="EmbeddedIcons\sub.japanese.jpg" />
-	  <None Remove="EmbeddedIcons\sub_norwegian.png" />
-	  <None Remove="EmbeddedIcons\tag.bob.jpg" />
-	  <None Remove="Images\preview.png" />
-	  <None Remove="Images\tag.png" />
-	  <None Remove="plugin.js" />
+		<None Remove="EmbeddedIcons\ar..4x3.png" />
+		<None Remove="EmbeddedIcons\ch.5.1.jpg" />
+		<None Remove="EmbeddedIcons\ch.7.1.jpg" />
+		<None Remove="EmbeddedIcons\ch.Mono.jpg" />
+		<None Remove="EmbeddedIcons\ch.stereo.jpg" />
+		<None Remove="EmbeddedIcons\lang.chinese.jpg" />
+		<None Remove="EmbeddedIcons\lang.danish.jpg" />
+		<None Remove="EmbeddedIcons\lang.english.jpg" />
+		<None Remove="EmbeddedIcons\lang.german.jpg" />
+		<None Remove="EmbeddedIcons\lang.indian.jpg" />
+		<None Remove="EmbeddedIcons\lang.japanese.jpg" />
+		<None Remove="EmbeddedIcons\lang_norwegian.png" />
+		<None Remove="EmbeddedIcons\pr_g.png" />
+		<None Remove="EmbeddedIcons\pr_nc-17.png" />
+		<None Remove="EmbeddedIcons\pr_pg-13.png" />
+		<None Remove="EmbeddedIcons\pr_pg.png" />
+		<None Remove="EmbeddedIcons\pr_r.png" />
+		<None Remove="EmbeddedIcons\pr_tv-14.png" />
+		<None Remove="EmbeddedIcons\pr_tv-ma.png" />
+		<None Remove="EmbeddedIcons\pr_tv-pg.png" />
+		<None Remove="EmbeddedIcons\sub.chinese.jpg" />
+		<None Remove="EmbeddedIcons\sub.danish.jpg" />
+		<None Remove="EmbeddedIcons\sub.english.jpg" />
+		<None Remove="EmbeddedIcons\sub.german.jpg" />
+		<None Remove="EmbeddedIcons\sub.indian.jpg" />
+		<None Remove="EmbeddedIcons\sub.japanese.jpg" />
+		<None Remove="EmbeddedIcons\sub_norwegian.png" />
+		<None Remove="EmbeddedIcons\tag.bob.jpg" />
+		<None Remove="Images\preview.png" />
+		<None Remove="Images\tag.png" />
+		<None Remove="plugin.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -122,8 +122,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="MediaBrowser.Common" Version="4.9.1.80" />
-		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.80" />
+		<PackageReference Include="MediaBrowser.Common" Version="4.9.1.80" PrivateAssets="all" />
+		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.80" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" />
 		<PackageReference Include="SkiaSharp" Version="2.88.6" />
 	</ItemGroup>
