@@ -68,7 +68,6 @@ namespace EmbyIcons.Services
         {
             try
             {
-                // Compact a small percentage to free unused entries; sizes are small so we use conservative values
                 _collectionToProfileIdCache?.Compact(0.1);
                 _itemToProfileIdCache?.Compact(0.05);
                 if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug("[EmbyIcons] Performed cache compaction for profile/collection caches.");
@@ -137,7 +136,7 @@ namespace EmbyIcons.Services
         {
             if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
             {
-                if (cachedProfileId == Guid.Empty) return null; // A cached result of "no profile"
+                if (cachedProfileId == Guid.Empty) return null; 
                 return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
             }
 

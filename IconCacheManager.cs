@@ -214,16 +214,68 @@ namespace EmbyIcons.Helpers
             var embeddedIconFileName = $"embedded_{prefix}_{lowerIconNameKey}";
             var customIconsFolder = options.IconsFolder;
 
+            // For Rotten Tomatoes, the embedded icons are special (e.g. t_splat.png without a "rating" prefix).
+            // This aligns custom icons to be named similarly (e.g. t.splat.png) by not prepending "rating."
+            if (iconType == IconType.CommunityRating && lowerIconNameKey.StartsWith("t."))
+            {
+                customIconFileName = lowerIconNameKey;
+            }
+
             switch (loadingMode)
             {
                 case IconLoadingMode.CustomOnly:
                     return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
                 case IconLoadingMode.BuiltInOnly:
-                    return await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken, currentCache);
+                    return await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
                 default: // Hybrid mode
                     var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
-                    return customIcon ?? await LoadEmbeddedIconAsync(embeddedIconFileName, cancellationToken, currentCache);
+                    return customIcon ?? await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
             }
+        }
+
+        // Try multiple embedded resource name variants to maximize compatibility with existing embedded file naming.
+        // Examples:
+        //  - requested key "t.splat" -> try embedded_rating_t_splat (i.e. resource t_splat.png)
+        //  - requested key "splat" -> try embedded_rating_splat
+        private async Task<SKImage?> TryLoadEmbeddedVariantsAsync(string prefix, string lowerIconNameKey, CancellationToken cancellationToken, MemoryCache cache)
+        {
+            // Primary expected embedded resource form: embedded_{prefix}_{key}
+            var primary = $"embedded_{prefix}_{lowerIconNameKey}";
+            var img = await LoadEmbeddedIconAsync(primary, cancellationToken, cache);
+            if (img != null) return img;
+
+            // If key contains dots (custom style like "t.splat"), try dot->underscore replacement under the same prefix
+            if (lowerIconNameKey.Contains('.'))
+            {
+                var replaced = lowerIconNameKey.Replace('.', '_');
+                img = await LoadEmbeddedIconAsync($"embedded_{prefix}_{replaced}", cancellationToken, cache);
+                if (img != null) return img;
+
+                // Also try the variant where the first dot part is treated as the resource prefix (e.g., "t.splat" -> resource "t_splat")
+                var parts = lowerIconNameKey.Split(new[] { '.' }, 2);
+                if (parts.Length == 2)
+                {
+                    img = await LoadEmbeddedIconAsync($"embedded_{parts[0]}_{parts[1]}", cancellationToken, cache);
+                    if (img != null) return img;
+                }
+            }
+
+            // If key contains underscores, try removing them or trying the second part
+            if (lowerIconNameKey.Contains('_'))
+            {
+                var parts = lowerIconNameKey.Split(new[] { '_' }, 2);
+                if (parts.Length == 2)
+                {
+                    // Try embedded_{prefix}_{secondPart}
+                    var second = parts[1];
+                    img = await LoadEmbeddedIconAsync($"embedded_{prefix}_{second}", cancellationToken, cache);
+                    if (img != null) return img;
+                }
+            }
+
+            // As a last resort, try embedded resource with just the key appended to the resource root
+            img = await LoadEmbeddedIconAsync($"embedded_{lowerIconNameKey}", cancellationToken, cache);
+            return img;
         }
 
         private async Task<SKImage?> LoadCustomIconAsync(string baseFileName, string iconsFolder, CancellationToken cancellationToken, MemoryCache cache)

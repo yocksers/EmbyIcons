@@ -20,8 +20,8 @@ namespace EmbyIcons.Services
     {
         private readonly EmbyIconsEnhancer _enhancer;
         private readonly ILibraryManager _libraryManager;
-    private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
-    private Timer? _cacheMaintenanceTimer;
+        private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = 5000 });
+        private Timer? _cacheMaintenanceTimer;
 
         public OverlayDataService(EmbyIconsEnhancer enhancer, ILibraryManager libraryManager)
         {
@@ -80,6 +80,103 @@ namespace EmbyIcons.Services
             return sb.ToString();
         }
 
+        private static float? ExtractRottenTomatoesFromItem(BaseItem it)
+        {
+            if (it == null) return null;
+
+            try
+            {
+                var providerIdsProp = it.GetType().GetProperty("ProviderIds");
+                var providerIds = providerIdsProp?.GetValue(it) as System.Collections.IDictionary;
+                if (providerIds != null)
+                {
+                    foreach (System.Collections.DictionaryEntry de in providerIds)
+                    {
+                        var key = de.Key?.ToString() ?? string.Empty;
+                        var val = de.Value?.ToString() ?? string.Empty;
+                        if (key.IndexOf("rotten", StringComparison.OrdinalIgnoreCase) >= 0 || key.Equals("rt", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parsed = TryParsePercent(val);
+                            if (parsed.HasValue) return parsed.Value;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                var props = it.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                foreach (var p in props)
+                {
+                    if (!typeof(System.Collections.IEnumerable).IsAssignableFrom(p.PropertyType) || p.PropertyType == typeof(string)) continue;
+                    if (p.Name.IndexOf("Rating", StringComparison.OrdinalIgnoreCase) < 0 && p.Name.IndexOf("Ratings", StringComparison.OrdinalIgnoreCase) < 0 && p.Name.IndexOf("External", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    try
+                    {
+                        var col = p.GetValue(it) as System.Collections.IEnumerable;
+                        if (col == null) continue;
+                        foreach (var entry in col)
+                        {
+                            if (entry == null) continue;
+                            var entryType = entry.GetType();
+                            var sourceProp = entryType.GetProperty("Source") ?? entryType.GetProperty("Name") ?? entryType.GetProperty("Key");
+                            var valueProp = entryType.GetProperty("Value") ?? entryType.GetProperty("Rating") ?? entryType.GetProperty("Score");
+                            var source = sourceProp?.GetValue(entry)?.ToString() ?? string.Empty;
+                            var value = valueProp?.GetValue(entry)?.ToString() ?? string.Empty;
+                            if (!string.IsNullOrEmpty(source) && source.IndexOf("rotten", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                var parsed = TryParsePercent(value);
+                                if (parsed.HasValue) return parsed.Value;
+                            }
+                            var parsed2 = TryParsePercent(source);
+                            if (parsed2.HasValue) return parsed2.Value;
+                            parsed2 = TryParsePercent(value);
+                            if (parsed2.HasValue) return parsed2.Value;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            return null;
+
+            static float? TryParsePercent(string s)
+            {
+                if (string.IsNullOrWhiteSpace(s)) return null;
+                s = s.Trim();
+                try
+                {
+                    var idx = s.IndexOf('%');
+                    if (idx >= 0)
+                    {
+                        var num = s.Substring(0, idx).Trim();
+                        if (float.TryParse(num, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) return Math.Clamp(f, 0f, 100f);
+                    }
+
+                    if (s.Contains('/'))
+                    {
+                        var parts = s.Split('/');
+                        if (parts.Length == 2 && float.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var a) && float.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b) && b != 0)
+                        {
+                            var percent = (a / b) * 100f;
+                            return Math.Clamp(percent, 0f, 100f);
+                        }
+                    }
+
+                    if (float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                    {
+                        if (v <= 1f) return Math.Clamp(v * 100f, 0f, 100f);
+                        if (v <= 10f) return Math.Clamp(v * 10f, 0f, 100f);
+                        return Math.Clamp(v, 0f, 100f);
+                    }
+                }
+                catch { }
+                return null;
+            }
+        }
+
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -102,6 +199,7 @@ namespace EmbyIcons.Services
                 VideoFormatIconName = aggResult.VideoFormats.FirstOrDefault(),
                 ResolutionIconName = aggResult.Resolutions.FirstOrDefault(),
                 CommunityRating = item.CommunityRating,
+                RottenTomatoesRating = item.CriticRating,
                 Tags = tags,
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
@@ -152,6 +250,7 @@ namespace EmbyIcons.Services
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
                     ResolutionIconName = cachedInfo.ResolutionIconName,
                     CommunityRating = item.CommunityRating,
+                    RottenTomatoesRating = cachedInfo.RottenTomatoesRating,
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
                     ParentalRatingIconName = cachedInfo.ParentalRatingIconName
                 };
@@ -171,6 +270,7 @@ namespace EmbyIcons.Services
                 ChannelIconName = overlayData.ChannelIconName,
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
+                RottenTomatoesRating = overlayData.RottenTomatoesRating,
                 DateModifiedTicks = item.DateModified.Ticks,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName
@@ -192,6 +292,20 @@ namespace EmbyIcons.Services
             if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled)
             {
                 data.CommunityRating = item.CommunityRating;
+            }
+
+            if (item.CriticRating.HasValue)
+            {
+                data.RottenTomatoesRating = item.CriticRating.Value;
+            }
+            else
+            {
+                try
+                {
+                    var rt = ExtractRottenTomatoesFromItem(item);
+                    if (rt.HasValue) data.RottenTomatoesRating = rt.Value;
+                }
+                catch { }
             }
 
             if (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled)

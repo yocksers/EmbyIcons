@@ -266,6 +266,19 @@
                                         <label class="inputLabel" for="rngCommunityScoreBackgroundOpacity">Background Opacity: <span class="valCommunityScoreBackgroundOpacity"></span></label>
                                         <input type="range" min="0" max="100" step="1" data-profile-key="CommunityScoreBackgroundOpacity" class="slider" />
                                     </div>
+                                    <div style="margin-top: 1.5em; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.25em;">
+                                        <h4 style="margin-top:0; margin-bottom: .5em;">Rotten Tomatoes Appearance</h4>
+                                        <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em; align-items: end;">
+                                            <select is="emby-select" label="Rotten Tomatoes Icon" data-profile-key="RottenTomatoesScoreIconAlignment" data-corner-group="TopRight"><option value="Disabled">Disabled</option><option value="TopLeft">Top Left</option><option value="TopRight">Top Right</option><option value="BottomLeft">Bottom Left</option><option value="BottomRight">Bottom Right</option></select>
+                                            <select is="emby-select" label="Priority" data-profile-key="RottenTomatoesScoreIconPriority" data-corner-group="TopRight"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select>
+                                        </div>
+                                        <div class="checkboxContainer" style="margin-top: .75em;"><label><input is="emby-checkbox" type="checkbox" data-profile-key="RottenTomatoesScoreOverlayHorizontal" /><span>Layout Horizontally</span></label></div>
+                                        <div style="margin-top: .75em; display:flex; gap:1em;">
+                                            <select is="emby-select" label="Background Shape" data-profile-key="RottenTomatoesScoreBackgroundShape" style="flex:1;"><option value="None">None</option><option value="Circle">Circle</option><option value="Square">Square</option></select>
+                                            <input type="color" data-profile-key="RottenTomatoesScoreBackgroundColor" style="width:3.25em; height:2.5em; padding:0;" />
+                                            <input type="range" min="0" max="100" step="1" data-profile-key="RottenTomatoesScoreBackgroundOpacity" class="slider" style="flex:2;" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -511,8 +524,17 @@
 
                     <p>
                         <strong>Community Rating (prefix: rating):</strong> <code>rating.{name}.png</code><br />
-                        Displayed next to the community score.<br />
-                        <em>Example:</em> <code>rating.imdb.png</code>
+                        The "Community Rating" icon is for IMDb and always uses the key `imdb`. A built-in icon is provided.<br />
+                        <em>Custom icon file:</em> <code>rating.imdb.png</code>
+                    </p>
+
+                    <p>
+                        <strong>Rotten Tomatoes Rating (no prefix):</strong><br />
+                        The "Rotten Tomatoes" icon is separate and displays based on the critic score. These icons do not use the `rating.` prefix for custom files. The naming convention is based on a 60% threshold:
+                        <ul style="margin-top: .5em;">
+                            <li>Score &lt; 60%: <code>t.splat.png</code></li>
+                            <li>Score &ge; 60%: <code>t.tomato.png</code></li>
+                        </ul>
                     </p>
 
                     <h3 style="margin-top: 2em;">Notes &amp; Tips</h3>

@@ -14,6 +14,8 @@ namespace EmbyIcons.Models
         public string? VideoFormatIconName { get; set; }
         public string? ResolutionIconName { get; set; }
         public float? CommunityRating { get; set; }
+        // Rotten Tomatoes percent value (0-100). Null if not available.
+        public float? RottenTomatoesRating { get; set; }
         public string? AspectRatioIconName { get; set; }
         public string? ParentalRatingIconName { get; set; }
     }

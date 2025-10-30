@@ -192,6 +192,13 @@ namespace EmbyIcons
         public IconAlignment CommunityScoreIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool CommunityScoreOverlayHorizontal { get; set; } = true;
         public int CommunityScoreIconPriority { get; set; } = 9;
+        // Rotten Tomatoes style separate settings (same options as CommunityScore but separate)
+        public IconAlignment RottenTomatoesScoreIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool RottenTomatoesScoreOverlayHorizontal { get; set; } = true;
+        public int RottenTomatoesScoreIconPriority { get; set; } = 9;
+        public ScoreBackgroundShape RottenTomatoesScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
+        public string RottenTomatoesScoreBackgroundColor { get; set; } = "#404040";
+        public int RottenTomatoesScoreBackgroundOpacity { get; set; } = 80;
 
         public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool AspectRatioOverlayHorizontal { get; set; } = true;

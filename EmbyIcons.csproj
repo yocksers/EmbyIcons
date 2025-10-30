@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.39.70</Version>
-		<AssemblyVersion>5.39.7.0</AssemblyVersion>
-		<FileVersion>5.39.7.0</FileVersion>
+		<Version>5.40.30</Version>
+		<AssemblyVersion>5.40.3.0</AssemblyVersion>
+		<FileVersion>5.40.3.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -90,6 +90,8 @@
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-ma.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_splat.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_tomato.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_1080p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_480p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_4k.png" />

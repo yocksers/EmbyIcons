@@ -17,7 +17,7 @@ namespace EmbyIcons.Services
         private readonly IconCacheManager _iconCache;
 
         private record OverlayGroupInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, List<SKImage> Icons) : IOverlayInfo;
-        private record RatingOverlayInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, float Score, SKImage? Icon) : IOverlayInfo;
+        private record RatingOverlayInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, float Score, SKImage? Icon, bool IsPercent, ScoreBackgroundShape BackgroundShape, string BackgroundColor, int BackgroundOpacity) : IOverlayInfo;
         private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int EdgePadding, int InterIconPadding, int CanvasWidth, int CanvasHeight);
 
         private record IconGroupDefinition(
@@ -76,6 +76,7 @@ namespace EmbyIcons.Services
 
             var iconGroups = await CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
             var ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+            var rottenInfo = await CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken);
 
             var overlaysByCorner = new Dictionary<IconAlignment, List<IOverlayInfo>>();
             foreach (var group in iconGroups)
@@ -87,6 +88,11 @@ namespace EmbyIcons.Services
             {
                 if (!overlaysByCorner.ContainsKey(ratingInfo.Alignment)) overlaysByCorner[ratingInfo.Alignment] = new List<IOverlayInfo>();
                 overlaysByCorner[ratingInfo.Alignment].Add(ratingInfo);
+            }
+            if (rottenInfo != null)
+            {
+                if (!overlaysByCorner.ContainsKey(rottenInfo.Alignment)) overlaysByCorner[rottenInfo.Alignment] = new List<IOverlayInfo>();
+                overlaysByCorner[rottenInfo.Alignment].Add(rottenInfo);
             }
 
             foreach (var corner in overlaysByCorner.Keys)
@@ -122,8 +128,46 @@ namespace EmbyIcons.Services
                 {
                     try { ratingInfo.Icon.Dispose(); } catch { }
                 }
+                if (rottenInfo != null && rottenInfo.Icon != null)
+                {
+                    try { rottenInfo.Icon.Dispose(); } catch { }
+                }
             }
             catch { }
+        }
+
+        private async Task<RatingOverlayInfo?> CreateRottenRatingInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)
+        {
+            if (profileOptions.RottenTomatoesScoreIconAlignment == IconAlignment.Disabled || !data.RottenTomatoesRating.HasValue)
+            {
+                return null;
+            }
+
+            float percent = data.RottenTomatoesRating.Value;
+
+            string iconKeyToRequest;
+            if (percent < 60f)
+            {
+                iconKeyToRequest = "t.splat";
+            }
+            else
+            {
+                iconKeyToRequest = "t.tomato";
+            }
+
+            var ratingIcon = await _iconCache.GetIconAsync(iconKeyToRequest, IconCacheManager.IconType.CommunityRating, options, cancellationToken);
+
+
+            return new RatingOverlayInfo(
+                profileOptions.RottenTomatoesScoreIconAlignment,
+                profileOptions.RottenTomatoesScoreIconPriority,
+                profileOptions.RottenTomatoesScoreOverlayHorizontal,
+                percent,
+                ratingIcon,
+                true,
+                profileOptions.RottenTomatoesScoreBackgroundShape,
+                profileOptions.RottenTomatoesScoreBackgroundColor,
+                profileOptions.RottenTomatoesScoreBackgroundOpacity);
         }
 
         private void DrawCorner(List<IOverlayInfo> overlays, IconAlignment alignment, DrawingContext context)
@@ -229,8 +273,15 @@ namespace EmbyIcons.Services
         {
             var typeface = FontHelper.GetDefaultBold(_logger);
             if (typeface == null) return SKSize.Empty;
-
-            var scoreText = rating.Score.ToString("F1");
+            string scoreText;
+            if (rating.IsPercent)
+            {
+                scoreText = Math.Round(rating.Score).ToString("F0") + "%";
+            }
+            else
+            {
+                scoreText = rating.Score.ToString("F1");
+            }
             var fontSize = context.IconSize * 0.75f;
 
             var textPaint = context.TextPaint;
@@ -245,7 +296,7 @@ namespace EmbyIcons.Services
             int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(context.IconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
 
             float bgHorizontalPadding = context.IconSize * 0.2f;
-            int scoreAreaWidth = (context.Options.CommunityScoreBackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
+            int scoreAreaWidth = (rating.BackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
 
             int totalWidth = iconDisplayWidth + (iconDisplayWidth > 0 ? iconPadding : 0) + scoreAreaWidth;
             int totalHeight = context.IconSize;
@@ -310,7 +361,15 @@ namespace EmbyIcons.Services
             if (totalSize.IsEmpty) return SKSize.Empty;
 
             var typeface = FontHelper.GetDefaultBold(_logger);
-            var scoreText = rating.Score.ToString("F1");
+            string scoreText;
+            if (rating.IsPercent)
+            {
+                scoreText = Math.Round(rating.Score).ToString("F0") + "%";
+            }
+            else
+            {
+                scoreText = rating.Score.ToString("F1");
+            }
             var fontSize = context.IconSize * 0.75f;
 
             var textPaint = context.TextPaint;
@@ -325,7 +384,7 @@ namespace EmbyIcons.Services
             int iconPadding = Math.Max(1, context.IconSize / 10);
             int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(context.IconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
             float bgHorizontalPadding = context.IconSize * 0.2f;
-            int scoreAreaWidth = (context.Options.CommunityScoreBackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
+            int scoreAreaWidth = (rating.BackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
 
             bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
             bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
@@ -342,26 +401,26 @@ namespace EmbyIcons.Services
 
             var bgRect = SKRect.Create(currentX, startY, scoreAreaWidth, totalSize.Height);
 
-            if (context.Options.CommunityScoreBackgroundShape != ScoreBackgroundShape.None)
+            if (rating.BackgroundShape != ScoreBackgroundShape.None)
             {
-                DrawRatingBackground(context.Canvas, context.Options, bgRect);
+                DrawRatingBackground(context.Canvas, rating.BackgroundShape, rating.BackgroundColor, rating.BackgroundOpacity, bgRect);
             }
 
             var textPos = new SKPoint(currentX + (scoreAreaWidth - textWidth) / 2f, startY + (totalSize.Height - textBounds.Height) / 2f - textBounds.Top);
 
             using var textStrokePaint = new SKPaint { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
-            DrawRatingText(context.Canvas, context.Options, scoreText, textPaint, textStrokePaint, textPos);
+            DrawRatingText(context.Canvas, rating.BackgroundShape, rating.BackgroundOpacity, scoreText, textPaint, textStrokePaint, textPos);
 
             textPaint.Typeface = null;
 
             return totalSize;
         }
 
-        private void DrawRatingBackground(SKCanvas canvas, ProfileSettings options, SKRect bgRect)
+        private void DrawRatingBackground(SKCanvas canvas, ScoreBackgroundShape shape, string color, int opacity, SKRect bgRect)
         {
-            if (!SKColor.TryParse(options.CommunityScoreBackgroundColor, out var baseBgColor)) return;
+            if (!SKColor.TryParse(color, out var baseBgColor)) return;
 
-            byte alpha = (byte)Math.Clamp(options.CommunityScoreBackgroundOpacity * 2.55, 0, 255);
+            byte alpha = (byte)Math.Clamp(opacity * 2.55, 0, 255);
             using var backgroundPaint = new SKPaint
             {
                 Style = SKPaintStyle.Fill,
@@ -369,19 +428,19 @@ namespace EmbyIcons.Services
                 Color = new SKColor(baseBgColor.Red, baseBgColor.Green, baseBgColor.Blue, alpha)
             };
 
-            if (options.CommunityScoreBackgroundShape == ScoreBackgroundShape.Square)
+            if (shape == ScoreBackgroundShape.Square)
             {
                 canvas.DrawRect(bgRect, backgroundPaint);
             }
-            else if (options.CommunityScoreBackgroundShape == ScoreBackgroundShape.Circle)
+            else if (shape == ScoreBackgroundShape.Circle)
             {
                 canvas.DrawCircle(bgRect.MidX, bgRect.MidY, Math.Min(bgRect.Width, bgRect.Height) / 2f, backgroundPaint);
             }
         }
 
-        private void DrawRatingText(SKCanvas canvas, ProfileSettings options, string text, SKPaint textPaint, SKPaint strokePaint, SKPoint position)
+        private void DrawRatingText(SKCanvas canvas, ScoreBackgroundShape bgShape, int bgOpacity, string text, SKPaint textPaint, SKPaint strokePaint, SKPoint position)
         {
-            if (options.CommunityScoreBackgroundShape == ScoreBackgroundShape.None || options.CommunityScoreBackgroundOpacity < 50)
+            if (bgShape == ScoreBackgroundShape.None || bgOpacity < 50)
             {
                 strokePaint.Typeface = textPaint.Typeface;
                 strokePaint.TextSize = textPaint.TextSize;
@@ -446,9 +505,19 @@ namespace EmbyIcons.Services
                 return null;
             }
 
-            var ratingIcon = await _iconCache.GetIconAsync("imdb", IconCacheManager.IconType.CommunityRating, options, cancellationToken);
+            const string iconKeyToRequest = "imdb";
+            var ratingIcon = await _iconCache.GetIconAsync(iconKeyToRequest, IconCacheManager.IconType.CommunityRating, options, cancellationToken);
 
-            return new RatingOverlayInfo(profileOptions.CommunityScoreIconAlignment, profileOptions.CommunityScoreIconPriority, profileOptions.CommunityScoreOverlayHorizontal, data.CommunityRating.Value, ratingIcon);
+            return new RatingOverlayInfo(
+                profileOptions.CommunityScoreIconAlignment,
+                profileOptions.CommunityScoreIconPriority,
+                profileOptions.CommunityScoreOverlayHorizontal,
+                data.CommunityRating.Value,
+                ratingIcon,
+                false,
+                profileOptions.CommunityScoreBackgroundShape,
+                profileOptions.CommunityScoreBackgroundColor,
+                profileOptions.CommunityScoreBackgroundOpacity);
         }
     }
 }
