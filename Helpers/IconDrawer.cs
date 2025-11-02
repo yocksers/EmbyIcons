@@ -28,7 +28,7 @@ namespace EmbyIcons.Helpers
 
             int GetIconWidth(SKImage i)
             {
-                if (i.Height == 0) return size; // Fallback for invalid image
+                if (i.Height == 0) return size; 
                 return (int)Math.Round(size * ((float)i.Width / i.Height));
             }
 

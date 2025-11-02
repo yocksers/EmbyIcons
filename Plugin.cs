@@ -301,7 +301,7 @@ namespace EmbyIcons
 
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();
-            _profileManager = null; // Re-create on next access
+            _profileManager = null; 
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{newOptions.PersistedVersion}'. Images will refresh as they are viewed.");
         }

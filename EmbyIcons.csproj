@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.40.30</Version>
-		<AssemblyVersion>5.40.3.0</AssemblyVersion>
-		<FileVersion>5.40.3.0</FileVersion>
+		<Version>5.40.40</Version>
+		<AssemblyVersion>5.40.4.0</AssemblyVersion>
+		<FileVersion>5.40.4.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>

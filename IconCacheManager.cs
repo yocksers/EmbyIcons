@@ -217,7 +217,7 @@ namespace EmbyIcons.Helpers
                     return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
                 case IconLoadingMode.BuiltInOnly:
                     return await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
-                default: // Hybrid mode
+                default: 
                     var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
                     return customIcon ?? await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
             }

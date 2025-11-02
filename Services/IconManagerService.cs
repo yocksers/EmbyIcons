@@ -106,7 +106,6 @@ namespace EmbyIcons.Services
                 Recursive = true
             });
 
-            // FIX: Invoke Count() as a method.
             int totalItems = allItems.Count();
             int processedCount = 0;
 

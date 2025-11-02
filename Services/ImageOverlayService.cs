@@ -4,6 +4,7 @@ using MediaBrowser.Model.Logging;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -280,7 +281,7 @@ namespace EmbyIcons.Services
             }
             else
             {
-                scoreText = rating.Score.ToString("F1");
+                scoreText = rating.Score.ToString("F1", CultureInfo.InvariantCulture);
             }
             var fontSize = context.IconSize * 0.75f;
 
@@ -368,7 +369,7 @@ namespace EmbyIcons.Services
             }
             else
             {
-                scoreText = rating.Score.ToString("F1");
+                scoreText = rating.Score.ToString("F1", CultureInfo.InvariantCulture);
             }
             var fontSize = context.IconSize * 0.75f;
 

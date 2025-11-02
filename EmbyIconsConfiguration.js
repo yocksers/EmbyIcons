@@ -141,7 +141,6 @@
             });
         }
 
-        // UX IMPROVEMENT: Poll for scan progress and provide live feedback.
         pollScanProgress(scanType, button, container) {
             clearInterval(this.progressPollInterval);
 
