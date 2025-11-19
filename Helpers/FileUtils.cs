@@ -1,3 +1,4 @@
+using MediaBrowser.Model.IO;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,14 +9,14 @@ namespace EmbyIcons.Helpers
 {
     internal static class FileUtils
     {
-        public static async Task SafeCopyAsync(string inputFile, string outputFile, CancellationToken cancellationToken)
+        public static async Task SafeCopyAsync(string inputFile, string outputFile, IFileSystem fileSystem, CancellationToken cancellationToken)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(outputFile) ?? ".");
 
             var tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                await using (var fsIn = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read, 262144, useAsync: true))
+                await using (var fsIn = fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
                 await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                 {
                     await fsIn.CopyToAsync(fsOut, 262144, cancellationToken);

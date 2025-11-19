@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Helpers;
+﻿﻿using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
@@ -27,6 +28,7 @@ namespace EmbyIcons
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
+        private readonly IFileSystem _fileSystem;
 
         private static readonly SemaphoreSlim _globalConcurrencyLock =
             new(Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * 0.75)));
@@ -56,10 +58,11 @@ namespace EmbyIcons
             }
         }
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager, IFileSystem fileSystem)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
+            _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
             if (_episodeIconCache == null)
             {
@@ -320,7 +323,7 @@ namespace EmbyIcons
             var profile = plugin.GetProfileForItem(item);
             if (profile == null)
             {
-                await FileUtils.SafeCopyAsync(inputFile, outputFile, cancellationToken);
+                await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, cancellationToken);
                 return;
             }
 
@@ -340,10 +343,12 @@ namespace EmbyIcons
                     item = GetFullItem(item);
                     var overlayData = _overlayDataService.GetOverlayData(item, profileOptions, globalOptions);
 
-                    using var sourceBitmap = SKBitmap.Decode(inputFile);
+                    await using var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true);
+                    using var sourceBitmap = SKBitmap.Decode(inputStream);
+
                     if (sourceBitmap == null)
                     {
-                        await FileUtils.SafeCopyAsync(inputFile, outputFile, cancellationToken);
+                        await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, cancellationToken);
                         return;
                     }
 
@@ -388,7 +393,7 @@ namespace EmbyIcons
             catch (Exception ex)
             {
                 _logger.ErrorException($"[EmbyIcons] Critical error during enhancement for {item?.Name}. Copying original.", ex);
-                try { await FileUtils.SafeCopyAsync(inputFile, outputFile, CancellationToken.None); }
+                try { await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, CancellationToken.None); }
                 catch { }
             }
             finally

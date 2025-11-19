@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Api;
+﻿﻿using EmbyIcons.Api;
 using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using MediaBrowser.Common;
@@ -41,8 +41,8 @@ namespace EmbyIcons
         private ConfigurationMonitor? _configMonitor;
 
         private bool _migrationPerformed = false;
-        private static bool _migrationAttempted = false; 
-        private static readonly object _migrationLock = new object(); 
+        private static bool _migrationAttempted = false;
+        private static readonly object _migrationLock = new object();
 
 
         public static Plugin? Instance { get; private set; }
@@ -51,7 +51,7 @@ namespace EmbyIcons
 
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
-        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager);
+        public EmbyIconsEnhancer Enhancer => _enhancer ??= new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
         private ProfileManagerService ProfileManager => _profileManager ??= new ProfileManagerService(_libraryManager, _logger, Configuration);
         private ConfigurationMonitor ConfigMonitor => _configMonitor ??= new ConfigurationMonitor(_logger, _libraryManager, _fileSystem);
 
@@ -301,7 +301,7 @@ namespace EmbyIcons
 
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();
-            _profileManager = null; 
+            _profileManager = null;
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{newOptions.PersistedVersion}'. Images will refresh as they are viewed.");
         }
