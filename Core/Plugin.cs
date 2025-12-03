@@ -1,4 +1,4 @@
-﻿﻿using EmbyIcons.Api;
+﻿using EmbyIcons.Api;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Services;
@@ -28,9 +28,6 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
-    /// <summary>
-    /// Main plugin class for EmbyIcons. Provides icon overlays on media posters based on video/audio attributes.
-    /// </summary>
     public class Plugin : BasePlugin<PluginOptions>, IHasWebPages, IHasThumbImage, IDisposable
     {
         private readonly IApplicationHost _appHost;
@@ -63,6 +60,7 @@ namespace EmbyIcons
                 {
                     _enhancer = new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
                     EnsurePruningTimerInitialized();
+                    _enhancer.EnsureTemplateCacheInitialized();
                 }
                 return _enhancer;
             }
@@ -106,9 +104,6 @@ namespace EmbyIcons
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
-
-            // Defer timer initialization to after base constructor completes
-            // Timer will be initialized when Configuration is first accessed
         }
 
         private void EnsureConfigurationMigrated()
@@ -282,7 +277,6 @@ namespace EmbyIcons
             
             try
             {
-                // Cache the enhancer reference to avoid repeated property access
                 var enhancer = Enhancer;
                 
                 if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
@@ -301,7 +295,6 @@ namespace EmbyIcons
                                  ?? (e.Item as Season)?.Series
                                  ?? e.Item as Series;
 
-                // Also get the season if this is an episode change
                 var seasonToClear = (e.Item as Episode)?.Season;
 
                 if (dateModifiedChanged && e.Item is Episode episode && episode.Series != null)
@@ -310,7 +303,6 @@ namespace EmbyIcons
                         _logger.Debug($"[EmbyIcons] DateModified change detected for episode '{episode.Name}', clearing series and season caches.");
                 }
 
-                // Clear season cache if episode changed
                 if (seasonToClear != null && seasonToClear.Id != Guid.Empty)
                 {
                     if (Configuration?.EnableDebugLogging ?? false)
@@ -346,9 +338,14 @@ namespace EmbyIcons
             if (oldOptions != null)
             {
                 ConfigMonitor.CheckForChangesAndTriggerRefreshes(oldOptions, newOptions);
+                
+                if (oldOptions.EnableIconTemplateCaching != newOptions.EnableIconTemplateCaching)
+                {
+                    _logger.Info($"[EmbyIcons] Template caching setting changed to: {newOptions.EnableIconTemplateCaching}");
+                    Enhancer.EnsureTemplateCacheInitialized();
+                }
             }
 
-            // Clear all caches to ensure settings changes take effect immediately
             Enhancer.ClearAllItemDataCaches();
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();

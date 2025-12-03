@@ -485,7 +485,6 @@ namespace EmbyIcons.Services
             }
             else
             {
-                // Load icons in parallel for better performance
                 var namesList = names.ToList();
                 if (namesList.Count > 1)
                 {
@@ -503,7 +502,6 @@ namespace EmbyIcons.Services
                 }
                 else
                 {
-                    // Single icon - no need for parallel loading
                     foreach (var name in namesList)
                     {
                         var icon = await _iconCache.GetIconAsync(name, type, options, cancellationToken).ConfigureAwait(false);

@@ -40,7 +40,6 @@ namespace EmbyIcons.Configuration
             var libsForHardRefresh = new List<string>();
             var libsForSoftRefresh = new List<string>();
 
-            // Check each library for profile changes or profile mapping changes
             foreach (var libId in allLibraryIds)
             {
                 oldMappings.TryGetValue(libId, out var oldMap);
@@ -52,7 +51,6 @@ namespace EmbyIcons.Configuration
                 IconProfile? newProfile = null;
                 if (newMap != null) newProfileDict.TryGetValue(newMap.ProfileId, out newProfile);
 
-                // Profile mapping changed (different profile assigned)
                 if (oldProfile?.Id != newProfile?.Id)
                 {
                     bool wasSupported = IsAnyIconEnabled(oldProfile);
@@ -67,7 +65,6 @@ namespace EmbyIcons.Configuration
                         libsForSoftRefresh.Add(libId);
                     }
                 }
-                // Same profile but settings might have changed
                 else if (oldProfile != null && newProfile != null && ProfileSettingsChanged(oldProfile, newProfile))
                 {
                     if (!libsForSoftRefresh.Contains(libId))
@@ -95,7 +92,6 @@ namespace EmbyIcons.Configuration
             var oldS = oldProfile.Settings;
             var newS = newProfile.Settings;
 
-            // Check if any icon alignment settings changed
             if (oldS.AudioIconAlignment != newS.AudioIconAlignment) return true;
             if (oldS.SubtitleIconAlignment != newS.SubtitleIconAlignment) return true;
             if (oldS.ChannelIconAlignment != newS.ChannelIconAlignment) return true;
@@ -110,7 +106,6 @@ namespace EmbyIcons.Configuration
             if (oldS.SourceIconAlignment != newS.SourceIconAlignment) return true;
             if (oldS.RottenTomatoesScoreIconAlignment != newS.RottenTomatoesScoreIconAlignment) return true;
 
-            // Check if any layout/behavior settings changed that affect appearance
             if (oldS.AudioOverlayHorizontal != newS.AudioOverlayHorizontal) return true;
             if (oldS.SubtitleOverlayHorizontal != newS.SubtitleOverlayHorizontal) return true;
             if (oldS.ChannelOverlayHorizontal != newS.ChannelOverlayHorizontal) return true;
@@ -124,7 +119,6 @@ namespace EmbyIcons.Configuration
             if (oldS.SourceOverlayHorizontal != newS.SourceOverlayHorizontal) return true;
             if (oldS.IconSize != newS.IconSize) return true;
 
-            // Check priority changes (affects order)
             if (oldS.AudioIconPriority != newS.AudioIconPriority) return true;
             if (oldS.SubtitleIconPriority != newS.SubtitleIconPriority) return true;
             if (oldS.ChannelIconPriority != newS.ChannelIconPriority) return true;
@@ -139,7 +133,6 @@ namespace EmbyIcons.Configuration
             if (oldS.SourceIconPriority != newS.SourceIconPriority) return true;
             if (oldS.RottenTomatoesScoreIconPriority != newS.RottenTomatoesScoreIconPriority) return true;
 
-            // Check behavior settings
             if (oldS.ShowOverlaysForEpisodes != newS.ShowOverlaysForEpisodes) return true;
             if (oldS.ShowOverlaysForSeasons != newS.ShowOverlaysForSeasons) return true;
             if (oldS.ShowSeriesIconsIfAllEpisodesHaveLanguage != newS.ShowSeriesIconsIfAllEpisodesHaveLanguage) return true;

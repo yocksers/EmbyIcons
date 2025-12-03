@@ -89,18 +89,13 @@ namespace EmbyIcons
                     OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
                 };
             }
-            else if (parent is Season season)
+            else if (parent is Season)
             {
                 useLiteMode = profileOptions.UseSeriesLiteMode; 
                 requireAllItemsToMatchForLanguage = useLiteMode || profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage;
-                
-                // In Lite Mode, use the first episode of the entire series (not just this season)
-                // This ensures consistent behavior across all seasons when only S01E01 is updated
-                var queryParent = useLiteMode && season.Series != null ? season.Series : parent;
-                
                 query = new InternalItemsQuery
                 {
-                    Parent = queryParent,
+                    Parent = parent,
                     Recursive = true,
                     IncludeItemTypes = new[] { Configuration.Constants.Episode },
                     Limit = useLiteMode ? 1 : null,

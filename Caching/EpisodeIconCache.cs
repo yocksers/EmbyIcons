@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,10 +13,6 @@ namespace EmbyIcons
 
         private static int MaxEpisodeCacheSize => Plugin.Instance?.Configuration.MaxEpisodeCacheSize ?? 2000;
         internal static int EpisodeCacheSlidingExpirationHours => Plugin.Instance?.Configuration.EpisodeCacheSlidingExpirationHours ?? 6;
-
-        /// <summary>
-        /// Ensures the episode cache is initialized. Safe to call multiple times.
-        /// </summary>
         internal static void EnsureEpisodeCacheInitialized()
         {
             if (_episodeIconCache == null)

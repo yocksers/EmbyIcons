@@ -37,7 +37,7 @@
         getDomElements(view) {
             this.dom = {
                 view: view,
-                form: view.querySelector('.embyIconsForm'),
+                forms: view.querySelectorAll('.embyIconsForm'),
                 allConfigInputs: view.querySelectorAll('[data-config-key]'),
                 allProfileInputs: view.querySelectorAll('[data-profile-key]'),
                 allProfileSelects: view.querySelectorAll('select[is="emby-select"][data-profile-key]'),
@@ -46,6 +46,9 @@
                 btnAddProfile: view.querySelector('#btnAddProfile'),
                 btnRenameProfile: view.querySelector('#btnRenameProfile'),
                 btnDeleteProfile: view.querySelector('#btnDeleteProfile'),
+                btnExportProfile: view.querySelector('#btnExportProfile'),
+                btnExportAllProfiles: view.querySelector('#btnExportAllProfiles'),
+                btnImportProfile: view.querySelector('#btnImportProfile'),
                 btnSelectIconsFolder: view.querySelector('#btnSelectIconsFolder'),
                 txtIconsFolder: view.querySelector('#txtIconsFolder'),
                 folderWarningIcon: view.querySelector('#folderWarningIcon'),
@@ -81,12 +84,15 @@
         }
 
         bindEvents() {
-            if (this.dom.form) {
-                this.dom.form.addEventListener('change', this.onFormChange.bind(this));
-                this.dom.form.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.saveData();
-                    return false;
+            // Bind events to all forms
+            if (this.dom.forms) {
+                this.dom.forms.forEach(form => {
+                    form.addEventListener('change', this.onFormChange.bind(this));
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        this.saveData();
+                        return false;
+                    });
                 });
             }
 
@@ -111,6 +117,9 @@
             if (this.dom.btnAddProfile) this.dom.btnAddProfile.addEventListener('click', this.addProfile.bind(this));
             if (this.dom.btnRenameProfile) this.dom.btnRenameProfile.addEventListener('click', this.renameProfile.bind(this));
             if (this.dom.btnDeleteProfile) this.dom.btnDeleteProfile.addEventListener('click', this.deleteProfile.bind(this));
+            if (this.dom.btnExportProfile) this.dom.btnExportProfile.addEventListener('click', this.exportCurrentProfile.bind(this));
+            if (this.dom.btnExportAllProfiles) this.dom.btnExportAllProfiles.addEventListener('click', this.exportAllProfiles.bind(this));
+            if (this.dom.btnImportProfile) this.dom.btnImportProfile.addEventListener('click', this.importProfiles.bind(this));
             if (this.dom.btnSelectIconsFolder) this.dom.btnSelectIconsFolder.addEventListener('click', this.selectIconsFolder.bind(this));
             if (this.dom.btnClearCache) this.dom.btnClearCache.addEventListener('click', this.clearCache.bind(this));
             if (this.dom.btnRunIconScan) this.dom.btnRunIconScan.addEventListener('click', this.runIconScan.bind(this));
@@ -1008,6 +1017,155 @@
                 }
             });
             profile.Settings.FilenameBasedIcons = mappings;
+        }
+
+        async exportCurrentProfile() {
+            if (!this.currentProfileId) {
+                toast('No profile selected');
+                return;
+            }
+
+            try {
+                loading.show();
+                if (!this.apiRoutes) await this.fetchApiRoutes();
+                const response = await ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl(this.apiRoutes.ExportProfiles, { ProfileIds: this.currentProfileId }),
+                    dataType: 'json'
+                });
+
+                if (response.Success && response.JsonData) {
+                    const profile = this.pluginConfiguration.Profiles.find(p => p.Id === this.currentProfileId);
+                    const filename = `emby-icons-profile-${profile.Name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+                    this.downloadJson(response.JsonData, filename);
+                    toast('Profile exported successfully');
+                } else {
+                    toast('Export failed: ' + (response.Error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                toast('Export failed: ' + error.message);
+            } finally {
+                loading.hide();
+            }
+        }
+
+        async exportAllProfiles() {
+            try {
+                loading.show();
+                if (!this.apiRoutes) await this.fetchApiRoutes();
+                const response = await ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl(this.apiRoutes.ExportProfiles),
+                    dataType: 'json'
+                });
+
+                if (response.Success && response.JsonData) {
+                    const filename = `emby-icons-profiles-all-${new Date().toISOString().split('T')[0]}.json`;
+                    this.downloadJson(response.JsonData, filename);
+                    toast(`Exported ${response.ProfileCount} profile(s) successfully`);
+                } else {
+                    toast('Export failed: ' + (response.Error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                toast('Export failed: ' + error.message);
+            } finally {
+                loading.hide();
+            }
+        }
+
+        async importProfiles() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    loading.show();
+                    const jsonData = await file.text();
+                    
+                    // Validate first
+                    if (!this.apiRoutes) await this.fetchApiRoutes();
+                    const validation = await ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl(this.apiRoutes.ValidateProfileImport),
+                        data: JSON.stringify({ JsonData: jsonData }),
+                        contentType: 'application/json',
+                        dataType: 'json'
+                    });
+
+                    if (!validation.IsValid) {
+                        const errors = validation.Errors.join('\n');
+                        alert('Import validation failed:\n\n' + errors);
+                        loading.hide();
+                        return;
+                    }
+
+                    // Show warnings if any
+                    if (validation.Warnings && validation.Warnings.length > 0) {
+                        const warnings = validation.Warnings.join('\n');
+                        const proceed = confirm(`Import warnings:\n\n${warnings}\n\nDo you want to continue?`);
+                        if (!proceed) {
+                            loading.hide();
+                            return;
+                        }
+                    }
+
+                    // Ask about conflicts
+                    const overwrite = confirm('Overwrite existing profiles with the same name?\n\nYes = Overwrite\nNo = Rename and create new');
+
+                    // Import
+                    const result = await ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl(this.apiRoutes.ImportProfiles),
+                        data: JSON.stringify({
+                            JsonData: jsonData,
+                            OverwriteExisting: overwrite,
+                            RenameOnConflict: !overwrite
+                        }),
+                        contentType: 'application/json',
+                        dataType: 'json'
+                    });
+
+                    if (result.Success) {
+                        let message = `Imported: ${result.ImportedCount}\n`;
+                        if (result.UpdatedCount > 0) message += `Updated: ${result.UpdatedCount}\n`;
+                        if (result.SkippedCount > 0) message += `Skipped: ${result.SkippedCount}\n`;
+                        if (result.FailedCount > 0) message += `Failed: ${result.FailedCount}\n`;
+                        
+                        alert('Import completed:\n\n' + message);
+                        
+                        // Reload configuration
+                        await this.loadData();
+                        toast('Profiles imported successfully');
+                    } else {
+                        alert('Import failed:\n\n' + (result.Error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    alert('Import failed: ' + error.message);
+                } finally {
+                    loading.hide();
+                }
+            };
+
+            input.click();
+        }
+
+        downloadJson(jsonString, filename) {
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
     }
 

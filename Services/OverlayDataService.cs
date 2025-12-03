@@ -31,8 +31,6 @@ namespace EmbyIcons.Services
         {
             _enhancer = enhancer;
             _libraryManager = libraryManager;
-            // Defer timer initialization to avoid accessing Plugin.Instance.Configuration before Plugin is fully constructed
-            // Timer will be initialized on first use or can be initialized explicitly later
         }
 
         private void EnsureMaintenanceTimerInitialized()
@@ -104,11 +102,9 @@ namespace EmbyIcons.Services
         {
             if (it == null) return null;
 
-            // Try direct provider IDs first
             var result = TryExtractFromProviderIds(it);
             if (result.HasValue) return result;
 
-            // Try reflection-based search through rating properties
             return TryExtractFromRatingProperties(it);
         }
 
@@ -484,7 +480,6 @@ namespace EmbyIcons.Services
             MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
             MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
-            // Pre-size collections based on typical stream counts
             var audioStreams = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).ToList();
             var subtitleStreams = mainItemStreams.Where(s => s.Type == MediaStreamType.Subtitle).ToList();
 

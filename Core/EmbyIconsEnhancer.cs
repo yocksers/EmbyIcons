@@ -1,7 +1,8 @@
-﻿﻿using EmbyIcons.Caching;
+﻿using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Services;
+using EmbyIcons.ImageProcessing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -60,13 +61,11 @@ namespace EmbyIcons
 
         internal readonly OverlayDataService _overlayDataService;
         private readonly ImageOverlayService _imageOverlayService;
+        private IconTemplateCache? _templateCache;
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
-
-        /// <summary>
-        /// Gets the logger instance for this enhancer.
-        /// </summary>
         public ILogger Logger => _logger;
+        public IconTemplateCache? TemplateCache => _templateCache;
 
         public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager, IFileSystem fileSystem)
         {
@@ -74,21 +73,61 @@ namespace EmbyIcons
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
-            // Don't initialize episode cache here - it will be initialized on first use
-            // to avoid accessing Plugin.Instance.Configuration before Plugin is fully constructed
-
             _logger.Info("[EmbyIcons] Session started.");
+
+            if (ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger))
+            {
+                _logger.Info("[EmbyIcons] SkiaSharp is available. Icon overlays will be applied.");
+            }
+            else
+            {
+                _logger.Warn("[EmbyIcons] SkiaSharp is not available. Icon overlays will be disabled.");
+                _logger.Warn("[EmbyIcons] To enable icon overlays, ensure SkiaSharp native libraries are installed for your platform.");
+            }
 
             _iconCacheManager = new IconCacheManager(_logger);
             _overlayDataService = new OverlayDataService(this, _libraryManager);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
         }
-
-        /// <summary>
-        /// Forces a complete cache refresh by clearing all caches and reloading icons from the specified folder.
-        /// </summary>
-        /// <param name="iconsFolder">The folder containing custom icons.</param>
-        /// <param name="cancellationToken">Token to cancel the operation.</param>
+        public void EnsureTemplateCacheInitialized()
+        {
+            if (Plugin.Instance?.Configuration.EnableIconTemplateCaching ?? false)
+            {
+                if (_templateCache == null)
+                {
+                    lock (_locks)
+                    {
+                        if (_templateCache == null)
+                        {
+                            _templateCache = new IconTemplateCache(_logger);
+                            _logger.Info("[EmbyIcons] Icon template caching enabled.");
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (_templateCache != null)
+                {
+                    lock (_locks)
+                    {
+                        if (_templateCache != null)
+                        {
+                            try
+                            {
+                                _templateCache.Dispose();
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}");
+                            }
+                            _templateCache = null;
+                            _logger.Info("[EmbyIcons] Icon template caching disabled.");
+                        }
+                    }
+                }
+            }
+        }
         public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
@@ -181,6 +220,11 @@ namespace EmbyIcons
         public bool Supports(BaseItem? item, ImageType imageType)
         {
             if (item == null) return false;
+
+            if (!ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger))
+            {
+                return false;
+            }
 
             var profile = Plugin.Instance?.GetProfileForItem(item);
             if (profile == null) return false;
@@ -440,6 +484,9 @@ namespace EmbyIcons
             
             try { _overlayDataService?.Dispose(); } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing overlay data service: {ex.Message}"); }
+            
+            try { _templateCache?.Dispose(); } 
+            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}"); }
             
             if (_globalConcurrencyLock != null)
             {

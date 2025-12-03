@@ -68,13 +68,6 @@
                             </label>
                             <div class="fieldDescription">Required for icons on collections, but may cause slowdowns on the home screen for some users. If you experience UI lag, try disabling this.</div>
                         </div>
-                        <div class="checkboxContainer" style="margin-top: 1.5em;">
-                            <label>
-                                <input is="emby-checkbox" type="checkbox" id="chkEnableDebugLogging" data-config-key="EnableDebugLogging" />
-                                <span>Enable detailed debug logging</span>
-                            </label>
-                            <div class="fieldDescription">Logs additional information to the Emby server log (useful for troubleshooting).</div>
-                        </div>
                     </div>
 
                     <!-- Profiles Section -->
@@ -90,8 +83,17 @@
                                 <select is="emby-select" id="selActiveProfile" style="flex-grow: 1;"></select>
                                 <button is="emby-button" type="button" class="raised button-submit" id="btnAddProfile" title="Add New Profile"><span>+</span></button>
                                 <button is="emby-button" type="button" class="raised" id="btnRenameProfile" title="Rename Profile"><span>Rename</span></button>
-                                <button is="emby-button" type="button" class="raised button-cancel" id="btnDeleteProfile" title="Delete Profile"><span></span></button>
+                                <button is="emby-button" type="button" class="raised button-cancel" id="btnDeleteProfile" title="Delete Profile"><span></span></button>
                             </div>
+                        </div>
+                        <div class="inputContainer" style="margin-top: 1.5em;">
+                            <label class="inputLabel">Import/Export Profiles:</label>
+                            <div style="display: flex; gap: 1em;">
+                                <button is="emby-button" type="button" class="raised" id="btnExportProfile" title="Export current profile to JSON"><span>Export Current</span></button>
+                                <button is="emby-button" type="button" class="raised" id="btnExportAllProfiles" title="Export all profiles to JSON"><span>Export All</span></button>
+                                <button is="emby-button" type="button" class="raised button-submit" id="btnImportProfile" title="Import profiles from JSON"><span>Import</span></button>
+                            </div>
+                            <div class="fieldDescription">Share your icon profiles with other Emby users or backup your configuration.</div>
                         </div>
                     </div>
 
@@ -142,7 +144,7 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for TV show scans</span></label>
-                            <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode of the series (S01E01) to determine icons for all seasons and the series itself.</div>
+                            <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
                         </div>
 
                         <div class="flex align-items-center" style="margin: 3em 0 .5em;">
@@ -386,6 +388,50 @@
                                 Multiplier for processor count to determine max concurrent operations. Default: 0.75.<br>
                                 Lower values (0.25-0.5) reduce CPU/memory usage but slow down processing.<br>
                                 Higher values (1.0-2.0) speed up bulk operations but use more resources.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+                        <h3 style="margin-top: 0;">Feature Toggles</h3>
+                        <p class="fieldDescription">Enable or disable performance-related features.</p>
+                        
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" data-config-key="EnableLazyIconLoading" />
+                                <span>Enable lazy icon loading (on-demand generation)</span>
+                            </label>
+                            <div class="fieldDescription">Only generate overlays when posters are viewed, not for entire libraries at once. Reduces server load during library scans.</div>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" data-config-key="EnableIconTemplateCaching" />
+                                <span>Enable icon template caching</span>
+                            </label>
+                            <div class="fieldDescription">Pre-render common icon combinations (e.g., "4K + DTS + HDR") to improve performance and reduce CPU usage.</div>
+                        </div>
+                    </div>
+
+                    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+                        <h3 style="margin-top: 0;">Testing & Diagnostics</h3>
+                        <p class="fieldDescription">Options for testing and troubleshooting image processing.</p>
+                        
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkEnableDebugLogging" data-config-key="EnableDebugLogging" />
+                                <span>Enable detailed debug logging</span>
+                            </label>
+                            <div class="fieldDescription">Logs additional information to the Emby server log (useful for troubleshooting).</div>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="chkForceDisableSkiaSharp" data-config-key="ForceDisableSkiaSharp" />
+                                <span style="color: #ffc107;"><strong>Force Disable SkiaSharp</strong></span>
+                            </label>
+                            <div class="fieldDescription" style="color: #ffc107;">
+                                <strong>Testing Only:</strong> Disables SkiaSharp even if available, forcing the plugin to use the fallback processor.
+                                This allows testing the fallback behavior without uninstalling SkiaSharp.
+                                Icon overlays will be disabled when this is checked. <strong>Leave unchecked for normal operation.</strong>
                             </div>
                         </div>
                     </div>
