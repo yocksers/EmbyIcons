@@ -1,0 +1,112 @@
+<div style="max-width: 800px; margin: auto;">
+    <h1 style="margin-bottom: 1em;">EmbyIcons Plugin Guide</h1>
+
+    <h3>Introduction</h3>
+    <p>This plugin overlays icons for language, audio channels, video format, resolution, aspect ratio, parental rating, and community ratings onto your media posters. Provide your own icon images in a designated folder and name them according to the conventions below.</p>
+    <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.bmp</code>, and <code>.gif</code>.</p>
+
+    <h3 style="margin-top: 2em;">Icon Naming Conventions</h3>
+    <p>Icons use a strict prefix-based naming scheme: <code>prefix.name.png</code>. The prefix indicates the category; the name is matched against media properties. Files that don’t follow this convention are ignored.</p>
+
+    <h4 style="margin-top: 2em;">Language &amp; Subtitle Icons</h4>
+    <p>
+        <strong>Audio Language (prefix: lang):</strong> <code>lang.{name}.png</code><br />
+        <em>{name}</em> must be the full display language name (exactly as Emby shows it), lowercased.<br />
+        <em>Example:</em> <code>lang.english.png</code>, <code>lang.french.png</code>
+    </p>
+
+    <p>
+        <strong>Subtitle Language (prefix: sub):</strong> <code>sub.{name}.png</code><br />
+        <em>{name}</em> must be the full display language name, lowercased.<br />
+        <em>Example:</em> <code>sub.english.png</code>, <code>sub.japanese.png</code>
+    </p>
+
+    <h4 style="margin-top: 2em;">Dynamic Detection</h4>
+    <p>Most categories are detected directly from media stream metadata (no filename hacks required). You can create icons for any codec/layout Emby recognizes.</p>
+
+    <p>
+        <strong>Parental Rating (prefix: pr):</strong> <code>pr.{rating}.png</code><br />
+        <em>{rating}</em> should match the official rating reported by Emby (e.g., <code>pg-13</code>, <code>tv-ma</code>) in lowercase.<br />
+        <em>Example:</em> <code>pr.pg-13.png</code>, <code>pr.tv-ma.png</code>
+    </p>
+
+    <p>
+        <strong>Audio Codec (prefix: ac):</strong> <code>ac.{codec_name}.png</code><br />
+        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>eac3</code>, <code>dts-hdma</code>).<br />
+        <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts-hdma.png</code>
+    </p>
+
+    <p>
+        <strong>Video Codec (prefix: vc):</strong> <code>vc.{codec_name}.png</code><br />
+        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>hevc</code>, <code>av1</code>).<br />
+        <em>Example:</em> <code>vc.hevc.png</code>, <code>vc.av1.png</code>
+    </p>
+
+    <p>
+        <strong>Audio Channels (prefix: ch):</strong> <code>ch.{layout_name}.png</code><br />
+        <em>{layout_name}</em> should match the audio layout reported by Emby (e.g., <code>5.1</code>, <code>7.1</code>, <code>stereo</code>).<br />
+        <em>Example:</em> <code>ch.5.1.png</code>, <code>ch.7.1.png</code>, <code>ch.stereo.png</code>
+    </p>
+
+    <p>
+        <strong>Resolution (prefix: res):</strong> <code>res.{resolution_name}.png</code><br />
+        Resolution is derived from the video stream (e.g., <code>4k</code>, <code>1080p</code>, <code>1080i</code>) and matched against available icon keys.<br />
+        <em>Example:</em> <code>res.4k.png</code>, <code>res.1080p.png</code>, <code>res.1080i.png</code>
+    </p>
+
+    <p>
+        <strong>Aspect Ratio (prefix: ar):</strong> <code>ar.{ratio}.png</code><br />
+        Uses video stream aspect ratio with the colon replaced by <code>x</code> (e.g., <code>16x9</code>, <code>4x3</code>).<br />
+        <em>Example:</em> <code>ar.16x9.png</code>, <code>ar.4x3.png</code>
+    </p>
+
+    <p>
+        <strong>Video Format (prefix: hdr):</strong> <code>hdr.{format_name}.png</code><br />
+        Detects HDR/Dolby Vision from stream metadata; supported names include <code>hdr</code> and <code>dv</code>. You can also add others you provide icons for.<br />
+        <em>Example:</em> <code>hdr.dv.png</code>, <code>hdr.hdr.png</code>
+    </p>
+
+    <h4 style="margin-top: 2em;">Other Categories</h4>
+
+    <p>
+        <strong>Custom Tags (prefix: tag):</strong> <code>tag.{name}.png</code><br />
+        Matches against media item tags (case-insensitive). Tags are normalized: lowercased, whitespace collapsed to hyphens, and leading/trailing hyphens removed.<br />
+        <em>Examples:</em> <code>Behind the Scenes</code> → <code>tag.behind-the-scenes.png</code>, <code>3D</code> → <code>tag.3d.png</code>
+    </p>
+
+    <p>
+        <strong>Community Rating (prefix: rating):</strong> <code>rating.{name}.png</code><br />
+        The "Community Rating" icon is for IMDb and always uses the key `imdb`. A built-in icon is provided.<br />
+        <em>Custom icon file:</em> <code>rating.imdb.png</code>
+    </p>
+
+    <p>
+        <strong>Rotten Tomatoes Rating (no prefix):</strong><br />
+        The "Rotten Tomatoes" icon is separate and displays based on the critic score. These icons do not use the `rating.` prefix for custom files. The naming convention is based on a 60% threshold:
+        <ul style="margin-top: .5em;">
+            <li>Score &lt; 60%: <code>t.splat.png</code></li>
+            <li>Score &ge; 60%: <code>t.tomato.png</code></li>
+        </ul>
+    </p>
+
+    <h3 style="margin-top: 2em;">Notes &amp; Tips</h3>
+    <ul>
+        <li>Language and subtitle icons use the <em>display language</em> shown by Emby (not ISO codes).</li>
+        <li>For collections and series, language icons require all children to share the same display language unless Lite Mode is used.</li>
+        <li>If icons don’t appear as expected, use the <strong>Troubleshooter</strong> tab to find inconsistencies.</li>
+    </ul>
+
+    <div style="margin-top: 3em; padding: 1em; background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; border-radius: 4px;">
+        <div style="display: flex; align-items: center; gap: 1em;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#ffeb3b" style="flex-shrink: 0;">
+                <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
+            </svg>
+            <div>
+                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you to all supporters and everyone who helped test this, especially Neminem from the Emby forum.</p>
+                <p style="margin: 0;">If you like this project and want to support it you can <a href="https://buymeacoffee.com/yockser" target="_blank" rel="noopener noreferrer">donate a coffee</a>. Add your name and we’ll list it here!</p>
+                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Thank you for the donations to:</p>
+                <p style="margin: 0 0 0.5em 0; font-weight: 500;">Alexander Hürter.<br />John Spiegel.</p>
+            </div>
+        </div>
+    </div>
+</div>

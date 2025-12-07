@@ -1,0 +1,150 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<OutputType>Library</OutputType>
+		<Nullable>enable</Nullable>
+		<LangVersion>latest</LangVersion>
+
+		<Version>5.42.0</Version>
+		<AssemblyVersion>5.42.0.0</AssemblyVersion>
+		<FileVersion>5.42.0.0</FileVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Remove="Settings\**" />
+		<EmbeddedResource Remove="Settings\**" />
+		<None Remove="Settings\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Remove="EmbeddedIcons\ar..4x3.png" />
+		<None Remove="EmbeddedIcons\ch.5.1.jpg" />
+		<None Remove="EmbeddedIcons\ch.7.1.jpg" />
+		<None Remove="EmbeddedIcons\ch.Mono.jpg" />
+		<None Remove="EmbeddedIcons\ch.stereo.jpg" />
+		<None Remove="EmbeddedIcons\lang.chinese.jpg" />
+		<None Remove="EmbeddedIcons\lang.danish.jpg" />
+		<None Remove="EmbeddedIcons\lang.english.jpg" />
+		<None Remove="EmbeddedIcons\lang.german.jpg" />
+		<None Remove="EmbeddedIcons\lang.indian.jpg" />
+		<None Remove="EmbeddedIcons\lang.japanese.jpg" />
+		<None Remove="EmbeddedIcons\lang_norwegian.png" />
+		<None Remove="EmbeddedIcons\pr_g.png" />
+		<None Remove="EmbeddedIcons\pr_nc-17.png" />
+		<None Remove="EmbeddedIcons\pr_pg-13.png" />
+		<None Remove="EmbeddedIcons\pr_pg.png" />
+		<None Remove="EmbeddedIcons\pr_r.png" />
+		<None Remove="EmbeddedIcons\pr_tv-14.png" />
+		<None Remove="EmbeddedIcons\pr_tv-ma.png" />
+		<None Remove="EmbeddedIcons\pr_tv-pg.png" />
+		<None Remove="EmbeddedIcons\sub.chinese.jpg" />
+		<None Remove="EmbeddedIcons\sub.danish.jpg" />
+		<None Remove="EmbeddedIcons\sub.english.jpg" />
+		<None Remove="EmbeddedIcons\sub.german.jpg" />
+		<None Remove="EmbeddedIcons\sub.indian.jpg" />
+		<None Remove="EmbeddedIcons\sub.japanese.jpg" />
+		<None Remove="EmbeddedIcons\sub_norwegian.png" />
+		<None Remove="EmbeddedIcons\tag.bob.jpg" />
+		<None Remove="Images\preview.png" />
+		<None Remove="Images\tag.png" />
+		<None Remove="plugin.js" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_aac.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_ac3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_dts.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_eac3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_flac.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_mp3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ac_truehd.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar..4x3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar_160x67.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar_16x9.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar_2.40x1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar_40x17.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch_5.1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch_7.1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch_Mono.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ch_stereo.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr_dv.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr.png" />
+		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr10plus.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_chinese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_danish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_english.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_french.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_german.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_indian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_norwegian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\lang_swedish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_g.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_nc-17.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_pg-13.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_pg.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_r.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-14.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-ma.png" />
+		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
+		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_splat.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_tomato.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res_1080p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res_480p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res_4k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res_576p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\res_720p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_chinese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_danish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_english.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_french.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_german.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_indian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_japanese.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_norwegian.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sub_swedish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\tag_bob.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_av1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_avc.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_h264.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_hevc.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_mp4.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_mpeg4.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_vc1.png" />
+		<EmbeddedResource Include="EmbeddedIcons\vc_vp9.png" />
+		<EmbeddedResource Include="EmbyIconsConfiguration.html" />
+		<EmbeddedResource Include="EmbyIconsConfiguration.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Utils.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Dom.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DomCache.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Events.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DataLoader.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.UIHandlers.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.ProfileUI.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Profile.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Scans.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Api.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Settings.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Advanced.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconManager.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Troubleshooter.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Readme.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.AddProfileTemplate.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.RenameProfileTemplate.html" />
+		<EmbeddedResource Include="Images\logo.png" />
+		<EmbeddedResource Include="Images\preview.png" />
+		<EmbeddedResource Include="Images\tag.png" />
+		<EmbeddedResource Include="plugin.js" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediaBrowser.Common" Version="4.9.1.80" PrivateAssets="all" />
+		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.80" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" />
+		<PackageReference Include="SkiaSharp" Version="2.88.6" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+﻿<div is="emby-scroller" data-controller="configurationpage?name=EmbyIconsConfigurationjs" class="view flex flex-direction-column scrollFrameY flex-grow" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-title="EmbyIcons">
+
+    <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
+        <div class="readOnlyContent auto-center">
+
+            <div data-role="controlgroup" data-type="horizontal" class="localnav">
+                <a is="emby-linkbutton" class="nav-button ui-btn-active" href="#" data-role="button" data-target="settingsPage">Settings</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="advancedPage">Advanced</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="iconManagerPage">Icon Manager</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="troubleshooterPage">Troubleshooter</a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="readmePage">Readme</a>
+            </div>
+
+            <!-- Content sections are loaded from smaller partial HTML files for easier maintenance -->
+            <div id="settingsPage" style="margin-top: 2em;"></div>
+            <div id="advancedPage" class="hide" style="margin-top: 2em;"></div>
+            <div id="iconManagerPage" class="hide" style="margin-top: 2em;"></div>
+            <div id="troubleshooterPage" class="hide" style="margin-top: 2em;"></div>
+            <div id="readmePage" class="hide" style="margin-top: 2em;"></div>
+
+        </div>
+    </div>
+
+    <template id="addProfileDialogTemplate"></template>
+    <template id="renameProfileDialogTemplate"></template>
+</div>

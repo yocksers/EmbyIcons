@@ -1,0 +1,106 @@
+<div style="max-width: 900px; margin: auto;">
+
+    <h1 style="margin-bottom: 0.5em;">Diagnostics & Maintenance</h1>
+    <div class="paper-card" style="padding: 1.5em;">
+        <h3 style="margin-top:0;">Cache Management</h3>
+        <p class="fieldDescription" style="margin-top:0;">
+            If you add, remove, or change any icon files, clear the cache to apply the changes. Posters will refresh as you browse. This also clears all internal data caches.
+        </p>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised button-cancel" id="btnClearCache">
+                <span>Clear All Caches</span>
+            </button>
+        </div>
+        <div style="margin-top: 1.5em;">
+            <h4 style="margin-top:1em;">Plugin Memory Usage</h4>
+            <div id="memoryUsageReport" style="font-family: monospace; margin-top: .5em;">Loading...</div>
+            <div style="margin-top: .75em; display:flex; gap: .5em;"><button is="emby-button" type="button" class="raised" id="btnRefreshMemoryUsage"><span>Refresh</span></button></div>
+        </div>
+    </div>
+
+    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Series Troubleshooter</h1>
+    <p class="fieldDescription">
+        Many icons (e.g., audio language, resolution) appear on a TV show poster only if all episodes share the same property. This tool scans a series and reports inconsistencies.
+    </p>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Checks to Perform</h3>
+        <p class="fieldDescription" style="margin-top:0;">Uncheck properties you don’t care about to speed up scans and reduce report noise.</p>
+        <div id="troubleshooterChecksContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1em; margin-top: 1.5em;">
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioLanguage" checked /><span>Audio Language</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="Subtitles" checked /><span>Subtitles</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioCodec" checked /><span>Audio Codec</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="VideoCodec" checked /><span>Video Codec</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AudioChannels" checked /><span>Audio Channels</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="Resolution" checked /><span>Resolution</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="AspectRatio" checked /><span>Aspect Ratio</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-check-name="VideoFormat" checked /><span>Video Format (HDR)</span></label></div>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em; position: relative;">
+        <h3 style="margin-top:0;">Scan a Specific TV Show</h3>
+        <div class="inputContainer">
+            <input is="emby-input" type="text" id="txtSeriesSearch" label="Search for a TV Show:" autocomplete="off" />
+            <div id="seriesSearchResults" class="raised paper-card" style="position: absolute; width: calc(100% - 3em); z-index: 10; max-height: 250px; overflow-y: auto; display: none;"></div>
+        </div>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised button-submit" id="btnRunSeriesScan">
+                <span>Scan Selected Show</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Scan All TV Shows</h3>
+        <p class="fieldDescription" style="margin-top:0;">
+            Scan your entire library to find all TV shows with inconsistencies. This may take several minutes on a large library.
+        </p>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised" id="btnRunFullSeriesScan">
+                <span>Scan All TV Shows for Inconsistencies</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="seriesReportContainer" style="margin-top: 2em;">
+        <!-- Report will be injected here by JavaScript -->
+    </div>
+
+    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>
+    <p class="fieldDescription">
+        Enter your video's resolution to find the correct icon name for its aspect ratio.
+    </p>
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1.5em; align-items: flex-end;">
+            <div class="inputContainer" style="margin: 0;">
+                <input is="emby-input" type="number" id="txtAspectRatioWidth" label="Video Width (pixels):" min="1" />
+            </div>
+            <div class="inputContainer" style="margin: 0;">
+                <input is="emby-input" type="number" id="txtAspectRatioHeight" label="Video Height (pixels):" min="1" />
+            </div>
+            <button is="emby-button" type="button" class="raised button-submit" id="btnCalculateAspectRatio" style="margin-bottom: 0.5em;">
+                <span>Calculate</span>
+            </button>
+        </div>
+        <div id="aspectRatioResultContainer" style="margin-top: 2em; display: none;">
+            <h3 style="margin-top:0;">Results</h3>
+            <p class="fieldDescription">
+                <strong>Decimal Ratio:</strong> <span id="aspectDecimalValue"></span>
+            </p>
+            <div style="background-color: rgba(128,128,128,0.1); padding: 0.5em 1em; border-radius: 4px; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 0.5em;">
+                    For 'Snap to nearest' enabled:
+                </p>
+                <code>ar.<span id="aspectSnappedIconName"></span>.png</code>
+            </div>
+            <div style="background-color: rgba(128,128,128,0.1); padding: 0.5em 1em; border-radius: 4px; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 0.5em;">
+                    For precise matching ('Snap to nearest' disabled):
+                </p>
+                <code>ar.<span id="aspectPreciseIconName"></span>.png</code>
+            </div>
+        </div>
+    </div>
+
+</div>
