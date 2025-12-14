@@ -234,6 +234,7 @@ namespace EmbyIcons.Configuration
         public int IconSize { get; set; } = 10;
         public float RatingFontSizeMultiplier { get; set; } = 0.75f;
         public string RatingPercentageSuffix { get; set; } = "%";
+        public float RatingTextVerticalOffset { get; set; } = 0f;
         
         public bool UseSeriesLiteMode { get; set; } = true;
         public List<FilenameIconMapping> FilenameBasedIcons { get; set; } = new List<FilenameIconMapping>();

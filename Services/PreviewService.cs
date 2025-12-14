@@ -121,8 +121,21 @@ namespace EmbyIcons
                 resultStream.Position = 0;
                 return resultStream;
             }
-            finally
+            catch
             {
+                try { resultStream?.Dispose(); } catch { }
+                
+                if (injectedIcons != null)
+                {
+                    foreach (var iconList in injectedIcons.Values)
+                    {
+                        foreach (var icon in iconList)
+                        {
+                            try { icon?.Dispose(); } catch { }
+                        }
+                    }
+                }
+                throw;
             }
         }
     }

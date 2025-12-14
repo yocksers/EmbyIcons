@@ -157,22 +157,56 @@ namespace EmbyIcons
             var allAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (checkAudioLangs)
             {
-                var firstAudioLangs = firstStreams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
-                commonAudioLangs.UnionWith(firstAudioLangs);
-                allAudioLangs.UnionWith(firstAudioLangs);
+                foreach (var stream in firstStreams)
+                {
+                    if (stream.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                    {
+                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                        commonAudioLangs.Add(lang);
+                        allAudioLangs.Add(lang);
+                    }
+                }
             }
 
             var commonSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var allSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (checkSubLangs)
             {
-                var firstSubtitleLangs = firstStreams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
-                commonSubtitleLangs.UnionWith(firstSubtitleLangs);
-                allSubtitleLangs.UnionWith(firstSubtitleLangs);
+                foreach (var stream in firstStreams)
+                {
+                    if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                    {
+                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                        commonSubtitleLangs.Add(lang);
+                        allSubtitleLangs.Add(lang);
+                    }
+                }
             }
 
-            var commonAudioCodecs = checkAudioCodecs ? firstStreams.Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(name => name != null).Select(name => name!).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>();
-            var commonVideoCodecs = checkVideoCodecs ? firstStreams.Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(name => name != null).Select(name => name!).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>();
+            var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var commonVideoCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (checkAudioCodecs)
+            {
+                foreach (var stream in firstStreams)
+                {
+                    if (stream.Type == MediaStreamType.Audio)
+                    {
+                        var codec = MediaStreamHelper.GetAudioCodecIconName(stream);
+                        if (codec != null) commonAudioCodecs.Add(codec);
+                    }
+                }
+            }
+            if (checkVideoCodecs)
+            {
+                foreach (var stream in firstStreams)
+                {
+                    if (stream.Type == MediaStreamType.Video)
+                    {
+                        var codec = MediaStreamHelper.GetVideoCodecIconName(stream);
+                        if (codec != null) commonVideoCodecs.Add(codec);
+                    }
+                }
+            }
 
             string? commonChannelType = null;
             if (checkChannels)

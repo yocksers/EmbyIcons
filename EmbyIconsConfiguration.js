@@ -97,6 +97,10 @@ define([
                 clearInterval(this.progressPollInterval);
                 this.progressPollInterval = null;
             }
+            if (this.documentClickHandler) {
+                document.removeEventListener('click', this.documentClickHandler);
+                this.documentClickHandler = null;
+            }
         }
 
         async fetchApiRoutes() {

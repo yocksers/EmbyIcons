@@ -14,8 +14,8 @@ define(['loading', 'toast'], function (loading, toast) {
             const key = el.getAttribute('data-profile-key');
             if (el.type === 'checkbox') {
                 settings[key] = el.checked;
-            } else if (key === 'RatingFontSizeMultiplier') {
-                settings[key] = parseFloat(el.value) || 0.75;
+            } else if (key === 'RatingFontSizeMultiplier' || key === 'RatingTextVerticalOffset') {
+                settings[key] = parseFloat(el.value) || (key === 'RatingFontSizeMultiplier' ? 0.75 : 0);
             } else if (el.type === 'number' || el.classList.contains('slider') || key.endsWith('Priority')) {
                 settings[key] = parseInt(el.value, 10) || 0;
             } else {

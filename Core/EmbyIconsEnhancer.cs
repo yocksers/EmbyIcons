@@ -444,7 +444,7 @@ namespace EmbyIcons
                 await GlobalConcurrencyLock.WaitAsync(cancellationToken);
                 globalLockAcquired = true;
 
-                var itemKey = item.Id.ToString();
+                var itemKey = item.Id.ToString("N");
                 itemSemaphore = _locks.GetOrAdd(itemKey, _ => new SemaphoreSlim(1, 1));
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
                 await itemSemaphore.WaitAsync(cancellationToken);
@@ -545,17 +545,62 @@ namespace EmbyIcons
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
 
-        public void Dispose()
+        internal static void CleanupStaticResources(ILogger? logger)
         {
-            var semaphores = _locks.Values.ToArray();
-            _locks.Clear();
-            _lockLastUsed.Clear();
-            foreach (var sem in semaphores)
+            if (_lockCleanupTimer != null)
             {
-                try { sem.Dispose(); } 
-                catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing semaphore: {ex.Message}"); }
+                lock (_lockCleanupInitLock)
+                {
+                    if (_lockCleanupTimer != null)
+                    {
+                        try { _lockCleanupTimer.Dispose(); } 
+                        catch (Exception ex) { logger?.Debug($"[EmbyIcons] Error disposing lock cleanup timer: {ex.Message}"); }
+                        _lockCleanupTimer = null;
+                    }
+                }
             }
             
+            try
+            {
+                var semaphores = _locks.Values.ToArray();
+                _locks.Clear();
+                _lockLastUsed.Clear();
+                foreach (var sem in semaphores)
+                {
+                    try { sem.Dispose(); } 
+                    catch (Exception ex) { logger?.Debug($"[EmbyIcons] Error disposing semaphore: {ex.Message}"); }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error clearing static locks: {ex.Message}");
+            }
+            
+            try
+            {
+                _seriesAggregationCache.Clear();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error clearing series aggregation cache: {ex.Message}");
+            }
+            
+            if (_episodeIconCache != null)
+            {
+                lock (_episodeCacheInitLock)
+                {
+                    if (_episodeIconCache != null)
+                    {
+                        try { _episodeIconCache.Dispose(); } 
+                        catch (Exception ex) { logger?.Debug($"[EmbyIcons] Error disposing static episode cache: {ex.Message}"); }
+                        _episodeIconCache = null;
+                    }
+                }
+            }
+        }
+
+        public void Dispose()
+        {
             try { _iconCacheManager?.Dispose(); } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing icon cache manager: {ex.Message}"); }
             
@@ -570,12 +615,6 @@ namespace EmbyIcons
                 try { _globalConcurrencyLock.Dispose(); } 
                 catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing global concurrency lock: {ex.Message}"); }
             }
-            
-            try { _episodeIconCache?.Dispose(); } 
-            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing episode cache: {ex.Message}"); }
-            
-            try { FontHelper.Dispose(); } 
-            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing FontHelper: {ex.Message}"); }
         }
     }
 }

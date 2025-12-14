@@ -31,6 +31,7 @@ namespace EmbyIcons.Services
         {
             _enhancer = enhancer;
             _libraryManager = libraryManager;
+            EnsureMaintenanceTimerInitialized();
         }
 
         private void EnsureMaintenanceTimerInitialized()
@@ -435,9 +436,16 @@ namespace EmbyIcons.Services
             if (profileOptions.SourceIconAlignment != IconAlignment.Disabled && item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
-                var providerIdKey = movieItem.ProviderIds.Keys.FirstOrDefault(k => 
-                    k.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) || 
-                    k.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase));
+                string? providerIdKey = null;
+                foreach (var key in movieItem.ProviderIds.Keys)
+                {
+                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) || 
+                        key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
+                    {
+                        providerIdKey = key;
+                        break;
+                    }
+                }
 
                 if (!string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
                 {

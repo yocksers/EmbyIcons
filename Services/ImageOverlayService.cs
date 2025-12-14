@@ -21,7 +21,7 @@ namespace EmbyIcons.Services
 
         private record OverlayGroupInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, List<SKImage> Icons) : IOverlayInfo;
         private record RatingOverlayInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, float Score, SKImage? Icon, bool IsPercent, ScoreBackgroundShape BackgroundShape, string BackgroundColor, int BackgroundOpacity) : IOverlayInfo;
-        private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int EdgePadding, int InterIconPadding, int CanvasWidth, int CanvasHeight, float RatingFontSizeMultiplier, string RatingPercentageSuffix);
+        private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int EdgePadding, int InterIconPadding, int CanvasWidth, int CanvasHeight, float RatingFontSizeMultiplier, string RatingPercentageSuffix, float RatingTextVerticalOffset);
 
         private record IconGroupDefinition(
             Func<ProfileSettings, IconAlignment> GetAlignment,
@@ -55,9 +55,17 @@ namespace EmbyIcons.Services
         public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
             var outputStream = new MemoryStream();
-            await ApplyOverlaysToStreamAsync(sourceBitmap, data, profileOptions, globalOptions, outputStream, cancellationToken, null).ConfigureAwait(false);
-            outputStream.Position = 0;
-            return outputStream;
+            try
+            {
+                await ApplyOverlaysToStreamAsync(sourceBitmap, data, profileOptions, globalOptions, outputStream, cancellationToken, null).ConfigureAwait(false);
+                outputStream.Position = 0;
+                return outputStream;
+            }
+            catch
+            {
+                outputStream?.Dispose();
+                throw;
+            }
         }
 
         public async Task ApplyOverlaysToStreamAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
@@ -81,7 +89,7 @@ namespace EmbyIcons.Services
                 using var paint = new SKPaint { IsAntialias = globalOptions.EnableImageSmoothing, FilterQuality = globalOptions.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
                 using var textPaint = new SKPaint { IsAntialias = globalOptions.EnableImageSmoothing, FilterQuality = globalOptions.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None, Color = SKColors.White };
 
-                var drawingContext = new DrawingContext(canvas, paint, textPaint, profileOptions, iconSize, edgePadding, interIconPadding, sourceBitmap.Width, sourceBitmap.Height, profileOptions.RatingFontSizeMultiplier, profileOptions.RatingPercentageSuffix ?? "%");
+                var drawingContext = new DrawingContext(canvas, paint, textPaint, profileOptions, iconSize, edgePadding, interIconPadding, sourceBitmap.Width, sourceBitmap.Height, profileOptions.RatingFontSizeMultiplier, profileOptions.RatingPercentageSuffix ?? "%", profileOptions.RatingTextVerticalOffset);
 
                 iconGroups = await CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons).ConfigureAwait(false);
                 ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
@@ -406,7 +414,7 @@ namespace EmbyIcons.Services
                 DrawRatingBackground(context.Canvas, rating.BackgroundShape, rating.BackgroundColor, rating.BackgroundOpacity, bgRect);
             }
 
-            var textPos = new SKPoint(currentX + (scoreAreaWidth - textWidth) / 2f, startY + (totalSize.Height - textBounds.Height) / 2f - textBounds.Top);
+            var textPos = new SKPoint(currentX + (scoreAreaWidth - textWidth) / 2f, startY + (totalSize.Height - textBounds.Height) / 2f - textBounds.Top + context.RatingTextVerticalOffset);
 
             using var textStrokePaint = new SKPaint { IsAntialias = true, Color = SKColors.Black, Style = SKPaintStyle.StrokeAndFill };
             DrawRatingText(context.Canvas, rating.BackgroundShape, rating.BackgroundOpacity, scoreText, textPaint, textStrokePaint, textPos);
@@ -488,17 +496,20 @@ namespace EmbyIcons.Services
         {
             var imgs = new List<SKImage>();
 
-            if (injectedIcons != null && injectedIcons.TryGetValue(type, out var inj) && inj != null && inj.Count > 0)
+            if (injectedIcons != null && injectedIcons.TryGetValue(type, out var inj) && inj.Count > 0)
             {
                 imgs.AddRange(inj);
             }
             else
             {
-                var namesList = names.ToList();
+                var namesList = names as IList<string> ?? names.ToList();
                 if (namesList.Count > 1)
                 {
-                    var tasks = namesList.Select(name => 
-                        _iconCache.GetIconAsync(name, type, options, cancellationToken)).ToList();
+                    var tasks = new Task<SKImage?>[namesList.Count];
+                    for (int i = 0; i < namesList.Count; i++)
+                    {
+                        tasks[i] = _iconCache.GetIconAsync(namesList[i], type, options, cancellationToken);
+                    }
                     var icons = await Task.WhenAll(tasks).ConfigureAwait(false);
                     
                     foreach (var icon in icons)
@@ -509,15 +520,12 @@ namespace EmbyIcons.Services
                         }
                     }
                 }
-                else
+                else if (namesList.Count == 1)
                 {
-                    foreach (var name in namesList)
+                    var icon = await _iconCache.GetIconAsync(namesList[0], type, options, cancellationToken).ConfigureAwait(false);
+                    if (icon != null)
                     {
-                        var icon = await _iconCache.GetIconAsync(name, type, options, cancellationToken).ConfigureAwait(false);
-                        if (icon != null)
-                        {
-                            imgs.Add(icon);
-                        }
+                        imgs.Add(icon);
                     }
                 }
             }

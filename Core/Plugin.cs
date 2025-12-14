@@ -40,6 +40,7 @@ namespace EmbyIcons
         private Timer? _pruningTimer;
         private ProfileManagerService? _profileManager;
         private ConfigurationMonitor? _configMonitor;
+        private CancellationTokenSource? _backgroundTasksCts;
 
         private bool _migrationPerformed = false;
         private static bool _migrationAttempted = false;
@@ -89,6 +90,7 @@ namespace EmbyIcons
             _logger = logManager.GetLogger(nameof(Plugin));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
             Instance = this;
+            _backgroundTasksCts = new CancellationTokenSource();
 
             _enhancerLazy = new Lazy<EmbyIconsEnhancer>(() =>
             {
@@ -119,8 +121,10 @@ namespace EmbyIcons
 
             var migrationTask = Task.Run(() =>
             {
+                var cancellationToken = _backgroundTasksCts?.Token ?? CancellationToken.None;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     _logger.Info("[EmbyIcons] No profiles found. Attempting to migrate old settings in the background.");
 
 #pragma warning disable CS0612
@@ -359,9 +363,14 @@ namespace EmbyIcons
 
         private void UnsubscribeLibraryEvents()
         {
-            _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged;
-            _libraryManager.ItemAdded -= LibraryManagerOnItemChanged;
-            _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged;
+            try { _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged; } 
+            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemUpdated: {ex.Message}"); }
+            
+            try { _libraryManager.ItemAdded -= LibraryManagerOnItemChanged; } 
+            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemAdded: {ex.Message}"); }
+            
+            try { _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged; } 
+            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemRemoved: {ex.Message}"); }
         }
 
         private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
@@ -468,8 +477,47 @@ namespace EmbyIcons
 
         public ImageFormat ThumbImageFormat => ImageFormat.Png;
 
+        private static void CleanupStaticResources(ILogger? logger)
+        {
+            try
+            {
+                EmbyIconsEnhancer.CleanupStaticResources(logger);
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error cleaning up enhancer static resources: {ex.Message}");
+            }
+            
+            try
+            {
+                Helpers.FontHelper.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error disposing FontHelper: {ex.Message}");
+            }
+            
+            try
+            {
+                ImageProcessing.ImageProcessorFactory.Reset();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error resetting image processor factory: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
+            try
+            {
+                _backgroundTasksCts?.Cancel();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error cancelling background tasks: {ex.Message}");
+            }
+            
             try
             {
                 UnsubscribeLibraryEvents();
@@ -499,8 +547,24 @@ namespace EmbyIcons
             { 
                 _logger?.Debug($"[EmbyIcons] Error disposing profile manager: {ex.Message}");
             }
+            
+            try { _configMonitor?.Dispose(); }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing config monitor: {ex.Message}");
+            }
+            
+            try { _backgroundTasksCts?.Dispose(); }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing background tasks CTS: {ex.Message}");
+            }
+            
+            CleanupStaticResources(_logger);
+            
             _profileManager = null;
             _configMonitor = null;
+            _backgroundTasksCts = null;
             Instance = null;
             
             _logger?.Debug("EmbyIcons plugin disposed.");

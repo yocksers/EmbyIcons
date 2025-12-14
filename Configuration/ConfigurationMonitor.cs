@@ -14,17 +14,19 @@ using MediaBrowser.Model.Querying;
 
 namespace EmbyIcons.Configuration
 {
-    public class ConfigurationMonitor
+    public class ConfigurationMonitor : IDisposable
     {
         private readonly ILogger _logger;
         private readonly ILibraryManager _libraryManager;
         private readonly IFileSystem _fileSystem;
+        private CancellationTokenSource? _refreshTasksCts;
 
         public ConfigurationMonitor(ILogger logger, ILibraryManager libraryManager, IFileSystem fileSystem)
         {
             _logger = logger;
             _libraryManager = libraryManager;
             _fileSystem = fileSystem;
+            _refreshTasksCts = new CancellationTokenSource();
         }
 
         public void CheckForChangesAndTriggerRefreshes(PluginOptions oldOptions, PluginOptions newOptions)
@@ -179,8 +181,10 @@ namespace EmbyIcons.Configuration
 
             var refreshTask = Task.Run(() => 
             {
+                var cancellationToken = _refreshTasksCts?.Token ?? CancellationToken.None;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                     {
                         ImageRefreshMode = MetadataRefreshMode.FullRefresh,
@@ -216,8 +220,10 @@ namespace EmbyIcons.Configuration
 
             var refreshTask = Task.Run(() => 
             {
+                var cancellationToken = _refreshTasksCts?.Token ?? CancellationToken.None;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                     {
                         ImageRefreshMode = MetadataRefreshMode.FullRefresh,
@@ -243,6 +249,20 @@ namespace EmbyIcons.Configuration
                     _logger.ErrorException("[EmbyIcons] Unhandled exception in hard refresh background task.", t.Exception);
                 }
             }, TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                _refreshTasksCts?.Cancel();
+                _refreshTasksCts?.Dispose();
+                _refreshTasksCts = null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing ConfigurationMonitor: {ex.Message}");
+            }
         }
     }
 }

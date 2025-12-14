@@ -175,17 +175,28 @@ namespace EmbyIcons.Caching
             }
             finally
             {
+                bool lockReleased = false;
                 try
                 {
                     lockObj.Release();
+                    lockReleased = true;
                 }
                 catch (ObjectDisposedException)
                 {
+                    lockReleased = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Debug($"[EmbyIcons] Error releasing template generation lock: {ex.Message}");
                 }
                 
-                if (_generationLocks.TryRemove(cacheKey, out var removedLock))
+                if (lockReleased && _generationLocks.TryRemove(cacheKey, out var removedLock))
                 {
-                    try { removedLock.Dispose(); } catch { }
+                    try { removedLock.Dispose(); } 
+                    catch (Exception ex) 
+                    { 
+                        _logger?.Debug($"[EmbyIcons] Error disposing template generation lock: {ex.Message}"); 
+                    }
                 }
             }
         }
@@ -279,14 +290,18 @@ namespace EmbyIcons.Caching
             _generationLocks.Clear();
             foreach (var lockObj in locks)
             {
-                try { lockObj.Dispose(); } catch { }
+                try { lockObj.Dispose(); } 
+                catch (Exception ex) 
+                { 
+                    _logger?.Debug($"[EmbyIcons] Error disposing lock during clear: {ex.Message}"); 
+                }
             }
             
             _cacheHits = 0;
             _cacheMisses = 0;
             _templatesGenerated = 0;
             
-            _logger.Info("[EmbyIcons] Icon template cache cleared");
+            _logger?.Info("[EmbyIcons] Icon template cache cleared");
         }
         public TemplateCacheStats GetStats()
         {
@@ -332,7 +347,10 @@ namespace EmbyIcons.Caching
             {
                 _maintenanceTimer?.Dispose();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing template cache maintenance timer: {ex.Message}");
+            }
 
             lock (_cacheInstanceLock)
             {
@@ -341,14 +359,22 @@ namespace EmbyIcons.Caching
                     _templateCache?.Dispose();
                     _templateCache = null;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger?.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}");
+                }
             }
 
-            foreach (var lockObj in _generationLocks.Values)
-            {
-                try { lockObj.Dispose(); } catch { }
-            }
+            var locks = _generationLocks.Values.ToArray();
             _generationLocks.Clear();
+            foreach (var lockObj in locks)
+            {
+                try { lockObj.Dispose(); } 
+                catch (Exception ex) 
+                { 
+                    _logger?.Debug($"[EmbyIcons] Error disposing generation lock: {ex.Message}"); 
+                }
+            }
         }
     }
 

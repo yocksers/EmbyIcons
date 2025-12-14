@@ -68,11 +68,12 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         if (dom.btnAddFilenameMapping) dom.btnAddFilenameMapping.addEventListener('click', instance.addFilenameMappingRow.bind(instance, null));
         if (dom.filenameMappingsContainer) dom.filenameMappingsContainer.addEventListener('click', instance.onFilenameMappingButtonClick.bind(instance));
 
-        document.addEventListener('click', (e) => {
+        instance.documentClickHandler = (e) => {
             if (dom.seriesSearchResults && dom.txtSeriesSearch && !dom.seriesSearchResults.contains(e.target) && !dom.txtSeriesSearch.contains(e.target)) {
                 dom.seriesSearchResults.style.display = 'none';
             }
-        });
+        };
+        document.addEventListener('click', instance.documentClickHandler);
     }
 
     return {
