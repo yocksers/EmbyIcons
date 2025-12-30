@@ -101,11 +101,15 @@ namespace EmbyIcons.Services
             pluginInstance.Logger.Info("[EmbyIcons] Generating new Icon Manager report...");
             var options = pluginInstance.GetConfiguredOptions();
 
+            // MEMORY LEAK FIX: Add limit to prevent loading entire library into memory
+            const int MAX_ITEMS_TO_ANALYZE = 50000;
+            
             var allItems = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Movie", Constants.Episode, "Series" },
                 IsVirtualItem = false,
-                Recursive = true
+                Recursive = true,
+                Limit = MAX_ITEMS_TO_ANALYZE
             });
 
             int totalItems = allItems.Count();

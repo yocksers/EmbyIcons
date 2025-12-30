@@ -65,6 +65,8 @@ namespace EmbyIcons.Caching
             var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
             return Convert.ToBase64String(hash).Replace('/', '_').Replace('+', '-');
         }
+        // IMPORTANT: This method now returns a NEW SKImage each time from cached byte data
+        // The caller MUST dispose the returned SKImage when done
         public async Task<SKImage?> GetOrCreateTemplateAsync(
             List<(IconCacheManager.IconType Type, List<string> Names)> iconGroups,
             Dictionary<IconCacheManager.IconType, List<SKImage>> loadedIcons,
@@ -86,12 +88,24 @@ namespace EmbyIcons.Caching
             {
                 try
                 {
-                    if (cache.TryGetValue(cacheKey, out SKImage? cachedTemplate))
+                    // Cache stores byte[] instead of SKImage to avoid memory leaks
+                    if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
                     {
                         Interlocked.Increment(ref _cacheHits);
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Template cache HIT for key: {cacheKey}");
-                        return cachedTemplate;
+                        
+                        // Recreate SKImage from cached bytes - caller must dispose
+                        try
+                        {
+                            using var ms = new MemoryStream(cachedBytes);
+                            return SKImage.FromEncodedData(ms);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.ErrorException("[EmbyIcons] Error recreating template from cache", ex);
+                            return null;
+                        }
                     }
                 }
                 catch (ObjectDisposedException)
@@ -111,11 +125,21 @@ namespace EmbyIcons.Caching
                 if (cache == null || _disposed)
                     return null;
                 
+                // Double-check cache after acquiring lock (another thread might have generated it)
                 try
                 {
-                    if (cache.TryGetValue(cacheKey, out SKImage? cachedTemplate))
+                    if (cache.TryGetValue(cacheKey, out byte[]? reCheckedBytes) && reCheckedBytes != null)
                     {
-                        return cachedTemplate;
+                        try
+                        {
+                            using var ms = new MemoryStream(reCheckedBytes);
+                            return SKImage.FromEncodedData(ms);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.ErrorException("[EmbyIcons] Error recreating template from cache after lock", ex);
+                            // Continue to generate new template
+                        }
                     }
                 }
                 catch (ObjectDisposedException)
@@ -127,76 +151,62 @@ namespace EmbyIcons.Caching
                 
                 if (template != null)
                 {
-                    var imageSize = template.Width * template.Height * 4; // RGBA
-                    
-                    var cacheOptions = new MemoryCacheEntryOptions()
-                        .SetSize(imageSize)
-                        .SetSlidingExpiration(TimeSpan.FromHours(2))
-                        .RegisterPostEvictionCallback((key, value, reason, state) =>
-                        {
-                            var img = value as SKImage;
-                            if (img != null)
-                            {
-                                try 
-                                { 
-                                    img.Dispose();
-                                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                                        _logger?.Debug($"[EmbyIcons] Disposed cached template on eviction: {reason}");
-                                } 
-                                catch (Exception ex)
-                                {
-                                    _logger?.Debug($"[EmbyIcons] Error disposing cached template: {ex.Message}");
-                                }
-                            }
-                        });
-
                     try
                     {
-                        if (cache == null || _disposed)
+                        // Encode template to PNG bytes for caching to prevent memory leaks
+                        using var encodedData = template.Encode(SKEncodedImageFormat.Png, 100);
+                        if (encodedData != null)
                         {
-                            template.Dispose();
-                            return null;
+                            var bytes = encodedData.ToArray();
+                            var cacheOptions = new MemoryCacheEntryOptions()
+                                .SetSize(bytes.LongLength)
+                                .SetSlidingExpiration(TimeSpan.FromHours(2));
+
+                            try
+                            {
+                                if (cache != null && !_disposed)
+                                {
+                                    cache.Set(cacheKey, bytes, cacheOptions);
+                                    Interlocked.Increment(ref _templatesGenerated);
+                                    
+                                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                                        _logger.Debug($"[EmbyIcons] Generated and cached template: {cacheKey} ({bytes.Length} bytes)");
+                                }
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                                // Cache was disposed, just return the template
+                            }
                         }
-                        
-                        cache.Set(cacheKey, template, cacheOptions);
                     }
-                    catch (ObjectDisposedException)
+                    finally
                     {
-                        template.Dispose();
-                        return null;
+                        // Don't dispose template here - return it to caller who must dispose it
                     }
-                    Interlocked.Increment(ref _templatesGenerated);
-                    
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _logger.Debug($"[EmbyIcons] Generated and cached template: {cacheKey}");
                 }
 
                 return template;
             }
             finally
             {
-                bool lockReleased = false;
+                // Release lock but keep it in the dictionary for reuse
+                // Locks will be cleaned up in Clear() and Dispose() methods
                 try
                 {
                     lockObj.Release();
-                    lockReleased = true;
                 }
                 catch (ObjectDisposedException)
                 {
-                    lockReleased = true;
+                    // Lock was already disposed, try to remove it
+                    _generationLocks.TryRemove(cacheKey, out _);
+                }
+                catch (SemaphoreFullException ex)
+                {
+                    _logger?.Debug($"[EmbyIcons] SemaphoreFullException releasing template lock: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
                     _logger?.Debug($"[EmbyIcons] Error releasing template generation lock: {ex.Message}");
-                }
-                
-                if (lockReleased && _generationLocks.TryRemove(cacheKey, out var removedLock))
-                {
-                    try { removedLock.Dispose(); } 
-                    catch (Exception ex) 
-                    { 
-                        _logger?.Debug($"[EmbyIcons] Error disposing template generation lock: {ex.Message}"); 
-                    }
                 }
             }
         }

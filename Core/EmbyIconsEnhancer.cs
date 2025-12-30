@@ -208,11 +208,15 @@ namespace EmbyIcons
                 return;
             }
 
+            // MEMORY LEAK FIX: Add limit to prevent loading thousands of episodes
+            const int MAX_EPISODES_TO_CLEAR = 10000;
+
             var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 ParentIds = new[] { seriesItem.InternalId },
                 IncludeItemTypes = new[] { Constants.Episode },
-                Recursive = true
+                Recursive = true,
+                Limit = MAX_EPISODES_TO_CLEAR
             }).Select(ep => ep.Id).ToList();
 
             if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)

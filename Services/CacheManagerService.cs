@@ -52,21 +52,11 @@ namespace EmbyIcons.Services
                 {
                     _logger.ErrorException("[EmbyIcons] Error during background cache refresh.", ex);
                 }
-            });
-            
-            _ = cacheRefreshTask.ContinueWith(t => 
-            {
-                if (t.IsFaulted && t.Exception != null)
+                finally
                 {
-                    _logger.ErrorException("[EmbyIcons] Unhandled exception in cache refresh background task.", t.Exception);
+                    try { cts?.Dispose(); } catch { }
                 }
-                try { cts?.Dispose(); } catch { }
-            }, TaskContinuationOptions.OnlyOnFaulted);
-            
-            _ = cacheRefreshTask.ContinueWith(t => 
-            {
-                try { cts?.Dispose(); } catch { }
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            });
 
             config.PersistedVersion = Guid.NewGuid().ToString("N");
             plugin.SaveCurrentConfiguration();

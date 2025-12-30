@@ -30,6 +30,9 @@ define(['loading', 'toast'], function (loading, toast) {
         if (!profile) return;
 
         Object.assign(profile.Settings, getCurrentProfileSettingsFromForm(instance));
+        
+        // Save filename-based icon mappings
+        saveFilenameMappings(instance, profile);
 
         instance.pluginConfiguration.LibraryProfileMappings = instance.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== instance.currentProfileId);
         instance.dom.librarySelectionContainer.querySelectorAll('input:checked:not(:disabled)').forEach(checkbox => {

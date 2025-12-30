@@ -42,6 +42,20 @@ namespace EmbyIcons.Services
 
         public void InvalidateLibraryCache()
         {
+            // MEMORY LEAK FIX: Clear old Trie before creating new Lazy
+            if (_libraryPathTrieLazy.IsValueCreated)
+            {
+                try
+                {
+                    var oldTrie = _libraryPathTrieLazy.Value;
+                    oldTrie?.Clear(); // Clear the trie data
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug($"[EmbyIcons] Error clearing old trie: {ex.Message}");
+                }
+            }
+            
             _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
 
             var maxItemCacheSize = Math.Max(1000, _configuration.MaxItemToProfileCacheSize);

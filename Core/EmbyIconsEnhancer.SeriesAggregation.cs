@@ -19,6 +19,10 @@ namespace EmbyIcons
     public partial class EmbyIconsEnhancer
     {
         private static int MaxSeriesCacheSize => Plugin.Instance?.Configuration.MaxSeriesCacheSize ?? 500;
+        
+        // MEMORY LEAK FIX: Ensure cache size is checked more frequently
+        private const int CACHE_SIZE_CHECK_FREQUENCY = 50; // Check every 50 additions
+        private static int _additionsCounter = 0;
 
         internal record AggregatedSeriesResult
         {
@@ -340,7 +344,13 @@ namespace EmbyIcons
             };
 
             _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-            PruneSeriesAggregationCacheWithLimit();
+            
+            // MEMORY LEAK FIX: Check cache size more frequently
+            if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
+            {
+                PruneSeriesAggregationCacheWithLimit();
+            }
+            
             return result;
         }
     }

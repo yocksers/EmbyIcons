@@ -456,7 +456,8 @@ namespace EmbyIcons.Services
                         {
                             IncludeItemTypes = new[] { "Movie" },
                             Recursive = true,
-                            AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) }
+                            AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
+                            Limit = 50 // MEMORY LEAK FIX: Limit number of movie versions to prevent huge arrays
                         };
                         try
                         {
@@ -465,6 +466,7 @@ namespace EmbyIcons.Services
                                 .Where(v => !string.IsNullOrEmpty(v.Path))
                                 .Select(v => v.Path!.ToLowerInvariant())
                                 .Distinct()
+                                .Take(50) // Additional safety limit
                                 .ToArray();
                         }
                         catch (Exception ex)

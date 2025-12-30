@@ -119,6 +119,19 @@ namespace EmbyIcons
             {
                 await _imageOverlayService.ApplyOverlaysToStreamAsync(originalBitmap, previewData, profileSettings, globalOptions, resultStream, CancellationToken.None, injectedIcons);
                 resultStream.Position = 0;
+                
+                // Success case: dispose injected icons since they've been used
+                if (injectedIcons != null)
+                {
+                    foreach (var iconList in injectedIcons.Values)
+                    {
+                        foreach (var icon in iconList)
+                        {
+                            try { icon?.Dispose(); } catch { }
+                        }
+                    }
+                }
+                
                 return resultStream;
             }
             catch

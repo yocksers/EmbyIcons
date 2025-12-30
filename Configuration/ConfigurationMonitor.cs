@@ -168,7 +168,15 @@ namespace EmbyIcons.Configuration
 
             if (!ancestorIds.Any()) return new List<BaseItem>();
 
-            return _libraryManager.GetItemList(new InternalItemsQuery { AncestorIds = ancestorIds, Recursive = true })
+            // MEMORY LEAK FIX: Add limit to prevent loading entire library
+            const int MAX_ITEMS_FOR_REFRESH = 50000;
+            
+            return _libraryManager.GetItemList(new InternalItemsQuery 
+            { 
+                AncestorIds = ancestorIds, 
+                Recursive = true,
+                Limit = MAX_ITEMS_FOR_REFRESH
+            })
                 .DistinctBy(i => i.Id)
                 .ToList();
         }

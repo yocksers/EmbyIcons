@@ -94,11 +94,25 @@ namespace EmbyIcons.Services
                 return reports;
             }
 
-            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Series" }, Recursive = true })
+            // MEMORY LEAK FIX: Add reasonable limits to prevent loading entire library into memory
+            const int MAX_SERIES_TO_ANALYZE = 1000;
+            const int MAX_EPISODES_TO_ANALYZE = 100000;
+
+            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery 
+            { 
+                IncludeItemTypes = new[] { "Series" }, 
+                Recursive = true,
+                Limit = MAX_SERIES_TO_ANALYZE
+            })
                                            .OfType<Series>()
                                            .ToDictionary(s => s.InternalId);
 
-            var allEpisodes = _libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { "Episode" }, Recursive = true })
+            var allEpisodes = _libraryManager.GetItemList(new InternalItemsQuery 
+            { 
+                IncludeItemTypes = new[] { "Episode" }, 
+                Recursive = true,
+                Limit = MAX_EPISODES_TO_ANALYZE
+            })
                                              .OfType<Episode>();
 
             var episodesBySeries = allEpisodes.GroupBy(e => e.SeriesId);

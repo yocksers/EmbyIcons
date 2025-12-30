@@ -19,6 +19,9 @@ namespace EmbyIcons.Services
         public long ProcessPrivateBytes { get; set; }
         public long ManagedHeapBytes { get; set; }
         public long IconCacheEstimatedBytes { get; set; }
+        public int SeriesAggregationCacheCount { get; set; }
+        public int EpisodeCacheCount { get; set; }
+        public int ItemLocksCount { get; set; }
         public string TimestampUtc { get; set; } = DateTime.UtcNow.ToString("o");
     }
 
@@ -49,12 +52,38 @@ namespace EmbyIcons.Services
             long managed = GC.GetTotalMemory(forceFullCollection: false);
 
             long iconCacheEstimate = 0;
+            int seriesCacheCount = 0;
+            int episodeCacheCount = 0;
+            int itemLocksCount = 0;
+            
             try
             {
                 var plugin = EmbyIcons.Plugin.Instance;
                 if (plugin != null)
                 {
                     var enhancer = plugin.Enhancer;
+                    
+                    // Get series aggregation cache count
+                    var seriesCacheField = typeof(EmbyIconsEnhancer).GetField("_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (seriesCacheField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<Guid, object> seriesCache)
+                    {
+                        seriesCacheCount = seriesCache.Count;
+                    }
+                    
+                    // Get episode cache count
+                    var episodeCacheField = typeof(EmbyIconsEnhancer).GetField("_episodeIconCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (episodeCacheField?.GetValue(null) is Microsoft.Extensions.Caching.Memory.MemoryCache episodeCache)
+                    {
+                        episodeCacheCount = episodeCache.Count;
+                    }
+                    
+                    // Get item locks count
+                    var locksField = typeof(EmbyIconsEnhancer).GetField("_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (locksField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<string, object> locks)
+                    {
+                        itemLocksCount = locks.Count;
+                    }
+                    
                     var field = enhancer.GetType().GetField("_iconCacheManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
                     var icm = field?.GetValue(enhancer);
                     if (icm != null)
@@ -84,6 +113,9 @@ namespace EmbyIcons.Services
                 ProcessPrivateBytes = privateBytes,
                 ManagedHeapBytes = managed,
                 IconCacheEstimatedBytes = iconCacheEstimate,
+                SeriesAggregationCacheCount = seriesCacheCount,
+                EpisodeCacheCount = episodeCacheCount,
+                ItemLocksCount = itemLocksCount,
                 TimestampUtc = DateTime.UtcNow.ToString("o")
             };
 
