@@ -17,5 +17,6 @@ namespace EmbyIcons.Models
         public float? RottenTomatoesRating { get; set; }
         public string? AspectRatioIconName { get; set; }
         public string? ParentalRatingIconName { get; set; }
+        public int? FavoriteCount { get; set; }
     }
 }

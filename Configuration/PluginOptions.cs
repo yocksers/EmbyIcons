@@ -227,6 +227,13 @@ namespace EmbyIcons.Configuration
         public bool SourceOverlayHorizontal { get; set; } = true;
         public int SourceIconPriority { get; set; } = 12;
 
+        public IconAlignment FavoriteCountIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool FavoriteCountOverlayHorizontal { get; set; } = true;
+        public int FavoriteCountIconPriority { get; set; } = 13;
+        public ScoreBackgroundShape FavoriteCountBackgroundShape { get; set; } = ScoreBackgroundShape.None;
+        public string FavoriteCountBackgroundColor { get; set; } = "#404040";
+        public int FavoriteCountBackgroundOpacity { get; set; } = 80;
+
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";
         public int CommunityScoreBackgroundOpacity { get; set; } = 80;

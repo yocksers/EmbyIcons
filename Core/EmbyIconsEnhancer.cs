@@ -12,6 +12,7 @@ using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
+using MediaBrowser.Model.Users;
 using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
 using System;
@@ -600,6 +601,62 @@ namespace EmbyIcons
                         _episodeIconCache = null;
                     }
                 }
+            }
+        }
+
+        public int GetFavoriteCount(BaseItem item)
+        {
+            try
+            {
+                var userManager = Plugin.Instance?.UserManager;
+                var appHost = Plugin.Instance?.ApplicationHost;
+                if (userManager == null || appHost == null)
+                {
+                    _logger?.Debug("[EmbyIcons] UserManager or AppHost not available for favorite count.");
+                    return 0;
+                }
+
+                int favoriteCount = 0;
+                
+                // Get UserDataManager from ApplicationHost
+                var userDataManager = appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
+                if (userDataManager == null)
+                {
+                    _logger?.Debug("[EmbyIcons] IUserDataManager not available.");
+                    return 0;
+                }
+                
+                // Get all users
+                var userQuery = new UserQuery();
+                var userIds = userManager.GetUserIds(userQuery);
+                
+                foreach (var userId in userIds.Items)
+                {
+                    try
+                    {
+                        var user = userManager.GetUserById(userId);
+                        if (user != null && item.IsVisibleStandalone(user))
+                        {
+                            // Get user data for this item
+                            var userData = userDataManager.GetUserData(user, item);
+                            if (userData != null && userData.IsFavorite)
+                            {
+                                favoriteCount++;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Skip users we can't access
+                    }
+                }
+
+                return favoriteCount;
+            }
+            catch (Exception ex)
+            {
+                _logger?.ErrorException("[EmbyIcons] Error calculating favorite count.", ex);
+                return 0;
             }
         }
 

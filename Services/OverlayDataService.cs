@@ -297,7 +297,7 @@ namespace EmbyIcons.Services
                 }
             }
 
-            return new OverlayData
+            var data = new OverlayData
             {
                 AudioLanguages = aggResult.AudioLangs,
                 SubtitleLanguages = aggResult.SubtitleLangs,
@@ -312,6 +312,15 @@ namespace EmbyIcons.Services
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
+
+            // Add favorite count if enabled
+            var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
+            if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
+            {
+                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
+            }
+
+            return data;
         }
 
         public OverlayData GetOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
@@ -421,11 +430,14 @@ namespace EmbyIcons.Services
                 }
                 catch (Exception ex)
                 {
-                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                    {
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error extracting Rotten Tomatoes rating for '{item.Name}': {ex.Message}");
-                    }
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error extracting Rotten Tomatoes rating: {ex.Message}");
                 }
+            }
+
+            if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
+            {
+                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
             }
 
             if (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled)

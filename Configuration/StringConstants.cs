@@ -18,6 +18,7 @@ namespace EmbyIcons.Configuration
         public const string TomatoIcon = "t.tomato";
         public const string SplatIcon = "t.splat";
         public const string ImdbIcon = "imdb";
+        public const string HeartIcon = "heart";
 
         public const string RatingPropertyName = "Rating";
         public const string RatingsPropertyName = "Ratings";

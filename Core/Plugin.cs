@@ -10,6 +10,7 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
@@ -33,6 +34,7 @@ namespace EmbyIcons
         private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
         private readonly IUserViewManager _userViewManager;
+        private readonly IUserManager _userManager;
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _logger;
         private readonly ILogManager _logManager;
@@ -41,6 +43,7 @@ namespace EmbyIcons
         private ProfileManagerService? _profileManager;
         private ConfigurationMonitor? _configMonitor;
         private CancellationTokenSource? _backgroundTasksCts;
+        private MediaBrowser.Controller.Library.IUserDataManager? _userDataManager;
 
         private bool _migrationPerformed = false;
         private static bool _migrationAttempted = false;
@@ -50,6 +53,10 @@ namespace EmbyIcons
         public static Plugin? Instance { get; private set; }
 
         public ILogger Logger => _logger;
+        
+        public IUserManager UserManager => _userManager;
+        
+        public IApplicationHost ApplicationHost => _appHost;
 
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
@@ -78,6 +85,7 @@ namespace EmbyIcons
             IApplicationPaths appPaths,
             ILibraryManager libraryManager,
             IUserViewManager userViewManager,
+            IUserManager userManager,
             ILogManager logManager,
             IFileSystem fileSystem,
             IXmlSerializer xmlSerializer)
@@ -86,11 +94,22 @@ namespace EmbyIcons
             _appHost = appHost;
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
+            _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
             _logger = logManager.GetLogger(nameof(Plugin));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
             Instance = this;
             _backgroundTasksCts = new CancellationTokenSource();
+
+            // Get UserDataManager from ApplicationHost for monitoring favorite changes
+            try
+            {
+                _userDataManager = _appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[EmbyIcons] Could not resolve IUserDataManager: {ex.Message}");
+            }
 
             _enhancerLazy = new Lazy<EmbyIconsEnhancer>(() =>
             {
@@ -359,6 +378,12 @@ namespace EmbyIcons
             _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
             _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
             _libraryManager.ItemRemoved += LibraryManagerOnItemChanged;
+            
+            // Subscribe to user data changes to detect favorite changes
+            if (_userDataManager != null)
+            {
+                _userDataManager.UserDataSaved += OnUserDataSaved;
+            }
         }
 
         private void UnsubscribeLibraryEvents()
@@ -371,6 +396,69 @@ namespace EmbyIcons
             
             try { _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged; } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemRemoved: {ex.Message}"); }
+            
+            // Unsubscribe from user data changes
+            if (_userDataManager != null)
+            {
+                try { _userDataManager.UserDataSaved -= OnUserDataSaved; }
+                catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing UserDataSaved: {ex.Message}"); }
+            }
+        }
+
+        private void OnUserDataSaved(object? sender, MediaBrowser.Controller.Library.UserDataSaveEventArgs e)
+        {
+            if (e?.Item == null) return;
+            
+            try
+            {
+                var item = e.Item;
+                
+                if (item.HasImage(MediaBrowser.Model.Entities.ImageType.Primary))
+                {
+                    try
+                    {
+                        var enhancer = Enhancer;
+                        if (item is Series series)
+                        {
+                            enhancer.ClearSeriesAggregationCache(series.Id);
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            {
+                                _logger?.Debug($"[EmbyIcons] Cleared aggregation cache for series: {series.Name}");
+                            }
+                        }
+                        else if (item is Season season)
+                        {
+                            enhancer.ClearSeriesAggregationCache(season.Id);
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            {
+                                _logger?.Debug($"[EmbyIcons] Cleared aggregation cache for season: {season.Name}");
+                            }
+                        }
+                        
+                        var primaryImage = item.GetImageInfo(MediaBrowser.Model.Entities.ImageType.Primary, 0);
+                        if (primaryImage != null)
+                        {
+                            primaryImage.DateModified = DateTime.UtcNow;
+                        }
+                        
+                        item.DateModified = DateTime.UtcNow;
+                        _libraryManager.UpdateItem(item, item, ItemUpdateType.ImageUpdate);
+                        
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        {
+                            _logger?.Debug($"[EmbyIcons] Triggered image update for: {item.Name}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Debug($"[EmbyIcons] Error triggering image update: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error handling user data change: {ex.Message}");
+            }
         }
 
         private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)

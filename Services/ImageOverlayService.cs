@@ -75,6 +75,7 @@ namespace EmbyIcons.Services
             List<OverlayGroupInfo>? iconGroups = null;
             RatingOverlayInfo? ratingInfo = null;
             RatingOverlayInfo? rottenInfo = null;
+            RatingOverlayInfo? favoriteInfo = null;
             
             try
             {
@@ -95,6 +96,8 @@ namespace EmbyIcons.Services
                 ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 rottenInfo = await CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
+                favoriteInfo = await CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+
                 var overlaysByCorner = new Dictionary<IconAlignment, List<IOverlayInfo>>();
                 foreach (var group in iconGroups)
                 {
@@ -110,6 +113,11 @@ namespace EmbyIcons.Services
                 {
                     if (!overlaysByCorner.ContainsKey(rottenInfo.Alignment)) overlaysByCorner[rottenInfo.Alignment] = new List<IOverlayInfo>();
                     overlaysByCorner[rottenInfo.Alignment].Add(rottenInfo);
+                }
+                if (favoriteInfo != null)
+                {
+                    if (!overlaysByCorner.ContainsKey(favoriteInfo.Alignment)) overlaysByCorner[favoriteInfo.Alignment] = new List<IOverlayInfo>();
+                    overlaysByCorner[favoriteInfo.Alignment].Add(favoriteInfo);
                 }
 
                 foreach (var corner in overlaysByCorner.Keys)
@@ -158,6 +166,10 @@ namespace EmbyIcons.Services
                     {
                         try { rottenInfo.Icon.Dispose(); } catch { }
                     }
+                    if (favoriteInfo?.Icon != null)
+                    {
+                        try { favoriteInfo.Icon.Dispose(); } catch { }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -191,6 +203,27 @@ namespace EmbyIcons.Services
                 profileOptions.RottenTomatoesScoreBackgroundShape,
                 profileOptions.RottenTomatoesScoreBackgroundColor,
                 profileOptions.RottenTomatoesScoreBackgroundOpacity);
+        }
+
+        private async Task<RatingOverlayInfo?> CreateFavoriteCountInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)
+        {
+            if (profileOptions.FavoriteCountIconAlignment == IconAlignment.Disabled || !data.FavoriteCount.HasValue || data.FavoriteCount.Value == 0)
+            {
+                return null;
+            }
+
+            var heartIcon = await _iconCache.GetIconAsync(StringConstants.HeartIcon, IconCacheManager.IconType.CommunityRating, options, cancellationToken).ConfigureAwait(false);
+
+            return new RatingOverlayInfo(
+                profileOptions.FavoriteCountIconAlignment,
+                profileOptions.FavoriteCountIconPriority,
+                profileOptions.FavoriteCountOverlayHorizontal,
+                data.FavoriteCount.Value,
+                heartIcon,
+                false,
+                profileOptions.FavoriteCountBackgroundShape,
+                profileOptions.FavoriteCountBackgroundColor,
+                profileOptions.FavoriteCountBackgroundOpacity);
         }
 
         private void DrawCorner(List<IOverlayInfo> overlays, IconAlignment alignment, DrawingContext context)
@@ -468,6 +501,10 @@ namespace EmbyIcons.Services
             }
             else
             {
+                if (Math.Abs(rating.Score - Math.Round(rating.Score)) < 0.01)
+                {
+                    return Math.Round(rating.Score).ToString("F0", CultureInfo.InvariantCulture);
+                }
                 return rating.Score.ToString("F1", CultureInfo.InvariantCulture);
             }
         }

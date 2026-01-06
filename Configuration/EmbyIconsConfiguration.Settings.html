@@ -554,6 +554,45 @@
                             <input type="range" min="0" max="100" step="1" data-profile-key="RottenTomatoesScoreBackgroundOpacity" class="slider" style="flex:2;" />
                         </div>
                     </div>
+                    <div style="margin-top: 1.5em; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.25em;">
+                        <h4 style="margin-top:0; margin-bottom: .5em;">Favorite Count Appearance</h4>
+                        <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em; align-items: end;">
+                            <select is="emby-select" label="Favorite Count Icon" data-profile-key="FavoriteCountIconAlignment" data-corner-group="TopRight">
+                                <option value="Disabled">Disabled</option>
+                                <option value="TopLeft">Top Left</option>
+                                <option value="TopRight">Top Right</option>
+                                <option value="BottomLeft">Bottom Left</option>
+                                <option value="BottomRight">Bottom Right</option>
+                            </select>
+                            <select is="emby-select" label="Priority" data-profile-key="FavoriteCountIconPriority" data-corner-group="TopRight">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                            </select>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: .75em;">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="FavoriteCountOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                        </div>
+                        <div style="margin-top: .75em; display:flex; gap:1em;">
+                            <select is="emby-select" label="Background Shape" data-profile-key="FavoriteCountBackgroundShape" style="flex:1;">
+                                <option value="None">None</option>
+                                <option value="Circle">Circle</option>
+                                <option value="Square">Square</option>
+                            </select>
+                            <input type="color" data-profile-key="FavoriteCountBackgroundColor" style="width:3.25em; height:2.5em; padding:0;" />
+                            <input type="range" min="0" max="100" step="1" data-profile-key="FavoriteCountBackgroundOpacity" class="slider" style="flex:2;" />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

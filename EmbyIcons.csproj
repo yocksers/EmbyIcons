@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.42.5</Version>
-		<AssemblyVersion>5.42.5.0</AssemblyVersion>
-		<FileVersion>5.42.5.0</FileVersion>
+		<Version>5.42.6</Version>
+		<AssemblyVersion>5.42.6.0</AssemblyVersion>
+		<FileVersion>5.42.6.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -23,6 +23,7 @@
 		<None Remove="EmbeddedIcons\ch.7.1.jpg" />
 		<None Remove="EmbeddedIcons\ch.Mono.jpg" />
 		<None Remove="EmbeddedIcons\ch.stereo.jpg" />
+		<None Remove="EmbeddedIcons\heart.png" />
 		<None Remove="EmbeddedIcons\lang.chinese.jpg" />
 		<None Remove="EmbeddedIcons\lang.danish.jpg" />
 		<None Remove="EmbeddedIcons\lang.english.jpg" />
@@ -72,6 +73,7 @@
 		<EmbeddedResource Include="EmbeddedIcons\hdr_dv.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr10plus.png" />
+		<EmbeddedResource Include="EmbeddedIcons\heart.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_chinese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_danish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_english.png" />
