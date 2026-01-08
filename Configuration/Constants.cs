@@ -24,7 +24,8 @@ namespace EmbyIcons.Configuration
             { IconCacheManager.IconType.CommunityRating, "rating" },
             { IconCacheManager.IconType.AspectRatio, "ar" },
             { IconCacheManager.IconType.ParentalRating, "pr" },
-            { IconCacheManager.IconType.Source, "source" }
+            { IconCacheManager.IconType.Source, "source" },
+            { IconCacheManager.IconType.FrameRate, "fps" }
         };
     }
 }

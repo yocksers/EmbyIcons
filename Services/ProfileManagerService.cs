@@ -42,7 +42,6 @@ namespace EmbyIcons.Services
 
         public void InvalidateLibraryCache()
         {
-            // MEMORY LEAK FIX: Clear old Trie before creating new Lazy
             if (_libraryPathTrieLazy.IsValueCreated)
             {
                 try

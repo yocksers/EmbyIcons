@@ -504,6 +504,36 @@
                         <label><input is="emby-checkbox" type="checkbox" data-profile-key="SourceOverlayHorizontal" /><span>Layout Horizontally</span></label>
                     </div>
                 </div>
+                <div>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                        <select is="emby-select" label="Frame Rate Icons (e.g., 23.976, 60)" data-profile-key="FrameRateIconAlignment" data-corner-group="BottomRight">
+                            <option value="Disabled">Disabled</option>
+                            <option value="TopLeft">Top Left</option>
+                            <option value="TopRight">Top Right</option>
+                            <option value="BottomLeft">Bottom Left</option>
+                            <option value="BottomRight">Bottom Right</option>
+                        </select>
+                        <select is="emby-select" label="Priority" data-profile-key="FrameRateIconPriority" data-corner-group="BottomRight">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                            <option value="14">14</option>
+                        </select>
+                    </div>
+                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="FrameRateOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                    </div>
+                </div>
                 <div id="ratingAppearanceControls">
                     <select is="emby-select" label="Rating Background Shape" data-profile-key="CommunityScoreBackgroundShape">
                         <option value="None">None</option>

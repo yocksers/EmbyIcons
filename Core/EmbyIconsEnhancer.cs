@@ -209,7 +209,6 @@ namespace EmbyIcons
                 return;
             }
 
-            // MEMORY LEAK FIX: Add limit to prevent loading thousands of episodes
             const int MAX_EPISODES_TO_CLEAR = 10000;
 
             var episodesInSeries = _libraryManager.GetItemList(new InternalItemsQuery
@@ -618,7 +617,6 @@ namespace EmbyIcons
 
                 int favoriteCount = 0;
                 
-                // Get UserDataManager from ApplicationHost
                 var userDataManager = appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
                 if (userDataManager == null)
                 {
@@ -626,7 +624,6 @@ namespace EmbyIcons
                     return 0;
                 }
                 
-                // Get all users
                 var userQuery = new UserQuery();
                 var userIds = userManager.GetUserIds(userQuery);
                 
@@ -637,7 +634,6 @@ namespace EmbyIcons
                         var user = userManager.GetUserById(userId);
                         if (user != null && item.IsVisibleStandalone(user))
                         {
-                            // Get user data for this item
                             var userData = userDataManager.GetUserData(user, item);
                             if (userData != null && userData.IsFavorite)
                             {
@@ -647,7 +643,6 @@ namespace EmbyIcons
                     }
                     catch
                     {
-                        // Skip users we can't access
                     }
                 }
 

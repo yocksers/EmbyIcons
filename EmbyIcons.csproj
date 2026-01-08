@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.42.6</Version>
-		<AssemblyVersion>5.42.6.0</AssemblyVersion>
-		<FileVersion>5.42.6.0</FileVersion>
+		<Version>5.42.7</Version>
+		<AssemblyVersion>5.42.7.0</AssemblyVersion>
+		<FileVersion>5.42.7.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -23,6 +23,11 @@
 		<None Remove="EmbeddedIcons\ch.7.1.jpg" />
 		<None Remove="EmbeddedIcons\ch.Mono.jpg" />
 		<None Remove="EmbeddedIcons\ch.stereo.jpg" />
+		<None Remove="EmbeddedIcons\fps_23.976.png" />
+		<None Remove="EmbeddedIcons\fps_24.png" />
+		<None Remove="EmbeddedIcons\fps_25.jpg" />
+		<None Remove="EmbeddedIcons\fps_30.png" />
+		<None Remove="EmbeddedIcons\fps_60.jpg" />
 		<None Remove="EmbeddedIcons\heart.png" />
 		<None Remove="EmbeddedIcons\lang.chinese.jpg" />
 		<None Remove="EmbeddedIcons\lang.danish.jpg" />
@@ -70,6 +75,11 @@
 		<EmbeddedResource Include="EmbeddedIcons\ch_7.1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_Mono.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_stereo.png" />
+		<EmbeddedResource Include="EmbeddedIcons\fps_23.976.png" />
+		<EmbeddedResource Include="EmbeddedIcons\fps_24.png" />
+		<EmbeddedResource Include="EmbeddedIcons\fps_25.jpg" />
+		<EmbeddedResource Include="EmbeddedIcons\fps_30.png" />
+		<EmbeddedResource Include="EmbeddedIcons\fps_60.jpg" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_dv.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr10plus.png" />

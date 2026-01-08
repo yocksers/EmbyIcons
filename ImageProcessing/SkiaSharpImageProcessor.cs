@@ -53,7 +53,6 @@ namespace EmbyIcons.ImageProcessing
 
         public object CreateBlankImage(int width, int height)
         {
-            // IMPORTANT: Caller MUST dispose the returned SKBitmap
             var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
             using (var canvas = new SKCanvas(bitmap))
             {

@@ -68,7 +68,6 @@ namespace EmbyIcons.Helpers
 
         public void Clear()
         {
-            // MEMORY LEAK FIX: Clear all nodes to release memory
             _root.Children.Clear();
             _root.Value = default;
             _root.IsTerminal = false;

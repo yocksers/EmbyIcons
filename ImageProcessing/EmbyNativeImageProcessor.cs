@@ -30,7 +30,6 @@ namespace EmbyIcons.ImageProcessing
             if (inputStream == null)
                 throw new ArgumentNullException(nameof(inputStream));
 
-            // IMPORTANT: Caller MUST dispose the returned MemoryStream
             var ms = new MemoryStream();
             inputStream.CopyTo(ms);
             ms.Position = 0;

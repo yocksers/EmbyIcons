@@ -234,6 +234,10 @@ namespace EmbyIcons.Configuration
         public string FavoriteCountBackgroundColor { get; set; } = "#404040";
         public int FavoriteCountBackgroundOpacity { get; set; } = 80;
 
+        public IconAlignment FrameRateIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool FrameRateOverlayHorizontal { get; set; } = true;
+        public int FrameRateIconPriority { get; set; } = 14;
+
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";
         public int CommunityScoreBackgroundOpacity { get; set; } = 80;

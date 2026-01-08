@@ -18,5 +18,6 @@ namespace EmbyIcons.Models
         public string? AspectRatioIconName { get; set; }
         public string? ParentalRatingIconName { get; set; }
         public int? FavoriteCount { get; set; }
+        public string? FrameRateIconName { get; set; }
     }
 }

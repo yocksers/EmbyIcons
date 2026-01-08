@@ -43,6 +43,7 @@ namespace EmbyIcons
             public string? ResolutionIconName { get; init; }
             public string? AspectRatioIconName { get; init; }
             public string? ParentalRatingIconName { get; init; }
+            public string? FrameRateIconName { get; init; }
             public float? RottenTomatoesRating { get; init; }
             public long DateModifiedTicks { get; init; }
         }

@@ -101,7 +101,6 @@ namespace EmbyIcons
             Instance = this;
             _backgroundTasksCts = new CancellationTokenSource();
 
-            // Get UserDataManager from ApplicationHost for monitoring favorite changes
             try
             {
                 _userDataManager = _appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
@@ -379,7 +378,6 @@ namespace EmbyIcons
             _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
             _libraryManager.ItemRemoved += LibraryManagerOnItemChanged;
             
-            // Subscribe to user data changes to detect favorite changes
             if (_userDataManager != null)
             {
                 _userDataManager.UserDataSaved += OnUserDataSaved;
@@ -397,7 +395,6 @@ namespace EmbyIcons
             try { _libraryManager.ItemRemoved -= LibraryManagerOnItemChanged; } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemRemoved: {ex.Message}"); }
             
-            // Unsubscribe from user data changes
             if (_userDataManager != null)
             {
                 try { _userDataManager.UserDataSaved -= OnUserDataSaved; }

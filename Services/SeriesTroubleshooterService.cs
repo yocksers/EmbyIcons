@@ -94,7 +94,6 @@ namespace EmbyIcons.Services
                 return reports;
             }
 
-            // MEMORY LEAK FIX: Add reasonable limits to prevent loading entire library into memory
             const int MAX_SERIES_TO_ANALYZE = 1000;
             const int MAX_EPISODES_TO_ANALYZE = 100000;
 

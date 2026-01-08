@@ -32,7 +32,7 @@ namespace EmbyIcons.Caching
             ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"
         };
 
-        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating, Source }
+        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating, Source, FrameRate }
 
         private readonly object _customKeysLock = new();
         private string? _customKeysFolder;
@@ -190,8 +190,6 @@ namespace EmbyIcons.Caching
 
         public async Task<SKImage?> GetIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
         {
-            // IMPORTANT: The returned SKImage MUST be disposed by the caller when done
-            // Each call may create a new SKImage instance from cached byte data
             MemoryCache currentCache;
             lock (_cacheInstanceLock)
             {

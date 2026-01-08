@@ -88,6 +88,7 @@ namespace EmbyIcons.Services
             public HashSet<string> AspectRatios { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> Tags { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> ParentalRatings { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> FrameRates { get; } = new(StringComparer.OrdinalIgnoreCase);
         }
 
         private IconManagerReport GenerateReport()
@@ -101,7 +102,6 @@ namespace EmbyIcons.Services
             pluginInstance.Logger.Info("[EmbyIcons] Generating new Icon Manager report...");
             var options = pluginInstance.GetConfiguredOptions();
 
-            // MEMORY LEAK FIX: Add limit to prevent loading entire library into memory
             const int MAX_ITEMS_TO_ANALYZE = 50000;
             
             var allItems = _libraryManager.GetItemList(new InternalItemsQuery
@@ -166,6 +166,8 @@ namespace EmbyIcons.Services
                                 if (res != null) localReport.Resolutions.Add(res);
                                 var ar = MediaStreamHelper.GetAspectRatioIconName(stream, true);
                                 if (ar != null) localReport.AspectRatios.Add(ar);
+                                var fps = MediaStreamHelper.GetFrameRateIconName(stream);
+                                if (fps != null) localReport.FrameRates.Add(fps);
                                 break;
                         }
                     }
@@ -192,6 +194,7 @@ namespace EmbyIcons.Services
                         threadReport.AspectRatios.UnionWith(itemReport.AspectRatios);
                         threadReport.Tags.UnionWith(itemReport.Tags);
                         threadReport.ParentalRatings.UnionWith(itemReport.ParentalRatings);
+                        threadReport.FrameRates.UnionWith(itemReport.FrameRates);
                         return threadReport;
                     },
                     combineAccumulatorsFunc: (mainReport, threadReport) =>
@@ -206,6 +209,7 @@ namespace EmbyIcons.Services
                         mainReport.AspectRatios.UnionWith(threadReport.AspectRatios);
                         mainReport.Tags.UnionWith(threadReport.Tags);
                         mainReport.ParentalRatings.UnionWith(threadReport.ParentalRatings);
+                        mainReport.FrameRates.UnionWith(threadReport.FrameRates);
                         return mainReport;
                     },
                     resultSelector: finalReport => finalReport);
@@ -222,6 +226,7 @@ namespace EmbyIcons.Services
             report.Groups[IconCacheManager.IconType.AspectRatio.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.AspectRatios.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.AspectRatio, new List<string>()) };
             report.Groups[IconCacheManager.IconType.Tag.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.Tags.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.Tag, new List<string>()) };
             report.Groups[IconCacheManager.IconType.ParentalRating.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.ParentalRatings.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.ParentalRating, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.FrameRate.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.FrameRates.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.FrameRate, new List<string>()) };
 
             pluginInstance.Logger.Info("[EmbyIcons] Icon Manager report generation complete.");
             return report;

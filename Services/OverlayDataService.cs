@@ -313,7 +313,6 @@ namespace EmbyIcons.Services
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
 
-            // Add favorite count if enabled
             var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
             if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
@@ -373,7 +372,8 @@ namespace EmbyIcons.Services
                     CommunityRating = item.CommunityRating,
                     RottenTomatoesRating = cachedInfo.RottenTomatoesRating,
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
-                    ParentalRatingIconName = cachedInfo.ParentalRatingIconName
+                    ParentalRatingIconName = cachedInfo.ParentalRatingIconName,
+                    FrameRateIconName = cachedInfo.FrameRateIconName
                 };
             }
 
@@ -395,7 +395,8 @@ namespace EmbyIcons.Services
                 RottenTomatoesRating = overlayData.RottenTomatoesRating,
                 DateModifiedTicks = item.DateModified.Ticks,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
-                ParentalRatingIconName = overlayData.ParentalRatingIconName
+                ParentalRatingIconName = overlayData.ParentalRatingIconName,
+                FrameRateIconName = overlayData.FrameRateIconName
             };
 
             var cacheEntryOptions = new MemoryCacheEntryOptions()
@@ -590,6 +591,11 @@ namespace EmbyIcons.Services
             if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)
             {
                 data.AspectRatioIconName = MediaStreamHelper.GetAspectRatioIconName(primaryVideoStream, profileOptions.SnapAspectRatioToCommon);
+            }
+
+            if (profileOptions.FrameRateIconAlignment != IconAlignment.Disabled && primaryVideoStream != null)
+            {
+                data.FrameRateIconName = MediaStreamHelper.GetFrameRateIconName(primaryVideoStream);
             }
 
             return data;

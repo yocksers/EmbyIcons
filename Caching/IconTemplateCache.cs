@@ -65,8 +65,6 @@ namespace EmbyIcons.Caching
             var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
             return Convert.ToBase64String(hash).Replace('/', '_').Replace('+', '-');
         }
-        // IMPORTANT: This method now returns a NEW SKImage each time from cached byte data
-        // The caller MUST dispose the returned SKImage when done
         public async Task<SKImage?> GetOrCreateTemplateAsync(
             List<(IconCacheManager.IconType Type, List<string> Names)> iconGroups,
             Dictionary<IconCacheManager.IconType, List<SKImage>> loadedIcons,
@@ -88,14 +86,12 @@ namespace EmbyIcons.Caching
             {
                 try
                 {
-                    // Cache stores byte[] instead of SKImage to avoid memory leaks
                     if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
                     {
                         Interlocked.Increment(ref _cacheHits);
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Template cache HIT for key: {cacheKey}");
                         
-                        // Recreate SKImage from cached bytes - caller must dispose
                         try
                         {
                             using var ms = new MemoryStream(cachedBytes);
@@ -125,7 +121,6 @@ namespace EmbyIcons.Caching
                 if (cache == null || _disposed)
                     return null;
                 
-                // Double-check cache after acquiring lock (another thread might have generated it)
                 try
                 {
                     if (cache.TryGetValue(cacheKey, out byte[]? reCheckedBytes) && reCheckedBytes != null)
@@ -138,7 +133,6 @@ namespace EmbyIcons.Caching
                         catch (Exception ex)
                         {
                             _logger.ErrorException("[EmbyIcons] Error recreating template from cache after lock", ex);
-                            // Continue to generate new template
                         }
                     }
                 }
@@ -153,7 +147,6 @@ namespace EmbyIcons.Caching
                 {
                     try
                     {
-                        // Encode template to PNG bytes for caching to prevent memory leaks
                         using var encodedData = template.Encode(SKEncodedImageFormat.Png, 100);
                         if (encodedData != null)
                         {
@@ -175,13 +168,11 @@ namespace EmbyIcons.Caching
                             }
                             catch (ObjectDisposedException)
                             {
-                                // Cache was disposed, just return the template
                             }
                         }
                     }
                     finally
                     {
-                        // Don't dispose template here - return it to caller who must dispose it
                     }
                 }
 
@@ -189,15 +180,12 @@ namespace EmbyIcons.Caching
             }
             finally
             {
-                // Release lock but keep it in the dictionary for reuse
-                // Locks will be cleaned up in Clear() and Dispose() methods
                 try
                 {
                     lockObj.Release();
                 }
                 catch (ObjectDisposedException)
                 {
-                    // Lock was already disposed, try to remove it
                     _generationLocks.TryRemove(cacheKey, out _);
                 }
                 catch (SemaphoreFullException ex)

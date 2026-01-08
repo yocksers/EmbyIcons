@@ -96,7 +96,8 @@ namespace EmbyIcons
                 RottenTomatoesRating = 88f,
                 FavoriteCount = 42,
                 AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9"),
-                ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13")
+                ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13"),
+                FrameRateIconName = GetRandom(IconCacheManager.IconType.FrameRate, "23.976")
             };
 
             var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
@@ -121,7 +122,6 @@ namespace EmbyIcons
                 await _imageOverlayService.ApplyOverlaysToStreamAsync(originalBitmap, previewData, profileSettings, globalOptions, resultStream, CancellationToken.None, injectedIcons);
                 resultStream.Position = 0;
                 
-                // Success case: dispose injected icons since they've been used
                 if (injectedIcons != null)
                 {
                     foreach (var iconList in injectedIcons.Values)

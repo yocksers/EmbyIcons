@@ -63,21 +63,18 @@ namespace EmbyIcons.Services
                 {
                     var enhancer = plugin.Enhancer;
                     
-                    // Get series aggregation cache count
                     var seriesCacheField = typeof(EmbyIconsEnhancer).GetField("_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (seriesCacheField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<Guid, object> seriesCache)
                     {
                         seriesCacheCount = seriesCache.Count;
                     }
                     
-                    // Get episode cache count
                     var episodeCacheField = typeof(EmbyIconsEnhancer).GetField("_episodeIconCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (episodeCacheField?.GetValue(null) is Microsoft.Extensions.Caching.Memory.MemoryCache episodeCache)
                     {
                         episodeCacheCount = episodeCache.Count;
                     }
                     
-                    // Get item locks count
                     var locksField = typeof(EmbyIconsEnhancer).GetField("_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (locksField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<string, object> locks)
                     {
