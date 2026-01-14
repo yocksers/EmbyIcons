@@ -65,6 +65,7 @@ namespace EmbyIcons.Services
             public const string Resolution = "Resolution";
             public const string AspectRatio = "AspectRatio";
             public const string VideoFormat = "VideoFormat";
+            public const string FrameRate = "FrameRate";
         }
 
         public SeriesTroubleshooterService(ILibraryManager libraryManager)
@@ -192,6 +193,13 @@ namespace EmbyIcons.Services
                 report.Checks.Add(CheckProperty(baseItems, "Video Format (HDR)", ep => {
                     var formatName = MediaStreamHelper.GetVideoFormatIconName(ep, ep.GetMediaStreams());
                     return formatName != null ? new List<string> { formatName } : new List<string>();
+                }));
+
+            if (runAllChecks || requestedChecks.Contains(CheckNames.FrameRate))
+                report.Checks.Add(CheckProperty(baseItems, "Frame Rate (FPS)", ep => {
+                    var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var fpsName = stream != null ? MediaStreamHelper.GetFrameRateIconName(stream) : null;
+                    return fpsName != null ? new List<string> { fpsName } : new List<string>();
                 }));
 
             return report;
