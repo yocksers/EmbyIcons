@@ -258,7 +258,7 @@ namespace EmbyIcons.Helpers
             return officialRating.ToLowerInvariant().Replace('/', '-');
         }
 
-        public static string? GetFrameRateIconName(MediaStream? videoStream)
+        public static string? GetFrameRateIconName(MediaStream? videoStream, bool snapToCommon = true)
         {
             if (videoStream == null) return null;
 
@@ -266,14 +266,17 @@ namespace EmbyIcons.Helpers
             if (!fps.HasValue || fps.Value <= 0) return null;
 
             var fpsValue = fps.Value;
-            var tolerance = 0.01f;
 
-            var commonRates = new[] { 23.976f, 24f, 25f, 29.97f, 30f, 50f, 59.94f, 60f, 120f };
-            foreach (var rate in commonRates)
+            if (snapToCommon)
             {
-                if (Math.Abs(fpsValue - rate) < tolerance)
+                var tolerance = 0.01f;
+                var commonRates = new[] { 23.976f, 24f, 25f, 29.97f, 30f, 50f, 59.94f, 60f, 120f };
+                foreach (var rate in commonRates)
                 {
-                    return rate.ToString(CultureInfo.InvariantCulture);
+                    if (Math.Abs(fpsValue - rate) < tolerance)
+                    {
+                        return rate.ToString(CultureInfo.InvariantCulture);
+                    }
                 }
             }
 

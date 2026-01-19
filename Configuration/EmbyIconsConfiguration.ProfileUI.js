@@ -3,6 +3,10 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
 
     function populateProfileSelector(instance) {
         const select = instance.dom.profileSelector;
+        if (!select) {
+            console.warn('Profile selector element not found in DOM');
+            return;
+        }
         select.innerHTML = instance.pluginConfiguration.Profiles.map(p => `<option value="${p.Id}">${p.Name}</option>`).join('');
         instance.currentProfileId = select.value;
         if (select.embyselect) select.embyselect.refresh();
@@ -13,6 +17,10 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
     }
 
     function loadProfileSettings(instance, profileId) {
+        if (!instance.dom || !instance.dom.allProfileInputs) {
+            console.warn('DOM elements not ready for loadProfileSettings');
+            return;
+        }
         instance.currentProfileId = profileId;
         const profile = instance.pluginConfiguration.Profiles.find(p => p.Id === profileId);
         if (!profile) return;

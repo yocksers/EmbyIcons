@@ -47,7 +47,7 @@ namespace EmbyIcons.Services
                 try
                 {
                     var oldTrie = _libraryPathTrieLazy.Value;
-                    oldTrie?.Clear(); // Clear the trie data
+                    oldTrie?.Clear();
                 }
                 catch (Exception ex)
                 {

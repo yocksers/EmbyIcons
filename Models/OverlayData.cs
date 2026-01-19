@@ -19,5 +19,6 @@ namespace EmbyIcons.Models
         public string? ParentalRatingIconName { get; set; }
         public int? FavoriteCount { get; set; }
         public string? FrameRateIconName { get; set; }
+        public string? OriginalLanguageIconName { get; set; }
     }
 }

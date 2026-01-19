@@ -1,5 +1,4 @@
 <form class="embyIconsForm">
-    <!-- Global Settings -->
     <div class="flex align-items-center" style="margin: 2em 0 .5em;">
         <h2 style="margin: 0;">Global Settings</h2>
     </div>
@@ -55,7 +54,6 @@
         </div>
     </div>
 
-    <!-- Profile Management -->
     <div class="flex align-items-center" style="margin: 3em 0 .5em;">
         <h2 style="margin: 0;">Profiles</h2>
     </div>
@@ -82,7 +80,6 @@
         </div>
     </div>
 
-    <!-- Profile Settings Container -->
     <div id="profileSettingsContainer">
         <div class="inputContainer" style="margin-top: 2.5em;">
             <h3 style="margin-bottom: 0.5em;">Assign this profile to libraries</h3>
@@ -91,7 +88,6 @@
             </div>
         </div>
 
-        <!-- Image Type Settings -->
         <div class="flex align-items-center" style="margin: 3em 0 .5em;">
             <h2 style="margin: 0;">Image Type Settings</h2>
         </div>
@@ -533,6 +529,44 @@
                     <div class="checkboxContainer" style="margin-top: 1.5em;">
                         <label><input is="emby-checkbox" type="checkbox" data-profile-key="FrameRateOverlayHorizontal" /><span>Layout Horizontally</span></label>
                     </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 1em;">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" data-profile-key="SnapFrameRateToCommon" />
+                            <span>Snap to nearest common frame rate</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">When enabled, snaps calculated frame rates to the closest common standard (e.g. 23.976, 24, 30, 60). When disabled, it uses the precise frame rate from the file's metadata.</div>
+                    </div>
+                </div>
+                <div>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                        <select is="emby-select" label="Original Language Icons" data-profile-key="OriginalLanguageIconAlignment" data-corner-group="TopRight">
+                            <option value="Disabled">Disabled</option>
+                            <option value="TopLeft">Top Left</option>
+                            <option value="TopRight">Top Right</option>
+                            <option value="BottomLeft">Bottom Left</option>
+                            <option value="BottomRight">Bottom Right</option>
+                        </select>
+                        <select is="emby-select" label="Priority" data-profile-key="OriginalLanguageIconPriority" data-corner-group="TopRight">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                            <option value="14">14</option>
+                            <option value="15">15</option>
+                        </select>
+                    </div>
+                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="OriginalLanguageOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                    </div>
                 </div>
                 <div id="ratingAppearanceControls">
                     <select is="emby-select" label="Rating Background Shape" data-profile-key="CommunityScoreBackgroundShape">
@@ -639,7 +673,6 @@
         </p>
         <div class="paper-card" style="padding: 1.5em;">
             <div id="filenameMappingsContainer">
-                <!-- Mappings will be added here by JS -->
             </div>
             <button is="emby-button" type="button" class="raised" id="btnAddFilenameMapping" style="margin-top: 1em;">
                 <span>Add Mapping</span>

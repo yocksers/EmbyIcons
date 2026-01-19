@@ -31,7 +31,6 @@ define(['loading', 'toast'], function (loading, toast) {
 
         Object.assign(profile.Settings, getCurrentProfileSettingsFromForm(instance));
         
-        // Save filename-based icon mappings
         saveFilenameMappings(instance, profile);
 
         instance.pluginConfiguration.LibraryProfileMappings = instance.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== instance.currentProfileId);

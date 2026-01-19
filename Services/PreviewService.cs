@@ -97,7 +97,8 @@ namespace EmbyIcons
                 FavoriteCount = 42,
                 AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9"),
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13"),
-                FrameRateIconName = GetRandom(IconCacheManager.IconType.FrameRate, "23.976")
+                FrameRateIconName = GetRandom(IconCacheManager.IconType.FrameRate, "23.976"),
+                OriginalLanguageIconName = GetRandom(IconCacheManager.IconType.OriginalLanguage, "english")
             };
 
             var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();

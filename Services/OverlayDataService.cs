@@ -324,7 +324,7 @@ namespace EmbyIcons.Services
 
         public OverlayData GetOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
-            EnsureMaintenanceTimerInitialized(); // Initialize timer on first use
+            EnsureMaintenanceTimerInitialized();
 
             if (item is Series seriesItem)
             {
@@ -373,7 +373,8 @@ namespace EmbyIcons.Services
                     RottenTomatoesRating = cachedInfo.RottenTomatoesRating,
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
                     ParentalRatingIconName = cachedInfo.ParentalRatingIconName,
-                    FrameRateIconName = cachedInfo.FrameRateIconName
+                    FrameRateIconName = cachedInfo.FrameRateIconName,
+                    OriginalLanguageIconName = cachedInfo.OriginalLanguageIconName
                 };
             }
 
@@ -396,7 +397,8 @@ namespace EmbyIcons.Services
                 DateModifiedTicks = item.DateModified.Ticks,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName,
-                FrameRateIconName = overlayData.FrameRateIconName
+                FrameRateIconName = overlayData.FrameRateIconName,
+                OriginalLanguageIconName = overlayData.OriginalLanguageIconName
             };
 
             var cacheEntryOptions = new MemoryCacheEntryOptions()
@@ -470,7 +472,7 @@ namespace EmbyIcons.Services
                             IncludeItemTypes = new[] { "Movie" },
                             Recursive = true,
                             AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
-                            Limit = 50 // MEMORY LEAK FIX: Limit number of movie versions to prevent huge arrays
+                            Limit = 50
                         };
                         try
                         {
@@ -479,7 +481,7 @@ namespace EmbyIcons.Services
                                 .Where(v => !string.IsNullOrEmpty(v.Path))
                                 .Select(v => v.Path!.ToLowerInvariant())
                                 .Distinct()
-                                .Take(50) // Additional safety limit
+                                .Take(50)
                                 .ToArray();
                         }
                         catch (Exception ex)
@@ -595,10 +597,57 @@ namespace EmbyIcons.Services
 
             if (profileOptions.FrameRateIconAlignment != IconAlignment.Disabled && primaryVideoStream != null)
             {
-                data.FrameRateIconName = MediaStreamHelper.GetFrameRateIconName(primaryVideoStream);
+                data.FrameRateIconName = MediaStreamHelper.GetFrameRateIconName(primaryVideoStream, profileOptions.SnapFrameRateToCommon);
+            }
+
+            if (profileOptions.OriginalLanguageIconAlignment != IconAlignment.Disabled)
+            {
+                var originalLang = GetOriginalLanguage(item);
+                if (!string.IsNullOrEmpty(originalLang))
+                {
+                    data.OriginalLanguageIconName = LanguageHelper.NormalizeLangCode(originalLang);
+                }
             }
 
             return data;
+        }
+
+        private static string? GetOriginalLanguage(BaseItem item)
+        {
+            if (item == null) return null;
+
+            try
+            {
+                var itemType = item.GetType();
+                var originalLangProp = itemType.GetProperty("OriginalLanguage");
+                if (originalLangProp != null)
+                {
+                    var value = originalLangProp.GetValue(item) as string;
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+
+                var productionLocationsProp = itemType.GetProperty("ProductionLocations");
+                if (productionLocationsProp != null)
+                {
+                    var locations = productionLocationsProp.GetValue(item) as string[];
+                    if (locations != null && locations.Length > 0 && !string.IsNullOrWhiteSpace(locations[0]))
+                    {
+                        return locations[0];
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language: {ex.Message}");
+                }
+            }
+
+            return null;
         }
     }
 

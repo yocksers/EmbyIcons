@@ -237,6 +237,11 @@ namespace EmbyIcons.Configuration
         public IconAlignment FrameRateIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool FrameRateOverlayHorizontal { get; set; } = true;
         public int FrameRateIconPriority { get; set; } = 14;
+        public bool SnapFrameRateToCommon { get; set; } = true;
+
+        public IconAlignment OriginalLanguageIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool OriginalLanguageOverlayHorizontal { get; set; } = true;
+        public int OriginalLanguageIconPriority { get; set; } = 15;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";

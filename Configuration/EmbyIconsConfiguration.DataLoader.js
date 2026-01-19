@@ -47,7 +47,11 @@ define([], function () {
             instance.profileMap = new Map(instance.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));
 
             instance.populateProfileSelector();
-            instance.loadProfileSettings(instance.dom.profileSelector.value);
+            
+            if (instance.dom && instance.dom.profileSelector && instance.dom.profileSelector.value) {
+                instance.loadProfileSettings(instance.dom.profileSelector.value);
+            }
+            
             instance.validateIconsFolder();
             instance.refreshMemoryUsage().catch(err => { /* ignore */ });
         } catch (error) {

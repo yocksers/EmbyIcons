@@ -1,12 +1,36 @@
 <div style="max-width: 900px; margin: auto;">
     <h1 style="margin-bottom: 0.5em;">Icon Manager</h1>
     <p class="fieldDescription">Scan your media library and custom icon folder to find missing or unused icons. On very large libraries this can take several minutes; results are cached until server restart or configuration changes.</p>
-    <div style="margin-top: 1.5em;">
+    
+    <div class="paper-card" id="iconManagerHowTo" style="margin-top: 1.5em; padding: 1em 1.5em; background-color: rgba(82, 181, 75, 0.1);">
+        <h3 style="margin-top: 0; display: flex; align-items: center; gap: 0.5em;">
+            <i class="md-icon">help_outline</i> How to Use
+        </h3>
+        <ol style="margin: 0.5em 0; padding-left: 1.5em; line-height: 1.8;">
+            <li><strong>Click "Scan Library & Icons"</strong> to analyze your media and detect which icons are needed</li>
+            <li><strong>View Library Statistics</strong> to see the breakdown of your media (resolutions, codecs, formats, etc.)</li>
+            <li><strong>Review Icon Categories</strong> - expand each section to see:
+                <ul style="margin: 0.5em 0; padding-left: 1.5em;">
+                    <li><span style="color: #ffc107;">⚠ Missing Icons</span> - Icons your library needs but aren't in your custom folder</li>
+                    <li><span style="color: #4CAF50;">✓ Found Icons</span> - Icons that are properly configured and available</li>
+                    <li><span style="color: #888;">− Unused Icons</span> - Icons in your folder but not currently needed</li>
+                </ul>
+            </li>
+            <li><strong>Click any icon name</strong> (underlined) to see which media files use that specific icon</li>
+            <li><strong>Add missing icons</strong> to your custom folder with the correct naming (e.g., <code style="background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px;">lang.en.png</code>)</li>
+        </ol>
+    </div>
+
+    <div style="margin-top: 1.5em; display: flex; gap: 1em;">
         <button is="emby-button" type="button" class="raised button-submit" id="btnRunIconScan">
             <span>Scan Library & Icons</span>
         </button>
+        <button is="emby-button" type="button" class="raised" id="btnShowStatistics">
+            <span>Show Statistics</span>
+        </button>
+    </div>
+    <div id="iconManagerStatsContainer" style="margin-top: 2em;">
     </div>
     <div id="iconManagerReportContainer" style="margin-top: 2em;">
-        <!-- Report will be injected here by JavaScript -->
     </div>
 </div>

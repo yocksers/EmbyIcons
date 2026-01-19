@@ -65,6 +65,9 @@ define([
             loading.show();
             try {
                 await dataLoader.loadPagePartials();
+                
+                await new Promise(resolve => setTimeout(resolve, 0));
+                
                 this.dom = domCache.getDomElements(this.view);
                 eventsModule.bindEvents(this);
 
@@ -216,6 +219,10 @@ define([
 
         async runIconScan() {
             return scansModule.runIconScan(this);
+        }
+
+        async showStatistics() {
+            return scansModule.showStatistics(this);
         }
 
         renderIconManagerReport(report) {

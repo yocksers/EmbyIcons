@@ -378,7 +378,7 @@ namespace EmbyIcons
             sb.Append('_').Append((int)options.CommunityScoreBackgroundShape).Append(options.CommunityScoreBackgroundColor).Append(options.CommunityScoreBackgroundOpacity);
             sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
             sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
-            sb.Append('_').Append(options.ExcludeSpecialsFromSeriesAggregation ? 't' : 'f').Append(options.SnapAspectRatioToCommon ? 't' : 'f');
+            sb.Append('_').Append(options.ExcludeSpecialsFromSeriesAggregation ? 't' : 'f').Append(options.SnapAspectRatioToCommon ? 't' : 'f').Append(options.SnapFrameRateToCommon ? 't' : 'f');
             sb.Append('_').Append(globalOptions.EnableCollectionProfileLookup ? 't' : 'f');
 
             if (item is Series series)

@@ -48,6 +48,7 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
 
         if (dom.btnClearCache) dom.btnClearCache.addEventListener('click', instance.clearCache.bind(instance));
         if (dom.btnRunIconScan) dom.btnRunIconScan.addEventListener('click', instance.runIconScan.bind(instance));
+        if (dom.btnShowStatistics) dom.btnShowStatistics.addEventListener('click', instance.showStatistics.bind(instance));
 
         if (dom.prioritySelects && dom.prioritySelects.length) {
             dom.prioritySelects.forEach(select => {

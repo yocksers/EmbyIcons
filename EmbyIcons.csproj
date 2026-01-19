@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.42.8</Version>
-		<AssemblyVersion>5.42.8.0</AssemblyVersion>
-		<FileVersion>5.42.8.0</FileVersion>
+		<Version>5.43.2</Version>
+		<AssemblyVersion>5.43.2.0</AssemblyVersion>
+		<FileVersion>5.43.2.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -93,6 +93,8 @@
 		<EmbeddedResource Include="EmbeddedIcons\lang_japanese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_norwegian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_swedish.png" />
+		<EmbeddedResource Include="EmbeddedIcons\og_denmark.png" />
+		<EmbeddedResource Include="EmbeddedIcons\og_united kingdom.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_g.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_nc-17.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_pg-13.png" />
