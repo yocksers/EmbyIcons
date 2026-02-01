@@ -358,6 +358,26 @@ namespace EmbyIcons.Services
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
                     Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
+                
+                float? currentRottenTomatoesRating = null;
+                if (item.CriticRating.HasValue)
+                {
+                    currentRottenTomatoesRating = item.CriticRating.Value;
+                }
+                else
+                {
+                    try
+                    {
+                        var rt = ExtractRottenTomatoesFromItem(item);
+                        if (rt.HasValue) currentRottenTomatoesRating = rt.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _enhancer.Logger.Debug($"[EmbyIcons] Error extracting Rotten Tomatoes rating from cached item: {ex.Message}");
+                    }
+                }
+                
                 return new OverlayData
                 {
                     AudioLanguages = cachedInfo.AudioLangs,
@@ -370,7 +390,7 @@ namespace EmbyIcons.Services
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
                     ResolutionIconName = cachedInfo.ResolutionIconName,
                     CommunityRating = item.CommunityRating,
-                    RottenTomatoesRating = cachedInfo.RottenTomatoesRating,
+                    RottenTomatoesRating = currentRottenTomatoesRating,
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
                     ParentalRatingIconName = cachedInfo.ParentalRatingIconName,
                     FrameRateIconName = cachedInfo.FrameRateIconName,
