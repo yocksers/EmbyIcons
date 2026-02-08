@@ -239,11 +239,11 @@ namespace EmbyIcons.Services
             }
             else if (percent >= VerifiedHotThreshold && votes >= VerifiedHotVotes)
             {
-                iconKeyToRequest = StringConstants.PopcornIcon;
+                iconKeyToRequest = StringConstants.FreshPopcornIcon;
             }
             else
             {
-                iconKeyToRequest = StringConstants.FreshPopcornIcon;
+                iconKeyToRequest = StringConstants.PopcornIcon;
             }
 
             var ratingIcon = await _iconCache.GetIconAsync(iconKeyToRequest, IconCacheManager.IconType.CommunityRating, options, cancellationToken).ConfigureAwait(false);
