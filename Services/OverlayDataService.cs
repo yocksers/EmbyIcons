@@ -26,6 +26,7 @@ namespace EmbyIcons.Services
         private Timer? _cacheMaintenanceTimer;
         private readonly object _timerInitLock = new object();
         private static readonly System.Reflection.PropertyInfo? _providerIdsProperty = typeof(BaseItem).GetProperty("ProviderIds");
+        private readonly MDBListService _mdbListService = new MDBListService();
 
         public OverlayDataService(EmbyIconsEnhancer enhancer, ILibraryManager libraryManager)
         {
@@ -114,6 +115,16 @@ namespace EmbyIcons.Services
             if (result.HasValue) return result;
 
             return TryExtractFromRatingProperties(it);
+        }
+
+        private static float? ExtractCommunityRatingFromItem(BaseItem it)
+        {
+            if (it == null) return null;
+
+            var result = TryExtractCommunityRatingFromProviderIds(it);
+            if (result.HasValue) return result;
+
+            return TryExtractCommunityRatingFromRatingProperties(it);
         }
 
         private static float? TryExtractFromProviderIds(BaseItem item)
@@ -285,6 +296,148 @@ namespace EmbyIcons.Services
             return null;
         }
 
+        private static float? TryExtractCommunityRatingFromProviderIds(BaseItem item)
+        {
+            try
+            {
+                var providerIds = _providerIdsProperty?.GetValue(item) as System.Collections.IDictionary;
+                if (providerIds == null) return null;
+
+                foreach (System.Collections.DictionaryEntry de in providerIds)
+                {
+                    var key = de.Key?.ToString() ?? string.Empty;
+                    var val = de.Value?.ToString() ?? string.Empty;
+                    
+                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) || 
+                        key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parsed = TryParseCommunityRating(val);
+                        if (parsed.HasValue) return parsed.Value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from provider IDs: {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        private static float? TryExtractCommunityRatingFromRatingProperties(BaseItem item)
+        {
+            try
+            {
+                var props = item.GetType().GetProperties(
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                
+                foreach (var p in props)
+                {
+                    if (!IsRatingProperty(p)) continue;
+
+                    var result = TryExtractCommunityRatingFromProperty(p, item);
+                    if (result.HasValue) return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from properties: {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        private static float? TryExtractCommunityRatingFromProperty(System.Reflection.PropertyInfo prop, BaseItem item)
+        {
+            try
+            {
+                var col = prop.GetValue(item) as System.Collections.IEnumerable;
+                if (col == null) return null;
+
+                foreach (var entry in col)
+                {
+                    if (entry == null) continue;
+                    
+                    var result = TryExtractCommunityRatingFromEntry(entry);
+                    if (result.HasValue) return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from property '{prop.Name}': {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        private static float? TryExtractCommunityRatingFromEntry(object entry)
+        {
+            var entryType = entry.GetType();
+            var sourceProp = entryType.GetProperty(StringConstants.SourcePropertyName) ?? 
+                           entryType.GetProperty(StringConstants.NamePropertyName) ?? 
+                           entryType.GetProperty(StringConstants.KeyPropertyName);
+            var valueProp = entryType.GetProperty(StringConstants.ValuePropertyName) ?? 
+                          entryType.GetProperty(StringConstants.RatingPropertyName) ?? 
+                          entryType.GetProperty(StringConstants.ScorePropertyName);
+            
+            var source = sourceProp?.GetValue(entry)?.ToString() ?? string.Empty;
+            var value = valueProp?.GetValue(entry)?.ToString() ?? string.Empty;
+            
+            if (!string.IsNullOrEmpty(source) && 
+                (source.IndexOf(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 source.IndexOf(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                var parsed = TryParseCommunityRating(value);
+                if (parsed.HasValue) return parsed.Value;
+            }
+            
+            return null;
+        }
+
+        private static float? TryParseCommunityRating(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            s = s.Trim();
+            
+            try
+            {
+                if (s.Contains('/'))
+                {
+                    var parts = s.Split('/');
+                    if (parts.Length == 2 && 
+                        float.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, 
+                            System.Globalization.CultureInfo.InvariantCulture, out var a) && 
+                        float.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, 
+                            System.Globalization.CultureInfo.InvariantCulture, out var b) && 
+                        b != 0)
+                    {
+                        return Math.Clamp(a / b * 10f, 0f, 10f);
+                    }
+                }
+
+                if (float.TryParse(s, System.Globalization.NumberStyles.Float, 
+                    System.Globalization.CultureInfo.InvariantCulture, out var v))
+                {
+                    return Math.Clamp(v, 0f, 10f);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error parsing community rating from '{s}': {ex.Message}");
+                }
+            }
+            
+            return null;
+        }
+
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -297,6 +450,25 @@ namespace EmbyIcons.Services
                 }
             }
 
+            float? currentCommunityRating = null;
+            if (item.CommunityRating.HasValue)
+            {
+                currentCommunityRating = item.CommunityRating.Value;
+            }
+            else
+            {
+                try
+                {
+                    var cr = ExtractCommunityRatingFromItem(item);
+                    if (cr.HasValue) currentCommunityRating = cr.Value;
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error extracting community rating from aggregate: {ex.Message}");
+                }
+            }
+
             var data = new OverlayData
             {
                 AudioLanguages = aggResult.AudioLangs,
@@ -306,7 +478,7 @@ namespace EmbyIcons.Services
                 ChannelIconName = aggResult.ChannelTypes.FirstOrDefault(),
                 VideoFormatIconName = aggResult.VideoFormats.FirstOrDefault(),
                 ResolutionIconName = aggResult.Resolutions.FirstOrDefault(),
-                CommunityRating = item.CommunityRating,
+                CommunityRating = currentCommunityRating,
                 RottenTomatoesRating = item.CriticRating,
                 Tags = tags,
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
@@ -314,6 +486,28 @@ namespace EmbyIcons.Services
             };
 
             var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
+            if (profileOptions?.PopcornScoreIconAlignment != IconAlignment.Disabled)
+            {
+                try
+                {
+                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var mdbData = _mdbListService.FetchRatings(item, apiKey);
+                        if (mdbData != null)
+                        {
+                            data.PopcornRating = mdbData.PopcornScore;  
+                            data.PopcornVotes = mdbData.PopcornVotes;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching Popcorn rating for aggregate: {ex.Message}");
+                }
+            }
+
             if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
                 data.FavoriteCount = _enhancer.GetFavoriteCount(item);
@@ -359,6 +553,25 @@ namespace EmbyIcons.Services
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
                     Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
                 
+                float? currentCommunityRating = null;
+                if (item.CommunityRating.HasValue)
+                {
+                    currentCommunityRating = item.CommunityRating.Value;
+                }
+                else
+                {
+                    try
+                    {
+                        var cr = ExtractCommunityRatingFromItem(item);
+                        if (cr.HasValue) currentCommunityRating = cr.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _enhancer.Logger.Debug($"[EmbyIcons] Error extracting community rating from cached item: {ex.Message}");
+                    }
+                }
+
                 float? currentRottenTomatoesRating = null;
                 if (item.CriticRating.HasValue)
                 {
@@ -389,7 +602,7 @@ namespace EmbyIcons.Services
                     ChannelIconName = cachedInfo.ChannelIconName,
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
                     ResolutionIconName = cachedInfo.ResolutionIconName,
-                    CommunityRating = item.CommunityRating,
+                    CommunityRating = currentCommunityRating,
                     RottenTomatoesRating = currentRottenTomatoesRating,
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
                     ParentalRatingIconName = cachedInfo.ParentalRatingIconName,
@@ -437,7 +650,23 @@ namespace EmbyIcons.Services
 
             if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled)
             {
-                data.CommunityRating = item.CommunityRating;
+                if (item.CommunityRating.HasValue)
+                {
+                    data.CommunityRating = item.CommunityRating.Value;
+                }
+                else
+                {
+                    try
+                    {
+                        var cr = ExtractCommunityRatingFromItem(item);
+                        if (cr.HasValue) data.CommunityRating = cr.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _enhancer.Logger.Debug($"[EmbyIcons] Error extracting community rating: {ex.Message}");
+                    }
+                }
             }
 
             if (item.CriticRating.HasValue)
@@ -455,6 +684,28 @@ namespace EmbyIcons.Services
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _enhancer.Logger.Debug($"[EmbyIcons] Error extracting Rotten Tomatoes rating: {ex.Message}");
+                }
+            }
+
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled)
+            {
+                try
+                {
+                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var mdbData = _mdbListService.FetchRatings(item, apiKey);
+                        if (mdbData != null)
+                        {
+                            data.PopcornRating = mdbData.PopcornScore;
+                            data.PopcornVotes = mdbData.PopcornVotes;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching Popcorn rating: {ex.Message}");
                 }
             }
 

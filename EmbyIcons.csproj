@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.43.4</Version>
-		<AssemblyVersion>5.43.4.0</AssemblyVersion>
-		<FileVersion>5.43.4.0</FileVersion>
+		<Version>5.50.0</Version>
+		<AssemblyVersion>5.50.0.0</AssemblyVersion>
+		<FileVersion>5.50.0.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -51,7 +51,10 @@
 		<None Remove="EmbeddedIcons\sub.indian.jpg" />
 		<None Remove="EmbeddedIcons\sub.japanese.jpg" />
 		<None Remove="EmbeddedIcons\sub_norwegian.png" />
+		<None Remove="EmbeddedIcons\t.spilledpopcorn.png" />
 		<None Remove="EmbeddedIcons\tag.bob.jpg" />
+		<None Remove="EmbeddedIcons\t_fresh.png" />
+		<None Remove="EmbeddedIcons\t_popcorn.png" />
 		<None Remove="Images\preview.png" />
 		<None Remove="Images\tag.png" />
 		<None Remove="plugin.js" />
@@ -104,6 +107,9 @@
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-ma.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t.spilledpopcorn.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_fresh.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_popcorn.png" />
 		<EmbeddedResource Include="EmbeddedIcons\t_splat.png" />
 		<EmbeddedResource Include="EmbeddedIcons\t_tomato.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_1080p.png" />
@@ -131,57 +137,23 @@
 		<EmbeddedResource Include="EmbeddedIcons\vc_vp9.png" />
 		<EmbeddedResource Include="EmbyIconsConfiguration.html" />
 		<EmbeddedResource Include="EmbyIconsConfiguration.js" />
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Utils.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Utils.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Dom.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Dom.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DomCache.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.DomCache.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Events.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Events.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DataLoader.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.DataLoader.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.UIHandlers.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.UIHandlers.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.ProfileUI.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.ProfileUI.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Profile.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Profile.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Scans.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Scans.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Api.js">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Api.js</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Settings.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Settings.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Advanced.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Advanced.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconManager.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.IconManager.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Troubleshooter.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Troubleshooter.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Readme.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.Readme.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.AddProfileTemplate.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.AddProfileTemplate.html</LogicalName>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.RenameProfileTemplate.html">
-			<LogicalName>EmbyIcons.Configuration.EmbyIconsConfiguration.RenameProfileTemplate.html</LogicalName>
-		</EmbeddedResource>
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Utils.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Dom.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DomCache.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Events.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.DataLoader.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.UIHandlers.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.ProfileUI.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Profile.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Scans.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Api.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Settings.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Advanced.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconManager.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Troubleshooter.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Readme.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.AddProfileTemplate.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.RenameProfileTemplate.html" />
 		<EmbeddedResource Include="Images\logo.png" />
 		<EmbeddedResource Include="Images\preview.png" />
 		<EmbeddedResource Include="Images\tag.png" />

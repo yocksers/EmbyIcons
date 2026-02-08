@@ -17,6 +17,9 @@ namespace EmbyIcons.Configuration
 
         public const string TomatoIcon = "t.tomato";
         public const string SplatIcon = "t.splat";
+        public const string PopcornIcon = "t.popcorn";
+        public const string FreshPopcornIcon = "t.fresh";
+        public const string SpilledPopcornIcon = "t.spilledpopcorn";
         public const string ImdbIcon = "imdb";
         public const string HeartIcon = "heart";
 

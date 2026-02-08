@@ -77,6 +77,7 @@ namespace EmbyIcons.Services
             List<OverlayGroupInfo>? iconGroups = null;
             RatingOverlayInfo? ratingInfo = null;
             RatingOverlayInfo? rottenInfo = null;
+            RatingOverlayInfo? popcornInfo = null;
             RatingOverlayInfo? favoriteInfo = null;
             
             try
@@ -97,6 +98,7 @@ namespace EmbyIcons.Services
                 iconGroups = await CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons).ConfigureAwait(false);
                 ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 rottenInfo = await CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                popcornInfo = await CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
                 favoriteInfo = await CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
@@ -115,6 +117,11 @@ namespace EmbyIcons.Services
                 {
                     if (!overlaysByCorner.ContainsKey(rottenInfo.Alignment)) overlaysByCorner[rottenInfo.Alignment] = new List<IOverlayInfo>();
                     overlaysByCorner[rottenInfo.Alignment].Add(rottenInfo);
+                }
+                if (popcornInfo != null)
+                {
+                    if (!overlaysByCorner.ContainsKey(popcornInfo.Alignment)) overlaysByCorner[popcornInfo.Alignment] = new List<IOverlayInfo>();
+                    overlaysByCorner[popcornInfo.Alignment].Add(popcornInfo);
                 }
                 if (favoriteInfo != null)
                 {
@@ -168,6 +175,10 @@ namespace EmbyIcons.Services
                     {
                         try { rottenInfo.Icon.Dispose(); } catch { }
                     }
+                    if (popcornInfo?.Icon != null)
+                    {
+                        try { popcornInfo.Icon.Dispose(); } catch { }
+                    }
                     if (favoriteInfo?.Icon != null)
                     {
                         try { favoriteInfo.Icon.Dispose(); } catch { }
@@ -205,6 +216,48 @@ namespace EmbyIcons.Services
                 profileOptions.RottenTomatoesScoreBackgroundShape,
                 profileOptions.RottenTomatoesScoreBackgroundColor,
                 profileOptions.RottenTomatoesScoreBackgroundOpacity);
+        }
+
+        private async Task<RatingOverlayInfo?> CreatePopcornRatingInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)
+        {
+            if (profileOptions.PopcornScoreIconAlignment == IconAlignment.Disabled || !data.PopcornRating.HasValue)
+            {
+                return null;
+            }
+
+            const float SpilledThreshold = 60f;
+            const float VerifiedHotThreshold = 90f;
+            const int VerifiedHotVotes = 500;
+
+            float percent = data.PopcornRating.Value;
+            int votes = data.PopcornVotes ?? 0;
+
+            string iconKeyToRequest;
+            if (percent < SpilledThreshold)
+            {
+                iconKeyToRequest = StringConstants.SpilledPopcornIcon;
+            }
+            else if (percent >= VerifiedHotThreshold && votes >= VerifiedHotVotes)
+            {
+                iconKeyToRequest = StringConstants.PopcornIcon;
+            }
+            else
+            {
+                iconKeyToRequest = StringConstants.FreshPopcornIcon;
+            }
+
+            var ratingIcon = await _iconCache.GetIconAsync(iconKeyToRequest, IconCacheManager.IconType.CommunityRating, options, cancellationToken).ConfigureAwait(false);
+
+            return new RatingOverlayInfo(
+                profileOptions.PopcornScoreIconAlignment,
+                profileOptions.PopcornScoreIconPriority,
+                profileOptions.PopcornScoreOverlayHorizontal,
+                percent,
+                ratingIcon,
+                true,
+                profileOptions.PopcornScoreBackgroundShape,
+                profileOptions.PopcornScoreBackgroundColor,
+                profileOptions.PopcornScoreBackgroundOpacity);
         }
 
         private async Task<RatingOverlayInfo?> CreateFavoriteCountInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)

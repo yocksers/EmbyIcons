@@ -62,6 +62,7 @@ namespace EmbyIcons.Configuration
         public int CacheMaintenanceIntervalHours { get; set; } = 1;
         public double GlobalConcurrencyMultiplier { get; set; } = 0.75; // Multiplied by processor count
         public bool ForceDisableSkiaSharp { get; set; } = false;
+        public string MDBListApiKey { get; set; } = string.Empty;
         
         #endregion
 
@@ -214,34 +215,41 @@ namespace EmbyIcons.Configuration
         public string RottenTomatoesScoreBackgroundColor { get; set; } = "#404040";
         public int RottenTomatoesScoreBackgroundOpacity { get; set; } = 80;
 
+        public IconAlignment PopcornScoreIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool PopcornScoreOverlayHorizontal { get; set; } = true;
+        public int PopcornScoreIconPriority { get; set; } = 10;
+        public ScoreBackgroundShape PopcornScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
+        public string PopcornScoreBackgroundColor { get; set; } = "#404040";
+        public int PopcornScoreBackgroundOpacity { get; set; } = 80;
+
         public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool AspectRatioOverlayHorizontal { get; set; } = true;
-        public int AspectRatioIconPriority { get; set; } = 10;
+        public int AspectRatioIconPriority { get; set; } = 11;
         public bool SnapAspectRatioToCommon { get; set; } = true;
 
         public IconAlignment ParentalRatingIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool ParentalRatingOverlayHorizontal { get; set; } = true;
-        public int ParentalRatingIconPriority { get; set; } = 11;
+        public int ParentalRatingIconPriority { get; set; } = 12;
 
         public IconAlignment SourceIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool SourceOverlayHorizontal { get; set; } = true;
-        public int SourceIconPriority { get; set; } = 12;
+        public int SourceIconPriority { get; set; } = 13;
 
         public IconAlignment FavoriteCountIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool FavoriteCountOverlayHorizontal { get; set; } = true;
-        public int FavoriteCountIconPriority { get; set; } = 13;
+        public int FavoriteCountIconPriority { get; set; } = 14;
         public ScoreBackgroundShape FavoriteCountBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string FavoriteCountBackgroundColor { get; set; } = "#404040";
         public int FavoriteCountBackgroundOpacity { get; set; } = 80;
 
         public IconAlignment FrameRateIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool FrameRateOverlayHorizontal { get; set; } = true;
-        public int FrameRateIconPriority { get; set; } = 14;
+        public int FrameRateIconPriority { get; set; } = 15;
         public bool SnapFrameRateToCommon { get; set; } = true;
 
         public IconAlignment OriginalLanguageIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool OriginalLanguageOverlayHorizontal { get; set; } = true;
-        public int OriginalLanguageIconPriority { get; set; } = 15;
+        public int OriginalLanguageIconPriority { get; set; } = 16;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";

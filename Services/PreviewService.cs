@@ -94,6 +94,8 @@ namespace EmbyIcons
                 ResolutionIconName = GetRandom(IconCacheManager.IconType.Resolution, "1080p"),
                 CommunityRating = 6.9f,
                 RottenTomatoesRating = 88f,
+                PopcornRating = 92f,
+                PopcornVotes = 750,
                 FavoriteCount = 42,
                 AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9"),
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13"),
