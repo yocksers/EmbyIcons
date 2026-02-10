@@ -164,12 +164,23 @@ define(['loading', 'toast'], function (loading, toast) {
     function renderIconManagerReport(instance, report) {
         const container = instance.dom.iconManagerReportContainer;
         
+        // Clean up previous event handlers to prevent memory leaks
         if (instance.iconClickHandlers) {
             instance.iconClickHandlers.forEach(({ element, handler }) => {
                 element.removeEventListener('click', handler);
             });
         }
         instance.iconClickHandlers = [];
+        
+        // Clean up item list close handlers
+        if (instance.itemListCloseHandlers) {
+            instance.itemListCloseHandlers.forEach(({ closeBtn, closeBtnHandler }) => {
+                if (closeBtn) {
+                    closeBtn.removeEventListener('click', closeBtnHandler);
+                }
+            });
+        }
+        instance.itemListCloseHandlers = [];
         
         const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings', FrameRate: 'Frame Rates', OriginalLanguage: 'Original Languages' };
         const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr.", FrameRate: "fps.", OriginalLanguage: "og." };
@@ -292,9 +303,24 @@ define(['loading', 'toast'], function (loading, toast) {
                 clickedIcon.classList.remove('highlighted');
                 const listElement = iconGrid.nextElementSibling;
                 closeBtn.removeEventListener('click', closeBtnHandler);
+                
+                // Remove from tracked handlers
+                if (instance.itemListCloseHandlers) {
+                    const index = instance.itemListCloseHandlers.findIndex(h => h.closeBtn === closeBtn);
+                    if (index !== -1) {
+                        instance.itemListCloseHandlers.splice(index, 1);
+                    }
+                }
+                
                 listElement.remove();
             };
             closeBtn.addEventListener('click', closeBtnHandler);
+            
+            // Track this handler for cleanup
+            if (!instance.itemListCloseHandlers) {
+                instance.itemListCloseHandlers = [];
+            }
+            instance.itemListCloseHandlers.push({ closeBtn, closeBtnHandler });
         }
     }
 

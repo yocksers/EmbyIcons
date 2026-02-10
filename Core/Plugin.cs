@@ -590,6 +590,15 @@ namespace EmbyIcons
             {
                 logger?.Debug($"[EmbyIcons] Error resetting image processor factory: {ex.Message}");
             }
+            
+            try
+            {
+                Services.MDBListService.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error disposing MDBList service: {ex.Message}");
+            }
         }
 
         public void Dispose()

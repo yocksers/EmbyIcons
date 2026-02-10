@@ -21,6 +21,7 @@ namespace EmbyIcons.Configuration
         public const string FreshPopcornIcon = "t.fresh";
         public const string SpilledPopcornIcon = "t.spilledpopcorn";
         public const string ImdbIcon = "imdb";
+        public const string MyAnimeListIcon = "r.mal";
         public const string HeartIcon = "heart";
 
         public const string RatingPropertyName = "Rating";

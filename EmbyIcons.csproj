@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.50.0</Version>
-		<AssemblyVersion>5.50.0.0</AssemblyVersion>
-		<FileVersion>5.50.0.0</FileVersion>
+		<Version>5.50.2</Version>
+		<AssemblyVersion>5.50.2.0</AssemblyVersion>
+		<FileVersion>5.50.2.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -44,6 +44,7 @@
 		<None Remove="EmbeddedIcons\pr_tv-14.png" />
 		<None Remove="EmbeddedIcons\pr_tv-ma.png" />
 		<None Remove="EmbeddedIcons\pr_tv-pg.png" />
+		<None Remove="EmbeddedIcons\r_mal.png" />
 		<None Remove="EmbeddedIcons\sub.chinese.jpg" />
 		<None Remove="EmbeddedIcons\sub.danish.jpg" />
 		<None Remove="EmbeddedIcons\sub.english.jpg" />
@@ -107,6 +108,7 @@
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-ma.png" />
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
+		<EmbeddedResource Include="EmbeddedIcons\r_mal.png" />
 		<EmbeddedResource Include="EmbeddedIcons\t.spilledpopcorn.png" />
 		<EmbeddedResource Include="EmbeddedIcons\t_fresh.png" />
 		<EmbeddedResource Include="EmbeddedIcons\t_popcorn.png" />

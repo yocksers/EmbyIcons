@@ -486,7 +486,7 @@ namespace EmbyIcons.Services
             };
 
             var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
-            if (profileOptions?.PopcornScoreIconAlignment != IconAlignment.Disabled)
+            if (profileOptions?.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions?.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
             {
                 try
                 {
@@ -498,13 +498,14 @@ namespace EmbyIcons.Services
                         {
                             data.PopcornRating = mdbData.PopcornScore;  
                             data.PopcornVotes = mdbData.PopcornVotes;
+                            data.MyAnimeListRating = mdbData.MyAnimeListScore;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching Popcorn rating for aggregate: {ex.Message}");
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for aggregate: {ex.Message}");
                 }
             }
 
@@ -687,7 +688,7 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled)
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
             {
                 try
                 {
@@ -699,13 +700,14 @@ namespace EmbyIcons.Services
                         {
                             data.PopcornRating = mdbData.PopcornScore;
                             data.PopcornVotes = mdbData.PopcornVotes;
+                            data.MyAnimeListRating = mdbData.MyAnimeListScore;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching Popcorn rating: {ex.Message}");
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
                 }
             }
 

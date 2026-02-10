@@ -75,6 +75,8 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
             }
         };
         document.addEventListener('click', instance.documentClickHandler);
+
+        utils.initializeCollapsibleSections(instance.view);
     }
 
     return {

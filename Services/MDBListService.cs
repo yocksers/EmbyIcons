@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -14,6 +15,73 @@ namespace EmbyIcons.Services
         private static readonly Dictionary<string, CachedRatingData> _ratingsCache = new Dictionary<string, CachedRatingData>();
         private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
         private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
+        private static Timer? _cacheCleanupTimer;
+        private static readonly object _timerLock = new object();
+        private const int MAX_CACHE_ENTRIES = 1000;
+
+        static MDBListService()
+        {
+            lock (_timerLock)
+            {
+                if (_cacheCleanupTimer == null)
+                {
+                    _cacheCleanupTimer = new Timer(_ => PruneExpiredCacheEntries(), null, 
+                        TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+                }
+            }
+        }
+
+        private static void PruneExpiredCacheEntries()
+        {
+            try
+            {
+                _cacheLock.Wait();
+                try
+                {
+                    var now = DateTime.UtcNow;
+                    var keysToRemove = _ratingsCache
+                        .Where(kvp => now - kvp.Value.CachedAt > CacheExpiration)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+
+                    foreach (var key in keysToRemove)
+                    {
+                        _ratingsCache.Remove(key);
+                    }
+
+                    // Also enforce max size limit by removing oldest entries
+                    if (_ratingsCache.Count > MAX_CACHE_ENTRIES)
+                    {
+                        var oldestKeys = _ratingsCache
+                            .OrderBy(kvp => kvp.Value.CachedAt)
+                            .Take(_ratingsCache.Count - MAX_CACHE_ENTRIES)
+                            .Select(kvp => kvp.Key)
+                            .ToList();
+
+                        foreach (var key in oldestKeys)
+                        {
+                            _ratingsCache.Remove(key);
+                        }
+                    }
+
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    {
+                        Plugin.Instance.Logger.Debug($"[EmbyIcons] MDBList cache pruned. Removed {keysToRemove.Count} expired entries. Current size: {_ratingsCache.Count}");
+                    }
+                }
+                finally
+                {
+                    _cacheLock.Release();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                {
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during MDBList cache cleanup: {ex.Message}");
+                }
+            }
+        }
 
         public MDBListRatingData? FetchRatings(BaseItem item, string apiKey)
         {
@@ -84,6 +152,7 @@ namespace EmbyIcons.Services
 
                 float? popcornScore = null;
                 int? popcornVotes = null;
+                float? myAnimeListScore = null;
 
                 foreach (var rating in ratingsArray.EnumerateArray())
                 {
@@ -103,14 +172,21 @@ namespace EmbyIcons.Services
                         {
                             popcornVotes = votesElement.GetInt32();
                         }
-                        break;
+                    }
+                    else if (source.Contains("myanimelist") || source.Contains("mal"))
+                    {
+                        if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
+                        {
+                            myAnimeListScore = (float)valueElement.GetDouble();
+                        }
                     }
                 }
 
                 var result = new MDBListRatingData
                 {
                     PopcornScore = popcornScore,
-                    PopcornVotes = popcornVotes
+                    PopcornVotes = popcornVotes,
+                    MyAnimeListScore = myAnimeListScore
                 };
 
                 await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -164,6 +240,19 @@ namespace EmbyIcons.Services
                 _cacheLock.Release();
             }
         }
+
+        public static void Dispose()
+        {
+            lock (_timerLock)
+            {
+                try
+                {
+                    _cacheCleanupTimer?.Dispose();
+                    _cacheCleanupTimer = null;
+                }
+                catch { }
+            }
+        }
     }
 
     internal class CachedRatingData
@@ -176,5 +265,6 @@ namespace EmbyIcons.Services
     {
         public float? PopcornScore { get; set; }
         public int? PopcornVotes { get; set; }
+        public float? MyAnimeListScore { get; set; }
     }
 }

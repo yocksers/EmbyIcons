@@ -104,6 +104,26 @@ define([
                 document.removeEventListener('click', this.documentClickHandler);
                 this.documentClickHandler = null;
             }
+            
+            // Clean up icon click handlers
+            if (this.iconClickHandlers) {
+                this.iconClickHandlers.forEach(({ element, handler }) => {
+                    if (element) {
+                        element.removeEventListener('click', handler);
+                    }
+                });
+                this.iconClickHandlers = [];
+            }
+            
+            // Clean up item list close handlers
+            if (this.itemListCloseHandlers) {
+                this.itemListCloseHandlers.forEach(({ closeBtn, closeBtnHandler }) => {
+                    if (closeBtn) {
+                        closeBtn.removeEventListener('click', closeBtnHandler);
+                    }
+                });
+                this.itemListCloseHandlers = [];
+            }
         }
 
         async fetchApiRoutes() {

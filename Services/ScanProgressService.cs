@@ -1,6 +1,8 @@
 ﻿using EmbyIcons.Api;
 using MediaBrowser.Model.Services;
+using System;
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -27,6 +29,19 @@ namespace EmbyIcons.Services
         {
             var progress = new ScanProgress { Current = current, Total = total, Message = message, IsComplete = current >= total };
             _progressCache.AddOrUpdate(scanType, progress, (key, old) => progress);
+
+            // Auto-clear completed scans after a delay to prevent memory buildup
+            if (progress.IsComplete)
+            {
+                _ = Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(_ => 
+                {
+                    ClearProgress(scanType);
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    {
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] Auto-cleared completed scan progress: {scanType}");
+                    }
+                });
+            }
         }
 
         public static void ClearProgress(string scanType)

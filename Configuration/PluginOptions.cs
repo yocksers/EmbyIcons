@@ -222,6 +222,13 @@ namespace EmbyIcons.Configuration
         public string PopcornScoreBackgroundColor { get; set; } = "#404040";
         public int PopcornScoreBackgroundOpacity { get; set; } = 80;
 
+        public IconAlignment MyAnimeListScoreIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool MyAnimeListScoreOverlayHorizontal { get; set; } = true;
+        public int MyAnimeListScoreIconPriority { get; set; } = 11;
+        public ScoreBackgroundShape MyAnimeListScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
+        public string MyAnimeListScoreBackgroundColor { get; set; } = "#404040";
+        public int MyAnimeListScoreBackgroundOpacity { get; set; } = 80;
+
         public IconAlignment AspectRatioIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool AspectRatioOverlayHorizontal { get; set; } = true;
         public int AspectRatioIconPriority { get; set; } = 11;

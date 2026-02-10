@@ -78,6 +78,7 @@ namespace EmbyIcons.Services
             RatingOverlayInfo? ratingInfo = null;
             RatingOverlayInfo? rottenInfo = null;
             RatingOverlayInfo? popcornInfo = null;
+            RatingOverlayInfo? malInfo = null;
             RatingOverlayInfo? favoriteInfo = null;
             
             try
@@ -99,6 +100,7 @@ namespace EmbyIcons.Services
                 ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 rottenInfo = await CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 popcornInfo = await CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                malInfo = await CreateMyAnimeListRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
                 favoriteInfo = await CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
@@ -122,6 +124,11 @@ namespace EmbyIcons.Services
                 {
                     if (!overlaysByCorner.ContainsKey(popcornInfo.Alignment)) overlaysByCorner[popcornInfo.Alignment] = new List<IOverlayInfo>();
                     overlaysByCorner[popcornInfo.Alignment].Add(popcornInfo);
+                }
+                if (malInfo != null)
+                {
+                    if (!overlaysByCorner.ContainsKey(malInfo.Alignment)) overlaysByCorner[malInfo.Alignment] = new List<IOverlayInfo>();
+                    overlaysByCorner[malInfo.Alignment].Add(malInfo);
                 }
                 if (favoriteInfo != null)
                 {
@@ -258,6 +265,29 @@ namespace EmbyIcons.Services
                 profileOptions.PopcornScoreBackgroundShape,
                 profileOptions.PopcornScoreBackgroundColor,
                 profileOptions.PopcornScoreBackgroundOpacity);
+        }
+
+        private async Task<RatingOverlayInfo?> CreateMyAnimeListRatingInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)
+        {
+            if (profileOptions.MyAnimeListScoreIconAlignment == IconAlignment.Disabled || !data.MyAnimeListRating.HasValue)
+            {
+                return null;
+            }
+
+            float score = data.MyAnimeListRating.Value;
+
+            var ratingIcon = await _iconCache.GetIconAsync(StringConstants.MyAnimeListIcon, IconCacheManager.IconType.CommunityRating, options, cancellationToken).ConfigureAwait(false);
+
+            return new RatingOverlayInfo(
+                profileOptions.MyAnimeListScoreIconAlignment,
+                profileOptions.MyAnimeListScoreIconPriority,
+                profileOptions.MyAnimeListScoreOverlayHorizontal,
+                score,
+                ratingIcon,
+                false,
+                profileOptions.MyAnimeListScoreBackgroundShape,
+                profileOptions.MyAnimeListScoreBackgroundColor,
+                profileOptions.MyAnimeListScoreBackgroundOpacity);
         }
 
         private async Task<RatingOverlayInfo?> CreateFavoriteCountInfo(OverlayData data, ProfileSettings profileOptions, PluginOptions options, CancellationToken cancellationToken)

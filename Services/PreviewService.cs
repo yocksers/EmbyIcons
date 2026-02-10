@@ -96,6 +96,7 @@ namespace EmbyIcons
                 RottenTomatoesRating = 88f,
                 PopcornRating = 92f,
                 PopcornVotes = 750,
+                MyAnimeListRating = 8.5f,
                 FavoriteCount = 42,
                 AspectRatioIconName = GetRandom(IconCacheManager.IconType.AspectRatio, "16x9"),
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13"),
