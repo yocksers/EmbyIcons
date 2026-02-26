@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net6.0</TargetFramework>
 		<OutputType>Library</OutputType>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.50.2</Version>
-		<AssemblyVersion>5.50.2.0</AssemblyVersion>
-		<FileVersion>5.50.2.0</FileVersion>
+		<Version>5.50.6</Version>
+		<AssemblyVersion>5.50.6.0</AssemblyVersion>
+		<FileVersion>5.50.6.0</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -119,6 +119,8 @@
 		<EmbeddedResource Include="EmbeddedIcons\res_4k.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_576p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_720p.png" />
+		<EmbeddedResource Include="EmbeddedIcons\series_ended.png" />
+		<EmbeddedResource Include="EmbeddedIcons\series_running.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_chinese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_danish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_english.png" />

@@ -23,6 +23,13 @@ namespace EmbyIcons.Configuration
     {
         public string Keyword { get; set; } = string.Empty;
         public string IconName { get; set; } = string.Empty;
+        public bool ApplyToMovies { get; set; } = true;
+        public bool ApplyToSeries { get; set; } = true;
+        public bool ApplyToSeasons { get; set; } = true;
+        public bool ApplyToEpisodes { get; set; } = true;
+        public IconAlignment IconAlignment { get; set; } = IconAlignment.BottomRight;
+        public int Priority { get; set; } = 13;
+        public bool HorizontalLayout { get; set; } = true;
     }
 
     public class PluginOptions : BasePluginConfiguration
@@ -257,6 +264,10 @@ namespace EmbyIcons.Configuration
         public IconAlignment OriginalLanguageIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool OriginalLanguageOverlayHorizontal { get; set; } = true;
         public int OriginalLanguageIconPriority { get; set; } = 16;
+
+        public IconAlignment SeriesStatusIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool SeriesStatusOverlayHorizontal { get; set; } = true;
+        public int SeriesStatusIconPriority { get; set; } = 17;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";

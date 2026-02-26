@@ -38,8 +38,9 @@
 
     <p>
         <strong>Audio Codec (prefix: ac):</strong> <code>ac.{codec_name}.png</code><br />
-        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>eac3</code>, <code>dts-hdma</code>).<br />
-        <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts-hdma.png</code>
+        <em>{codec_name}</em> should match the codec reported by Emby (e.g., <code>eac3</code>, <code>dts</code>, <code>dts-hdma</code>, <code>dtsx</code>, <code>truehd</code>).<br />
+        The plugin distinguishes between DTS variants: <code>dts</code> (regular), <code>dts-hdma</code> (DTS-HD Master Audio), <code>dts-hra</code> (DTS-HD High Resolution), and <code>dtsx</code> (DTS:X).<br />
+        <em>Example:</em> <code>ac.eac3.png</code>, <code>ac.dts.png</code>, <code>ac.dts-hdma.png</code>, <code>ac.dtsx.png</code>
     </p>
 
     <p>
@@ -76,6 +77,16 @@
         <strong>Frame Rate (prefix: fps):</strong> <code>fps.{fps_value}.png</code><br />
         Displays the frame rate of the video. Common values include <code>23.976</code>, <code>24</code>, <code>25</code>, <code>29.97</code>, <code>30</code>, <code>50</code>, <code>59.94</code>, and <code>60</code>.<br />
         <em>Example:</em> <code>fps.23.976.png</code>, <code>fps.60.png</code>
+    </p>
+
+    <p>
+        <strong>Series Status (prefix: series):</strong> <code>series.{status}.png</code><br />
+        Shows whether a TV series has ended or is still running (ongoing). The plugin detects this from the series metadata. Only two status values are used:
+        <ul style="margin-top: .5em;">
+            <li><code>series.ended.png</code> - For series that have ended or been canceled</li>
+            <li><code>series.running.png</code> - For series that are still airing new episodes</li>
+        </ul>
+        <em>Note:</em> This icon type only applies to Series items, not individual episodes or movies. Built-in icons are provided.
     </p>
 
     <h4 style="margin-top: 2em;">Other Categories</h4>

@@ -546,6 +546,39 @@
                         <label><input is="emby-checkbox" type="checkbox" data-profile-key="OriginalLanguageOverlayHorizontal" /><span>Layout Horizontally</span></label>
                     </div>
                 </div>
+                <div>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                        <select is="emby-select" label="Series Status Icons" data-profile-key="SeriesStatusIconAlignment" data-corner-group="TopRight">
+                            <option value="Disabled">Disabled</option>
+                            <option value="TopLeft">Top Left</option>
+                            <option value="TopRight">Top Right</option>
+                            <option value="BottomLeft">Bottom Left</option>
+                            <option value="BottomRight">Bottom Right</option>
+                        </select>
+                        <select is="emby-select" label="Priority" data-profile-key="SeriesStatusIconPriority" data-corner-group="TopRight">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                            <option value="14">14</option>
+                            <option value="15">15</option>
+                            <option value="16">16</option>
+                            <option value="17">17</option>
+                        </select>
+                    </div>
+                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="SeriesStatusOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -598,38 +631,10 @@
         </h3>
         <div class="collapsible-content" style="display: none; margin-top: 1em;">
         <div class="paper-card" style="padding: 1.5em;">
-            <div class="alignment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2em 2.5em;">
+            <div class="alignment-grid">
                 <div>
-                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
-                        <select is="emby-select" label="Community Rating Icon" data-profile-key="CommunityScoreIconAlignment" data-corner-group="TopRight">
-                            <option value="Disabled">Disabled</option>
-                            <option value="TopLeft">Top Left</option>
-                            <option value="TopRight">Top Right</option>
-                            <option value="BottomLeft">Bottom Left</option>
-                            <option value="BottomRight">Bottom Right</option>
-                        </select>
-                        <select is="emby-select" label="Priority" data-profile-key="CommunityScoreIconPriority" data-corner-group="TopRight">
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                            <option value="6">6</option>
-                            <option value="7">7</option>
-                            <option value="8">8</option>
-                            <option value="9">9</option>
-                            <option value="10">10</option>
-                            <option value="11">11</option>
-                            <option value="12">12</option>
-                            <option value="13">13</option>
-                        </select>
-                    </div>
-                    <div class="checkboxContainer" style="margin-top: 1.5em;">
-                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="CommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label>
-                    </div>
-                </div>
-                <div>
-                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                    <h4 style="margin-top:0; margin-bottom: .5em;">Parental Rating Icons</h4>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em; align-items: end;">
                         <select is="emby-select" label="Parental Rating Icons" data-profile-key="ParentalRatingIconAlignment" data-corner-group="TopRight">
                             <option value="Disabled">Disabled</option>
                             <option value="TopLeft">Top Left</option>
@@ -653,26 +658,51 @@
                             <option value="13">13</option>
                         </select>
                     </div>
-                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                    <div class="checkboxContainer" style="margin-top: .75em;">
                         <label><input is="emby-checkbox" type="checkbox" data-profile-key="ParentalRatingOverlayHorizontal" /><span>Layout Horizontally</span></label>
                     </div>
                 </div>
-                <div id="ratingAppearanceControls" style="grid-column: 1 / -1;">
-                    <select is="emby-select" label="Rating Background Shape" data-profile-key="CommunityScoreBackgroundShape">
-                        <option value="None">None</option>
-                        <option value="Circle">Circle</option>
-                        <option value="Square">Square</option>
-                    </select>
-                    <div style="margin-top: 1.5em;">
-                        <label class="inputLabel" for="txtCommunityScoreBackgroundColor">Background Color</label>
-                        <input type="color" data-profile-key="CommunityScoreBackgroundColor" style="width: 100%; height: 2.5em; padding: 0.2em; background: transparent; border: 1px solid rgb(85, 85, 85); border-radius: 4px; box-sizing: border-box;">
+                <div style="margin-top: 1.5em; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.25em;">
+                    <h4 style="margin-top:0; margin-bottom: .5em;">Community Rating Appearance</h4>
+                    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em; align-items: end;">
+                        <select is="emby-select" label="Community Rating Icon" data-profile-key="CommunityScoreIconAlignment" data-corner-group="TopRight">
+                            <option value="Disabled">Disabled</option>
+                            <option value="TopLeft">Top Left</option>
+                            <option value="TopRight">Top Right</option>
+                            <option value="BottomLeft">Bottom Left</option>
+                            <option value="BottomRight">Bottom Right</option>
+                        </select>
+                        <select is="emby-select" label="Priority" data-profile-key="CommunityScoreIconPriority" data-corner-group="TopRight">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                        </select>
                     </div>
-                    <div style="margin-top: 1.5em;">
-                        <label class="inputLabel" for="rngCommunityScoreBackgroundOpacity">Background Opacity: <span class="valCommunityScoreBackgroundOpacity"></span></label>
-                        <input type="range" min="0" max="100" step="1" data-profile-key="CommunityScoreBackgroundOpacity" class="slider" />
+                    <div class="checkboxContainer" style="margin-top: .75em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="CommunityScoreOverlayHorizontal" /><span>Layout Horizontally</span></label>
                     </div>
-                    <div style="margin-top: 1.5em; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.25em;">
-                        <h4 style="margin-top:0; margin-bottom: .5em;">Rotten Tomatoes Appearance</h4>
+                    <div style="margin-top: .75em; display:flex; gap:1em;">
+                        <select is="emby-select" label="Background Shape" data-profile-key="CommunityScoreBackgroundShape" style="flex:1;">
+                            <option value="None">None</option>
+                            <option value="Circle">Circle</option>
+                            <option value="Square">Square</option>
+                        </select>
+                        <input type="color" data-profile-key="CommunityScoreBackgroundColor" style="width:3.25em; height:2.5em; padding:0;" />
+                        <input type="range" min="0" max="100" step="1" data-profile-key="CommunityScoreBackgroundOpacity" class="slider" style="flex:2;" />
+                    </div>
+                </div>
+                <div style="margin-top: 1.5em; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1.25em;">
+                    <h4 style="margin-top:0; margin-bottom: .5em;">Rotten Tomatoes Appearance</h4>
                         <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em; align-items: end;">
                             <select is="emby-select" label="Rotten Tomatoes Icon" data-profile-key="RottenTomatoesScoreIconAlignment" data-corner-group="TopRight">
                                 <option value="Disabled">Disabled</option>
@@ -854,7 +884,7 @@
             </h3>
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
                 <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">
-                    Display icons for movies based on keywords in the filename (e.g., 'remux', 'extended', 'web-dl'). The icon name you provide is used to find a file like <code>source.icon-name.png</code> in your custom icons folder.
+                    Display icons for movies based on keywords in the filename (e.g., 'remux', 'extended', 'web-dl'). The icon name you provide is used to find a file like <code>source.icon-name.png</code> in your custom icons folder. Each mapping has its own corner placement, priority, and layout settings.
                 </p>
                 <div class="paper-card" style="padding: 1.5em;">
             <div id="filenameMappingsContainer">

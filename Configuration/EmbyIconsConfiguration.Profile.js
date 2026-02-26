@@ -144,7 +144,26 @@ define(['loading', 'toast'], function (loading, toast) {
         instance.dom.filenameMappingsContainer.querySelectorAll('.filenameMappingRow').forEach(row => {
             const keyword = row.querySelector('.txtFilenameKeyword').value.trim();
             const iconName = row.querySelector('.txtFilenameIconName').value.trim();
-            if (keyword && iconName) mappings.push({ Keyword: keyword, IconName: iconName });
+            const applyToMovies = row.querySelector('.chkApplyToMovies').checked;
+            const applyToSeries = row.querySelector('.chkApplyToSeries').checked;
+            const applyToSeasons = row.querySelector('.chkApplyToSeasons').checked;
+            const applyToEpisodes = row.querySelector('.chkApplyToEpisodes').checked;
+            const iconAlignment = row.querySelector('.selFilenameIconAlignment').value;
+            const priority = parseInt(row.querySelector('.selFilenamePriority').value, 10);
+            const horizontalLayout = row.querySelector('.chkFilenameHorizontalLayout').checked;
+            if (keyword && iconName) {
+                mappings.push({ 
+                    Keyword: keyword, 
+                    IconName: iconName,
+                    ApplyToMovies: applyToMovies,
+                    ApplyToSeries: applyToSeries,
+                    ApplyToSeasons: applyToSeasons,
+                    ApplyToEpisodes: applyToEpisodes,
+                    IconAlignment: iconAlignment,
+                    Priority: priority,
+                    HorizontalLayout: horizontalLayout
+                });
+            }
         });
         profile.Settings.FilenameBasedIcons = mappings;
     }

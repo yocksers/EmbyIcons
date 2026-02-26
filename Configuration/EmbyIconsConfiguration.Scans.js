@@ -182,8 +182,8 @@ define(['loading', 'toast'], function (loading, toast) {
         }
         instance.itemListCloseHandlers = [];
         
-        const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings', FrameRate: 'Frame Rates', OriginalLanguage: 'Original Languages' };
-        const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr.", FrameRate: "fps.", OriginalLanguage: "og." };
+        const friendlyNames = { Language: 'Audio Languages', Subtitle: 'Subtitle Languages', Channel: 'Audio Channels', AudioCodec: 'Audio Codecs', VideoCodec: 'Video Codecs', VideoFormat: 'Video Formats', Resolution: 'Resolutions', AspectRatio: 'Aspect Ratios', Tag: 'Custom Tags', ParentalRating: 'Parental Ratings', FrameRate: 'Frame Rates', OriginalLanguage: 'Original Languages', SeriesStatus: 'Series Status' };
+        const prefixMap = { Language: "lang.", Subtitle: "sub.", Channel: "ch.", AudioCodec: "ac.", VideoCodec: "vc.", VideoFormat: "hdr.", Resolution: "res.", AspectRatio: "ar.", Tag: "tag.", ParentalRating: "pr.", FrameRate: "fps.", OriginalLanguage: "og.", SeriesStatus: "series." };
 
         const htmlParts = [];
         htmlParts.push(`<p class="fieldDescription">Report generated on: ${new Date(report.ReportDate).toLocaleString()}</p>`);
@@ -271,7 +271,7 @@ define(['loading', 'toast'], function (loading, toast) {
     }
 
     function showItemsInline(items, iconType, iconName, clickedIcon) {
-        const friendlyNames = { Language: 'Audio Language', Subtitle: 'Subtitle Language', Channel: 'Audio Channel', AudioCodec: 'Audio Codec', VideoCodec: 'Video Codec', VideoFormat: 'Video Format', Resolution: 'Resolution', AspectRatio: 'Aspect Ratio', Tag: 'Tag', ParentalRating: 'Parental Rating', FrameRate: 'Frame Rate', OriginalLanguage: 'Original Language' };
+        const friendlyNames = { Language: 'Audio Language', Subtitle: 'Subtitle Language', Channel: 'Audio Channel', AudioCodec: 'Audio Codec', VideoCodec: 'Video Codec', VideoFormat: 'Video Format', Resolution: 'Resolution', AspectRatio: 'Aspect Ratio', Tag: 'Tag', ParentalRating: 'Parental Rating', FrameRate: 'Frame Rate', OriginalLanguage: 'Original Language', SeriesStatus: 'Series Status' };
 
         const itemsHtml = items.map(item => {
             let itemDisplay = `<strong>${item.Name}</strong>`;

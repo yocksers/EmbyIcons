@@ -17,7 +17,7 @@ namespace EmbyIcons.Services
     [Route(ApiRoutes.ItemsByIcon, "GET", Summary = "Gets media items that use a specific icon")]
     public class GetItemsByIcon : IReturn<ItemsByIconResponse>
     {
-        [ApiMember(Name = "IconType", Description = "The type of icon (Language, Subtitle, Channel, AudioCodec, VideoCodec, VideoFormat, Resolution, AspectRatio, Tag, ParentalRating, FrameRate)", IsRequired = true)]
+        [ApiMember(Name = "IconType", Description = "The type of icon (Language, Subtitle, Channel, AudioCodec, VideoCodec, VideoFormat, Resolution, AspectRatio, Tag, ParentalRating, FrameRate, OriginalLanguage, SeriesStatus)", IsRequired = true)]
         public string IconType { get; set; } = string.Empty;
 
         [ApiMember(Name = "IconName", Description = "The name of the icon (e.g., 'en', '5.1', 'hevc')", IsRequired = true)]
@@ -64,9 +64,13 @@ namespace EmbyIcons.Services
             var iconName = request.IconName.ToLowerInvariant();
             var limit = request.Limit ?? 100;
 
+            var includeTypes = iconType.Equals("SeriesStatus", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Series" }
+                : new[] { "Movie", Constants.Episode };
+
             var query = new InternalItemsQuery
             {
-                IncludeItemTypes = new[] { "Movie", Constants.Episode },
+                IncludeItemTypes = includeTypes,
                 IsVirtualItem = false,
                 Recursive = true,
                 Limit = 5000
@@ -95,7 +99,7 @@ namespace EmbyIcons.Services
                 if (matchingItems.Count >= limit) break;
 
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                if (!streams.Any() && !iconType.Equals("Tag", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("ParentalRating", StringComparison.OrdinalIgnoreCase))
+                if (!streams.Any() && !iconType.Equals("Tag", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("ParentalRating", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("SeriesStatus", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 bool matches = false;
@@ -184,6 +188,14 @@ namespace EmbyIcons.Services
                         {
                             var normalizedOriginalLang = LanguageHelper.NormalizeLangCode(originalLang);
                             matches = normalizedOriginalLang.Equals(iconName, StringComparison.OrdinalIgnoreCase);
+                        }
+                        break;
+
+                    case "SeriesStatus":
+                        if (item is MediaBrowser.Controller.Entities.TV.Series series)
+                        {
+                            var status = MediaStreamHelper.GetSeriesStatusIconName(series);
+                            matches = status != null && status.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         }
                         break;
                 }

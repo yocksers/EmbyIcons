@@ -481,6 +481,8 @@ namespace EmbyIcons.Services
                 CommunityRating = currentCommunityRating,
                 RottenTomatoesRating = item.CriticRating,
                 Tags = tags,
+                SourceIcons = aggResult.SourceIcons,
+                FilenameBasedIcons = aggResult.FilenameBasedIcons,
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
@@ -512,6 +514,11 @@ namespace EmbyIcons.Services
             if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
                 data.FavoriteCount = _enhancer.GetFavoriteCount(item);
+            }
+
+            if (profileOptions?.SeriesStatusIconAlignment != IconAlignment.Disabled && item is Series series)
+            {
+                data.SeriesStatusIconName = MediaStreamHelper.GetSeriesStatusIconName(series);
             }
 
             return data;
@@ -721,7 +728,7 @@ namespace EmbyIcons.Services
                 data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
             }
 
-            if (profileOptions.SourceIconAlignment != IconAlignment.Disabled && item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 string? providerIdKey = null;
@@ -790,9 +797,42 @@ namespace EmbyIcons.Services
                     {
                         if (!string.IsNullOrWhiteSpace(mapping.Keyword) &&
                             !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                            mapping.ApplyToMovies &&
+                            mapping.IconAlignment != IconAlignment.Disabled &&
                             path.Contains(mapping.Keyword.ToLowerInvariant()))
                         {
-                            data.SourceIcons.Add(mapping.IconName.ToLowerInvariant());
+                            data.FilenameBasedIcons.Add(new FilenameBasedIconData
+                            {
+                                IconName = mapping.IconName.ToLowerInvariant(),
+                                Alignment = mapping.IconAlignment,
+                                Priority = mapping.Priority,
+                                HorizontalLayout = mapping.HorizontalLayout
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (item is Episode episodeItem && profileOptions.FilenameBasedIcons.Any())
+            {
+                if (!string.IsNullOrEmpty(episodeItem.Path))
+                {
+                    var episodePath = episodeItem.Path.ToLowerInvariant();
+                    foreach (var mapping in profileOptions.FilenameBasedIcons)
+                    {
+                        if (!string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                            !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                            mapping.ApplyToEpisodes &&
+                            mapping.IconAlignment != IconAlignment.Disabled &&
+                            episodePath.Contains(mapping.Keyword.ToLowerInvariant()))
+                        {
+                            data.FilenameBasedIcons.Add(new FilenameBasedIconData
+                            {
+                                IconName = mapping.IconName.ToLowerInvariant(),
+                                Alignment = mapping.IconAlignment,
+                                Priority = mapping.Priority,
+                                HorizontalLayout = mapping.HorizontalLayout
+                            });
                         }
                     }
                 }

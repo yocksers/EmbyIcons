@@ -20,11 +20,34 @@ namespace EmbyIcons.Helpers
                 if (string.IsNullOrEmpty(codec)) return null;
 
                 var lowerCodec = codec.ToLowerInvariant();
+                var displayTitle = (stream.DisplayTitle ?? "").ToLowerInvariant();
+                var profile = (stream.Profile ?? "").ToLowerInvariant();
+                
+                if (lowerCodec.Contains("dts") || displayTitle.Contains("dts") || profile.Contains("dts"))
+                {
+                    if (displayTitle.Contains("dts:x") || profile.Contains("dts:x") || lowerCodec.Contains("dts:x") || 
+                        displayTitle.Contains("dtsx") || profile.Contains("dtsx") || lowerCodec.Contains("dtsx"))
+                    {
+                        return "dtsx";
+                    }
+                    if (displayTitle.Contains("dts-hd ma") || profile.Contains("dts-hd ma") || lowerCodec.Contains("dts-hd ma") ||
+                        displayTitle.Contains("dts-hd master") || profile.Contains("dts-hd master") ||
+                        displayTitle.Contains("dts-hdma") || profile.Contains("dts-hdma") || lowerCodec.Contains("dts-hdma") ||
+                        displayTitle.Contains("dts ma") || profile.Contains("dts ma"))
+                    {
+                        return "dts-hdma";
+                    }
+                    if (displayTitle.Contains("dts-hd hra") || profile.Contains("dts-hd hra") || lowerCodec.Contains("dts-hd hra") ||
+                        displayTitle.Contains("dts-hra") || profile.Contains("dts-hra") || lowerCodec.Contains("dts-hra") ||
+                        displayTitle.Contains("dts-hd hr") || profile.Contains("dts-hd hr") || lowerCodec.Contains("dts-hd hr"))
+                    {
+                        return "dts-hra";
+                    }
+                    return "dts";
+                }
                 
                 return lowerCodec switch
                 {
-                    var c when c.Contains("dts-hd ma") => c.Replace("dts-hd ma", "dts-hdma"),
-                    var c when c.Contains("dts:x") => c.Replace("dts:x", "dtsx"),
                     var c when c.Contains("e-ac-3") => c.Replace("e-ac-3", "eac3"),
                     var c when c.Contains("ac-3") => c.Replace("ac-3", "ac3"),
                     _ => lowerCodec
@@ -146,36 +169,33 @@ namespace EmbyIcons.Helpers
 
                 string? resolutionName = null;
 
-                if (width >= 3840 && width <= 4096)
+                if (height >= 2160)
                 {
                     resolutionName = "4k";
                 }
-                else if (width >= 2560 && width < 3840)
+                else if (height >= 1440)
                 {
                     resolutionName = "1440p";
                 }
-                else if (width >= 1920 && width < 2560)
+                else if (height >= 1080)
                 {
                     resolutionName = "1080" + scanType;
                 }
-                else if (width >= 1280 && width < 1920)
+                else if (height >= 720)
                 {
                     resolutionName = "720" + scanType;
                 }
-                else if (width < 1280)
+                else if (height >= 576)
                 {
-                    if (height >= 576)
-                    {
-                        resolutionName = "576" + scanType;
-                    }
-                    else if (height >= 480)
-                    {
-                        resolutionName = "480" + scanType;
-                    }
-                    else if (height >= 360)
-                    {
-                        resolutionName = "360" + scanType;
-                    }
+                    resolutionName = "576" + scanType;
+                }
+                else if (height >= 480)
+                {
+                    resolutionName = "480" + scanType;
+                }
+                else if (height >= 360)
+                {
+                    resolutionName = "360" + scanType;
                 }
 
                 if (resolutionName != null)
@@ -344,6 +364,59 @@ namespace EmbyIcons.Helpers
                 var hashBytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
                 return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
             }
+        }
+
+        public static string? GetSeriesStatusIconName(MediaBrowser.Controller.Entities.TV.Series? series)
+        {
+            if (series == null) return null;
+
+            try
+            {
+                // Check if the series has a Status property using reflection
+                var statusProperty = series.GetType().GetProperty("Status");
+                if (statusProperty != null)
+                {
+                    var statusValue = statusProperty.GetValue(series)?.ToString();
+                    if (!string.IsNullOrEmpty(statusValue))
+                    {
+                        // Check if the status indicates the series has ended
+                        if (statusValue.IndexOf("Ended", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            statusValue.IndexOf("Canceled", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            return "ended";
+                        }
+                        // Check if the status indicates the series is continuing/running
+                        else if (statusValue.IndexOf("Continuing", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 statusValue.IndexOf("Running", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            return "running";
+                        }
+                    }
+                }
+
+                // Fallback: Check EndDate property
+                var endDateProperty = series.GetType().GetProperty("EndDate");
+                if (endDateProperty != null)
+                {
+                    var endDate = endDateProperty.GetValue(series) as DateTime?;
+                    if (endDate.HasValue && endDate.Value < DateTime.Now)
+                    {
+                        return "ended";
+                    }
+                }
+
+                // If we have a PremiereDate but no EndDate or status, assume it's running
+                if (series.PremiereDate.HasValue)
+                {
+                    return "running";
+                }
+            }
+            catch
+            {
+                // If we can't determine the status, return null
+            }
+
+            return null;
         }
     }
 }

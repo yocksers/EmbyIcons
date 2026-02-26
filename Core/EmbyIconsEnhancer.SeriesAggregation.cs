@@ -1,6 +1,7 @@
 ﻿using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
+using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -33,6 +34,8 @@ namespace EmbyIcons
             public HashSet<string> VideoFormats { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> Resolutions { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> AspectRatios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> SourceIcons { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+            public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
             public string CombinedEpisodesHashShort { get; init; } = "";
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
         }
@@ -321,6 +324,83 @@ namespace EmbyIcons
                 }
             }
 
+            var finalSourceIcons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var filenameBasedIconsList = new List<FilenameBasedIconData>();
+            if (profileOptions.FilenameBasedIcons.Any())
+            {
+                var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                bool checkParentPath = false;
+                bool checkEpisodePaths = false;
+                
+                if (parent is Series)
+                {
+                    checkParentPath = true;
+                    checkEpisodePaths = true;
+                }
+                else if (parent is Season)
+                {
+                    checkParentPath = true;
+                    checkEpisodePaths = true;
+                }
+                
+                if (checkParentPath && !string.IsNullOrEmpty(parent.Path))
+                {
+                    allPaths.Add(parent.Path.ToLowerInvariant());
+                }
+                
+                if (checkEpisodePaths)
+                {
+                    foreach (var item in itemList)
+                    {
+                        if (!string.IsNullOrEmpty(item.Path))
+                        {
+                            allPaths.Add(item.Path.ToLowerInvariant());
+                        }
+                    }
+                }
+                
+                foreach (var path in allPaths)
+                {
+                    foreach (var mapping in profileOptions.FilenameBasedIcons)
+                    {
+                        bool shouldApply = false;
+                        
+                        if (parent is Series && mapping.ApplyToSeries && checkParentPath && !string.IsNullOrEmpty(parent.Path) && path == parent.Path.ToLowerInvariant())
+                        {
+                            shouldApply = true;
+                        }
+                        else if (parent is Series && mapping.ApplyToEpisodes && checkEpisodePaths)
+                        {
+                            shouldApply = true;
+                        }
+                        else if (parent is Season && mapping.ApplyToSeasons && checkParentPath && !string.IsNullOrEmpty(parent.Path) && path == parent.Path.ToLowerInvariant())
+                        {
+                            shouldApply = true;
+                        }
+                        else if (parent is Season && mapping.ApplyToEpisodes && checkEpisodePaths)
+                        {
+                            shouldApply = true;
+                        }
+                        
+                        if (shouldApply &&
+                            !string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                            !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                            mapping.IconAlignment != IconAlignment.Disabled &&
+                            path.Contains(mapping.Keyword.ToLowerInvariant()))
+                        {
+                            filenameBasedIconsList.Add(new FilenameBasedIconData
+                            {
+                                IconName = mapping.IconName.ToLowerInvariant(),
+                                Alignment = mapping.IconAlignment,
+                                Priority = mapping.Priority,
+                                HorizontalLayout = mapping.HorizontalLayout
+                            });
+                        }
+                    }
+                }
+            }
+
             var combinedHashString = string.Join(";", itemHashes.OrderBy(h => h));
             byte[] hashBytes;
             using (var md5 = MD5.Create())
@@ -339,6 +419,8 @@ namespace EmbyIcons
                 Resolutions = finalResolutions,
                 VideoFormats = finalVideoFormats,
                 AspectRatios = finalAspectRatios,
+                SourceIcons = finalSourceIcons,
+                FilenameBasedIcons = filenameBasedIconsList,
                 CombinedEpisodesHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
             };
 

@@ -225,7 +225,14 @@ define([
         addFilenameMappingRow(mapping) {
             const keyword = mapping ? mapping.Keyword : '';
             const iconName = mapping ? mapping.IconName : '';
-            const newRow = domHelpers.createFilenameMappingRow(keyword, iconName);
+            const applyToMovies = mapping ? mapping.ApplyToMovies : true;
+            const applyToSeries = mapping ? mapping.ApplyToSeries : true;
+            const applyToSeasons = mapping ? mapping.ApplyToSeasons : true;
+            const applyToEpisodes = mapping ? mapping.ApplyToEpisodes : true;
+            const iconAlignment = mapping ? mapping.IconAlignment : 'BottomRight';
+            const priority = mapping ? mapping.Priority : 13;
+            const horizontalLayout = mapping ? mapping.HorizontalLayout : true;
+            const newRow = domHelpers.createFilenameMappingRow(keyword, iconName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout);
             this.dom.filenameMappingsContainer.appendChild(newRow);
         }
 

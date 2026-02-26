@@ -47,14 +47,6 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
         instance.dom.allProfileSelects.forEach(s => {
             if (s.embyselect) s.embyselect.refresh();
         });
-
-        if (instance.dom.opacitySlider && instance.dom.opacityValue) {
-            instance.dom.opacityValue.textContent = instance.dom.opacitySlider.value + '%';
-        }
-
-        require(['configurationpage?name=EmbyIconsConfigurationUIHandlers'], (uiHandlers) => {
-            uiHandlers.toggleRatingAppearanceControls(instance);
-        });
     }
 
     async function populateLibraryAssignments(instance, profileId) {

@@ -107,6 +107,7 @@ namespace EmbyIcons.Services
             public HashSet<string> ParentalRatings { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> FrameRates { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> OriginalLanguages { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> SeriesStatuses { get; } = new(StringComparer.OrdinalIgnoreCase);
             
             public string? Resolution { get; set; }
             public string? PrimaryLanguage { get; set; }
@@ -166,6 +167,14 @@ namespace EmbyIcons.Services
 
                     if (!streams.Any()) return localReport;
 
+                    var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var isLikelyImage = false;
+                    if (videoStream != null)
+                    {
+                        var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
+                        isLikelyImage = fps.HasValue && fps.Value > 1000;
+                    }
+
                     var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
                     if (format != null)
                     {
@@ -173,14 +182,17 @@ namespace EmbyIcons.Services
                         localReport.VideoFormat = format;
                     }
 
-                    var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
-                    if (primaryAudio != null)
+                    if (!isLikelyImage)
                     {
-                        var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
-                        if (ch != null)
+                        var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                        if (primaryAudio != null)
                         {
-                            localReport.Channels.Add(ch);
-                            localReport.Channel = ch;
+                            var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
+                            if (ch != null)
+                            {
+                                localReport.Channels.Add(ch);
+                                localReport.Channel = ch;
+                            }
                         }
                     }
 
@@ -189,21 +201,24 @@ namespace EmbyIcons.Services
                         switch (stream.Type)
                         {
                             case MediaStreamType.Audio:
-                                if (!string.IsNullOrEmpty(stream.DisplayLanguage))
+                                if (!isLikelyImage)
                                 {
-                                    var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
-                                    localReport.Languages.Add(lang);
-                                    if (localReport.PrimaryLanguage == null) localReport.PrimaryLanguage = lang;
-                                }
-                                var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
-                                if (audioCodec != null)
-                                {
-                                    localReport.AudioCodecs.Add(audioCodec);
-                                    if (localReport.AudioCodec == null) localReport.AudioCodec = audioCodec;
+                                    if (!string.IsNullOrEmpty(stream.DisplayLanguage))
+                                    {
+                                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                                        localReport.Languages.Add(lang);
+                                        if (localReport.PrimaryLanguage == null) localReport.PrimaryLanguage = lang;
+                                    }
+                                    var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
+                                    if (audioCodec != null)
+                                    {
+                                        localReport.AudioCodecs.Add(audioCodec);
+                                        if (localReport.AudioCodec == null) localReport.AudioCodec = audioCodec;
+                                    }
                                 }
                                 break;
                             case MediaStreamType.Subtitle:
-                                if (!string.IsNullOrEmpty(stream.DisplayLanguage))
+                                if (!isLikelyImage && !string.IsNullOrEmpty(stream.DisplayLanguage))
                                 {
                                     var subLang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
                                     localReport.Subtitles.Add(subLang);
@@ -229,11 +244,14 @@ namespace EmbyIcons.Services
                                     localReport.AspectRatios.Add(ar);
                                     localReport.AspectRatio = ar;
                                 }
-                                var fps = MediaStreamHelper.GetFrameRateIconName(stream);
-                                if (fps != null)
+                                if (!isLikelyImage)
                                 {
-                                    localReport.FrameRates.Add(fps);
-                                    localReport.FrameRate = fps;
+                                    var fps = MediaStreamHelper.GetFrameRateIconName(stream);
+                                    if (fps != null)
+                                    {
+                                        localReport.FrameRates.Add(fps);
+                                        localReport.FrameRate = fps;
+                                    }
                                 }
                                 break;
                         }
@@ -245,6 +263,12 @@ namespace EmbyIcons.Services
                         var normalizedLang = LanguageHelper.NormalizeLangCode(originalLang);
                         localReport.OriginalLanguages.Add(normalizedLang);
                         localReport.OriginalLanguage = normalizedLang;
+                    }
+
+                    if (item is MediaBrowser.Controller.Entities.TV.Series series)
+                    {
+                        var status = MediaStreamHelper.GetSeriesStatusIconName(series);
+                        if (status != null) localReport.SeriesStatuses.Add(status);
                     }
 
                     var newCount = System.Threading.Interlocked.Increment(ref processedCount);
@@ -271,6 +295,7 @@ namespace EmbyIcons.Services
                         threadReport.ParentalRatings.UnionWith(itemReport.ParentalRatings);
                         threadReport.FrameRates.UnionWith(itemReport.FrameRates);
                         threadReport.OriginalLanguages.UnionWith(itemReport.OriginalLanguages);
+                        threadReport.SeriesStatuses.UnionWith(itemReport.SeriesStatuses);
                         return threadReport;
                     },
                     combineAccumulatorsFunc: (mainReport, threadReport) =>
@@ -287,6 +312,7 @@ namespace EmbyIcons.Services
                         mainReport.ParentalRatings.UnionWith(threadReport.ParentalRatings);
                         mainReport.FrameRates.UnionWith(threadReport.FrameRates);
                         mainReport.OriginalLanguages.UnionWith(threadReport.OriginalLanguages);
+                        mainReport.SeriesStatuses.UnionWith(threadReport.SeriesStatuses);
                         return mainReport;
                     },
                     resultSelector: finalReport => finalReport);
@@ -305,6 +331,7 @@ namespace EmbyIcons.Services
             report.Groups[IconCacheManager.IconType.ParentalRating.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.ParentalRatings.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.ParentalRating, new List<string>()) };
             report.Groups[IconCacheManager.IconType.FrameRate.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.FrameRates.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.FrameRate, new List<string>()) };
             report.Groups[IconCacheManager.IconType.OriginalLanguage.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.OriginalLanguages.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.OriginalLanguage, new List<string>()) };
+            report.Groups[IconCacheManager.IconType.SeriesStatus.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.SeriesStatuses.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.SeriesStatus, new List<string>()) };
 
             report.Statistics = CalculateStatistics(allItems, knownResolutions);
 
@@ -335,16 +362,23 @@ namespace EmbyIcons.Services
                 if (!streams.Any()) return;
 
                 var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                var isLikelyImage = false;
                 if (videoStream != null)
                 {
+                    var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
+                    isLikelyImage = fps.HasValue && fps.Value > 1000;
+
                     var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
                     if (res != null) resolutionCounts.AddOrUpdate(res, 1, (k, v) => v + 1);
 
                     var ar = MediaStreamHelper.GetAspectRatioIconName(videoStream, true);
                     if (ar != null) aspectRatioCounts.AddOrUpdate(ar, 1, (k, v) => v + 1);
 
-                    var fps = MediaStreamHelper.GetFrameRateIconName(videoStream);
-                    if (fps != null) frameRateCounts.AddOrUpdate(fps, 1, (k, v) => v + 1);
+                    if (!isLikelyImage)
+                    {
+                        var fpsIconName = MediaStreamHelper.GetFrameRateIconName(videoStream);
+                        if (fpsIconName != null) frameRateCounts.AddOrUpdate(fpsIconName, 1, (k, v) => v + 1);
+                    }
 
                     var vc = MediaStreamHelper.GetVideoCodecIconName(videoStream);
                     if (vc != null) videoCodecCounts.AddOrUpdate(vc, 1, (k, v) => v + 1);
@@ -353,27 +387,30 @@ namespace EmbyIcons.Services
                 var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
                 if (format != null) videoFormatCounts.AddOrUpdate(format, 1, (k, v) => v + 1);
 
-                var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
-                if (primaryAudio != null)
+                if (!isLikelyImage)
                 {
-                    if (!string.IsNullOrEmpty(primaryAudio.DisplayLanguage))
+                    var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                    if (primaryAudio != null)
                     {
-                        var lang = LanguageHelper.NormalizeLangCode(primaryAudio.DisplayLanguage);
-                        languageCounts.AddOrUpdate(lang, 1, (k, v) => v + 1);
+                        if (!string.IsNullOrEmpty(primaryAudio.DisplayLanguage))
+                        {
+                            var lang = LanguageHelper.NormalizeLangCode(primaryAudio.DisplayLanguage);
+                            languageCounts.AddOrUpdate(lang, 1, (k, v) => v + 1);
+                        }
+
+                        var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
+                        if (ch != null) channelCounts.AddOrUpdate(ch, 1, (k, v) => v + 1);
+
+                        var ac = MediaStreamHelper.GetAudioCodecIconName(primaryAudio);
+                        if (ac != null) audioCodecCounts.AddOrUpdate(ac, 1, (k, v) => v + 1);
                     }
 
-                    var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
-                    if (ch != null) channelCounts.AddOrUpdate(ch, 1, (k, v) => v + 1);
-
-                    var ac = MediaStreamHelper.GetAudioCodecIconName(primaryAudio);
-                    if (ac != null) audioCodecCounts.AddOrUpdate(ac, 1, (k, v) => v + 1);
-                }
-
-                var firstSubtitle = streams.FirstOrDefault(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage));
-                if (firstSubtitle != null)
-                {
-                    var subLang = LanguageHelper.NormalizeLangCode(firstSubtitle.DisplayLanguage);
-                    subtitleCounts.AddOrUpdate(subLang, 1, (k, v) => v + 1);
+                    var firstSubtitle = streams.FirstOrDefault(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage));
+                    if (firstSubtitle != null)
+                    {
+                        var subLang = LanguageHelper.NormalizeLangCode(firstSubtitle.DisplayLanguage);
+                        subtitleCounts.AddOrUpdate(subLang, 1, (k, v) => v + 1);
+                    }
                 }
 
                 var originalLang = GetOriginalLanguageFromItem(item);

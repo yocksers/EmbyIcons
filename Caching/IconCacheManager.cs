@@ -32,7 +32,7 @@ namespace EmbyIcons.Caching
             ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"
         };
 
-        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating, Source, FrameRate, OriginalLanguage }
+        public enum IconType { Language, Subtitle, Channel, VideoFormat, Resolution, AudioCodec, VideoCodec, Tag, CommunityRating, AspectRatio, ParentalRating, Source, FrameRate, OriginalLanguage, SeriesStatus }
 
         private readonly object _customKeysLock = new();
         private string? _customKeysFolder;

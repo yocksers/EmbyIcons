@@ -5,12 +5,6 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         triggerConfigSave(instance);
         triggerPreviewUpdate(instance);
 
-        if (event.target.matches('[data-profile-key="CommunityScoreBackgroundOpacity"]')) {
-            instance.dom.opacityValue.textContent = event.target.value + '%';
-        }
-        if (event.target.matches('[data-profile-key="CommunityScoreIconAlignment"]')) {
-            toggleRatingAppearanceControls(instance);
-        }
         if (event.target.matches('[data-profile-key="UseSeriesLiteMode"]')) {
             toggleDependentSetting(instance, 'UseSeriesLiteMode', 'ShowSeriesIconsIfAllEpisodesHaveLanguage', 'This setting is ignored when Lite Mode is enabled, as Lite Mode only scans one episode.');
         }
@@ -74,15 +68,6 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         }
     }
 
-    function toggleRatingAppearanceControls(instance) {
-        if (!instance.dom.ratingAppearanceControls) return;
-
-        const ratingAlignmentSelect = instance.dom.view.querySelector('[data-profile-key="CommunityScoreIconAlignment"]');
-        if (ratingAlignmentSelect) {
-            instance.dom.ratingAppearanceControls.style.display = ratingAlignmentSelect.value === 'Disabled' ? 'none' : 'block';
-        }
-    }
-
     function onTabChange(instance, e) {
         const currentTarget = e.currentTarget;
         instance.dom.view.querySelector('.localnav .ui-btn-active')?.classList.remove('ui-btn-active');
@@ -141,7 +126,6 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         onFormChange: onFormChange,
         onPriorityChange: onPriorityChange,
         updateAllPriorityGroups: updateAllPriorityGroups,
-        toggleRatingAppearanceControls: toggleRatingAppearanceControls,
         onTabChange: onTabChange,
         triggerPreviewUpdate: triggerPreviewUpdate,
         selectIconsFolder: selectIconsFolder

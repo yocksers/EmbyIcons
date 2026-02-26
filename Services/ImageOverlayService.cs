@@ -45,7 +45,8 @@ namespace EmbyIcons.Services
             new(p => p.ParentalRatingIconAlignment, p => p.ParentalRatingIconPriority, p => p.ParentalRatingOverlayHorizontal, IconCacheManager.IconType.ParentalRating, d => d.ParentalRatingIconName != null ? new[] { d.ParentalRatingIconName } : null),
             new(p => p.SourceIconAlignment, p => p.SourceIconPriority, p => p.SourceOverlayHorizontal, IconCacheManager.IconType.Source, d => d.SourceIcons),
             new(p => p.FrameRateIconAlignment, p => p.FrameRateIconPriority, p => p.FrameRateOverlayHorizontal, IconCacheManager.IconType.FrameRate, d => d.FrameRateIconName != null ? new[] { d.FrameRateIconName } : null),
-            new(p => p.OriginalLanguageIconAlignment, p => p.OriginalLanguageIconPriority, p => p.OriginalLanguageOverlayHorizontal, IconCacheManager.IconType.OriginalLanguage, d => d.OriginalLanguageIconName != null ? new[] { d.OriginalLanguageIconName } : null)
+            new(p => p.OriginalLanguageIconAlignment, p => p.OriginalLanguageIconPriority, p => p.OriginalLanguageOverlayHorizontal, IconCacheManager.IconType.OriginalLanguage, d => d.OriginalLanguageIconName != null ? new[] { d.OriginalLanguageIconName } : null),
+            new(p => p.SeriesStatusIconAlignment, p => p.SeriesStatusIconPriority, p => p.SeriesStatusOverlayHorizontal, IconCacheManager.IconType.SeriesStatus, d => d.SeriesStatusIconName != null ? new[] { d.SeriesStatusIconName } : null)
         }.AsReadOnly();
 
         public ImageOverlayService(ILogger logger, IconCacheManager iconCache)
@@ -185,6 +186,10 @@ namespace EmbyIcons.Services
                     if (popcornInfo?.Icon != null)
                     {
                         try { popcornInfo.Icon.Dispose(); } catch { }
+                    }
+                    if (malInfo?.Icon != null)
+                    {
+                        try { malInfo.Icon.Dispose(); } catch { }
                     }
                     if (favoriteInfo?.Icon != null)
                     {
@@ -608,6 +613,14 @@ namespace EmbyIcons.Services
                     var priority = def.GetPriority(profileOptions);
                     var isHorizontal = def.IsHorizontal(profileOptions);
                     await AddGroup(groups, names, def.IconType, alignment, priority, isHorizontal, globalOptions, cancellationToken, injectedIcons);
+                }
+            }
+
+            foreach (var filenameIcon in data.FilenameBasedIcons)
+            {
+                if (filenameIcon.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(filenameIcon.IconName))
+                {
+                    await AddGroup(groups, new[] { filenameIcon.IconName }, IconCacheManager.IconType.Source, filenameIcon.Alignment, filenameIcon.Priority, filenameIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons);
                 }
             }
 
