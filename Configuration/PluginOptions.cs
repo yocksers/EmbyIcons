@@ -274,9 +274,36 @@ namespace EmbyIcons.Configuration
         public int CommunityScoreBackgroundOpacity { get; set; } = 80;
 
         public int IconSize { get; set; } = 10;
+        public float TopLeftIconSize { get; set; } = 0f;
+        public float TopRightIconSize { get; set; } = 0f;
+        public float BottomLeftIconSize { get; set; } = 0f;
+        public float BottomRightIconSize { get; set; } = 0f;
+        public float IconSpacing { get; set; } = 12.5f;
+        public float EdgePaddingHorizontal { get; set; } = -1f;
+        public float EdgePaddingVertical { get; set; } = -1f;
+        public float TopLeftHorizontalPadding { get; set; } = -1f;
+        public float TopLeftVerticalPadding { get; set; } = -1f;
+        public float TopRightHorizontalPadding { get; set; } = -1f;
+        public float TopRightVerticalPadding { get; set; } = -1f;
+        public float BottomLeftHorizontalPadding { get; set; } = -1f;
+        public float BottomLeftVerticalPadding { get; set; } = -1f;
+        public float BottomRightHorizontalPadding { get; set; } = -1f;
+        public float BottomRightVerticalPadding { get; set; } = -1f;
         public float RatingFontSizeMultiplier { get; set; } = 0.75f;
         public string RatingPercentageSuffix { get; set; } = "%";
         public float RatingTextVerticalOffset { get; set; } = 0f;
+
+        public bool EnableTopIconBar { get; set; } = false;
+        public int TopIconBarHeight { get; set; } = 8;
+        public string TopIconBarColor { get; set; } = "#000000";
+        public int TopIconBarOpacity { get; set; } = 80;
+        public bool TopIconBarOverlay { get; set; } = false;
+
+        public bool EnableBottomIconBar { get; set; } = false;
+        public int BottomIconBarHeight { get; set; } = 8;
+        public string BottomIconBarColor { get; set; } = "#000000";
+        public int BottomIconBarOpacity { get; set; } = 80;
+        public bool BottomIconBarOverlay { get; set; } = false;
         
         public bool UseSeriesLiteMode { get; set; } = true;
         public List<FilenameIconMapping> FilenameBasedIcons { get; set; } = new List<FilenameIconMapping>();

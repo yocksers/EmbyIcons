@@ -47,6 +47,8 @@ define([], function () {
             aspectPreciseIconName: view.querySelector('#aspectPreciseIconName'),
             filenameMappingsContainer: view.querySelector('#filenameMappingsContainer'),
             btnAddFilenameMapping: view.querySelector('#btnAddFilenameMapping'),
+            btnExpandAll: view.querySelector('#btnExpandAll'),
+            btnCollapseAll: view.querySelector('#btnCollapseAll'),
         };
     }
 

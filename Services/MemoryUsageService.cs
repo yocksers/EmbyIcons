@@ -2,6 +2,7 @@ using MediaBrowser.Model.Services;
 using MediaBrowser.Model.Logging;
 using EmbyIcons.Api;
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime;
 using System.Threading.Tasks;
@@ -28,6 +29,12 @@ namespace EmbyIcons.Services
     public class MemoryUsageService : IService
     {
         private readonly ILogger _logger;
+        private static readonly ConcurrentDictionary<(Type, string, System.Reflection.BindingFlags), System.Reflection.FieldInfo?> _fieldCache = new ConcurrentDictionary<(Type, string, System.Reflection.BindingFlags), System.Reflection.FieldInfo?>();
+
+        private static System.Reflection.FieldInfo? GetCachedField(Type type, string fieldName, System.Reflection.BindingFlags bindingFlags)
+        {
+            return _fieldCache.GetOrAdd((type, fieldName, bindingFlags), key => key.Item1.GetField(key.Item2, key.Item3));
+        }
 
         public MemoryUsageService(ILogManager logManager)
         {
@@ -63,29 +70,29 @@ namespace EmbyIcons.Services
                 {
                     var enhancer = plugin.Enhancer;
                     
-                    var seriesCacheField = typeof(EmbyIconsEnhancer).GetField("_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    var seriesCacheField = GetCachedField(typeof(EmbyIconsEnhancer), "_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (seriesCacheField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<Guid, object> seriesCache)
                     {
                         seriesCacheCount = seriesCache.Count;
                     }
                     
-                    var episodeCacheField = typeof(EmbyIconsEnhancer).GetField("_episodeIconCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    var episodeCacheField = GetCachedField(typeof(EmbyIconsEnhancer), "_episodeIconCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (episodeCacheField?.GetValue(null) is Microsoft.Extensions.Caching.Memory.MemoryCache episodeCache)
                     {
                         episodeCacheCount = episodeCache.Count;
                     }
                     
-                    var locksField = typeof(EmbyIconsEnhancer).GetField("_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    var locksField = GetCachedField(typeof(EmbyIconsEnhancer), "_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (locksField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<string, object> locks)
                     {
                         itemLocksCount = locks.Count;
                     }
                     
-                    var field = enhancer.GetType().GetField("_iconCacheManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                    var field = GetCachedField(enhancer.GetType(), "_iconCacheManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
                     var icm = field?.GetValue(enhancer);
                     if (icm != null)
                     {
-                        var cacheField = icm.GetType().GetField("_iconImageCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        var cacheField = GetCachedField(icm.GetType(), "_iconImageCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                         var cache = cacheField?.GetValue(icm) as Microsoft.Extensions.Caching.Memory.MemoryCache;
                         if (cache != null)
                         {

@@ -329,6 +329,7 @@ namespace EmbyIcons
             var filenameBasedIconsList = new List<FilenameBasedIconData>();
             if (profileOptions.FilenameBasedIcons.Any())
             {
+                var uniqueIcons = new Dictionary<string, FilenameBasedIconData>();
                 var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 bool checkParentPath = false;
                 bool checkEpisodePaths = false;
@@ -389,23 +390,47 @@ namespace EmbyIcons
                             mapping.IconAlignment != IconAlignment.Disabled &&
                             path.Contains(mapping.Keyword.ToLowerInvariant()))
                         {
-                            filenameBasedIconsList.Add(new FilenameBasedIconData
+                            var iconKey = $"{mapping.IconName.ToLowerInvariant()}|{mapping.IconAlignment}|{mapping.Priority}|{mapping.HorizontalLayout}";
+                            if (!uniqueIcons.ContainsKey(iconKey))
                             {
-                                IconName = mapping.IconName.ToLowerInvariant(),
-                                Alignment = mapping.IconAlignment,
-                                Priority = mapping.Priority,
-                                HorizontalLayout = mapping.HorizontalLayout
-                            });
+                                uniqueIcons[iconKey] = new FilenameBasedIconData
+                                {
+                                    IconName = mapping.IconName.ToLowerInvariant(),
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                };
+                            }
                         }
                     }
                 }
+                
+                filenameBasedIconsList = uniqueIcons.Values.ToList();
             }
 
-            var combinedHashString = string.Join(";", itemHashes.OrderBy(h => h));
             byte[] hashBytes;
             using (var md5 = MD5.Create())
             {
-                hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(combinedHashString));
+                var encoding = Encoding.UTF8;
+                var separator = encoding.GetBytes(";");
+                var orderedHashes = itemHashes.OrderBy(h => h).ToList();
+                
+                for (int i = 0; i < orderedHashes.Count; i++)
+                {
+                    var bytes = encoding.GetBytes(orderedHashes[i]);
+                    if (i < orderedHashes.Count - 1)
+                    {
+                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+                        md5.TransformBlock(separator, 0, separator.Length, null, 0);
+                    }
+                    else
+                    {
+                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+                        md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                    }
+                }
+                
+                hashBytes = md5.Hash!;
             }
 
             var result = new AggregatedSeriesResult

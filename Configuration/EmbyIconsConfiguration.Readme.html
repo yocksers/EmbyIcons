@@ -5,6 +5,13 @@
     <p>This plugin overlays icons for language, audio channels, video format, resolution, aspect ratio, parental rating, and community ratings onto your media posters. Provide your own icon images in a designated folder and name them according to the conventions below.</p>
     <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.bmp</code>, and <code>.gif</code>.</p>
 
+    <h3 style="margin-top: 2em;">System Requirements &amp; Performance</h3>
+    <div style="padding: 1em; background-color: rgba(82, 181, 75, 0.1); border-left: 4px solid #52B54B; border-radius: 4px; margin-bottom: 1em;">
+        <p style="margin: 0 0 0.5em 0;"><strong>Important:</strong> Some features of this plugin can be CPU intensive, particularly series aggregation which analyzes multiple episodes to determine common media properties.</p>
+        <p style="margin: 0 0 0.5em 0;">A <strong>modern CPU is recommended</strong> for optimal performance when using series aggregation features. The plugin processes poster images on-demand, and series with many episodes may require more processing time.</p>
+        <p style="margin: 0;"><strong>Lite Mode</strong> is available for smaller systems or low-power servers. Lite Mode disables series aggregation and processes each item individually, significantly reducing CPU load at the cost of some advanced features. Enable Lite Mode in Profile Settings if you experience performance issues.</p>
+    </div>
+
     <h3 style="margin-top: 2em;">Icon Naming Conventions</h3>
     <p>Icons use a strict prefix-based naming scheme: <code>prefix.name.png</code>. The prefix indicates the category; the name is matched against media properties. Files that don’t follow this convention are ignored.</p>
 

@@ -1,10 +1,27 @@
 <form class="embyIconsForm">
-    <div class="collapsible-section" style="margin-top: 2em;">
+    <div style="margin-bottom: 2em; padding: 1.5em; background: rgba(82, 181, 75, 0.08); border-left: 4px solid #52B54B; border-radius: 8px;">
+        <h2 style="margin-top: 0; margin-bottom: 0.5em; color: #52B54B;">Welcome to EmbyIcons</h2>
+        <p style="margin: 0 0 0.5em 0; opacity: 0.9;">This plugin overlays icons on your media posters to show audio/video formats, languages, ratings, and more. Start by selecting a profile, assign it to your libraries, then customize which icons to display and where they appear.</p>
+        <p style="margin: 0; opacity: 0.8; font-size: 0.95em;"><strong>Please read the Help section</strong> for important information about system requirements and performance.</p>
+    </div>
+
+    <div style="margin-bottom: 1.5em; display: flex; gap: 1em; align-items: center;">
+        <button type="button" is="emby-button" class="raised" id="btnExpandAll" style="flex: 0 0 auto;">
+            <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">unfold_more</i>
+            <span>Expand All</span>
+        </button>
+        <button type="button" is="emby-button" class="raised" id="btnCollapseAll" style="flex: 0 0 auto;">
+            <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">unfold_less</i>
+            <span>Collapse All</span>
+        </button>
+    </div>
+
+    <div class="collapsible-section">
         <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
             <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
             <span>Global Settings</span>
         </h3>
-        <div class="collapsible-content" style="display: none; margin-top: 1em;">
+        <div class="collapsible-content" style="margin-top: 1em;">
             <p class="fieldDescription" style="margin-bottom: 1.5em;">These settings apply to all profiles and libraries.</p>
 
             <div class="paper-card" style="padding: 1.5em;">
@@ -64,7 +81,7 @@
             <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
             <span>Profiles</span>
         </h3>
-        <div class="collapsible-content" style="display: none; margin-top: 1em;">
+        <div class="collapsible-content" style="margin-top: 1em;">
             <p class="fieldDescription" style="margin-bottom: 1.5em;">Create multiple profiles to apply different icon styles to different libraries.</p>
 
     <div class="paper-card" style="padding: 1.5em;">
@@ -94,7 +111,7 @@
             <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
             <span>Library Assignment</span>
         </h3>
-        <div class="collapsible-content" style="display: none; margin-top: 1em;">
+        <div class="collapsible-content" style="margin-top: 1em;">
             <h3 style="margin-bottom: 0.5em;">Assign this profile to libraries</h3>
             <p class="fieldDescription" style="margin-top:0;">A library can only be assigned to one profile at a time.</p>
             <div id="librarySelectionContainer" class="paper-card" style="padding: 1em 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1em 1.5em;">
@@ -108,7 +125,7 @@
                 <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
                 <span>Image Type Settings</span>
             </h3>
-            <div class="collapsible-content" style="display: none; margin-top: 1em;">
+            <div class="collapsible-content" style="margin-top: 1em;">
                 <div class="paper-card" style="padding: 1.5em;">
             <p class="fieldDescription" style="margin-top:0; margin-bottom: 1.5em;">Select which image types should have icons overlaid. "Primary" refers to the main poster image.</p>
             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -130,6 +147,7 @@
                 <span>TV Show Settings</span>
             </h3>
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <div class="paper-card" style="padding: 1.5em;">
         <div class="checkboxContainer checkboxContainer-withDescription">
             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowOverlaysForEpisodes" /><span>Show overlays on episode images</span></label>
             <div class="fieldDescription checkboxFieldDescription">When disabled, overlays only appear on movies and TV shows.</div>
@@ -150,6 +168,7 @@
             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseSeriesLiteMode" /><span>Use Lite Mode for TV show scans</span></label>
             <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first episode to determine icons for the entire series.</div>
         </div>
+                </div>
             </div>
         </div>
 
@@ -159,6 +178,7 @@
                 <span>Collection Settings</span>
             </h3>
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <div class="paper-card" style="padding: 1.5em;">
         <div class="checkboxContainer checkboxContainer-withDescription">
             <label><input is="emby-checkbox" type="checkbox" data-profile-key="ShowCollectionIconsIfAllChildrenHaveLanguage" /><span>Show icons on collections</span></label>
             <div class="fieldDescription checkboxFieldDescription">Language icons appear only if all child items share the same display language. Other icons appear when common to all children.</div>
@@ -167,6 +187,7 @@
             <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseCollectionLiteMode" /><span>Use Lite Mode for collection scans</span></label>
             <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first item to determine icons for the entire collection.</div>
         </div>
+                </div>
             </div>
         </div>
 
@@ -176,8 +197,9 @@
                 <span>Alignment & Layout</span>
             </h3>
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 1.5em;">Control where each icon type appears on your posters and their display priority. Lower priority numbers appear first.</p>
 
-    <div class="collapsible-section" style="margin-top: 1em; margin-left: 1em;">
+    <div class="collapsible-section" style="margin-top: 0; margin-left: 1em;">
         <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #3d8a37; color: white; padding: 0.5em 0.9em; border-radius: 8px; font-size: 0.95em;">
             <i class="md-icon collapse-icon" style="transition: transform 0.2s; font-size: 1.2em;">expand_more</i>
             <span>Audio</span>
@@ -873,10 +895,6 @@
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 3em; margin-bottom: 2em;">
-            <img class="previewImage" alt="Loading Preview..." style="max-height: 24em; display: block; background-color: #101010; margin: auto;" />
-        </div>
-
         <div class="collapsible-section" style="margin-top: 1.5em;">
             <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
                 <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
@@ -904,11 +922,160 @@
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
                 <div class="paper-card" style="padding: 1.5em;">
             <div class="inputContainer">
-                <input is="emby-input" type="number" label="Icon Size (% of poster height):" min="1" max="100" data-profile-key="IconSize" />
+                <input is="emby-input" type="number" label="Icon Size (% of poster height, default: 10%):" min="1" max="100" data-profile-key="IconSize" />
+            </div>
+            <div class="inputContainer" style="margin-top: 1.5em;">
+                <input is="emby-input" type="number" label="Icon Spacing (% of icon size, default: 12.5%):" min="0" max="100" step="0.1" data-profile-key="IconSpacing" />
+                <div class="fieldDescription">Space between icons as a percentage of icon size. Set to 0 for no spacing.</div>
+            </div>
+            <div class="inputContainer" style="margin-top: 1.5em;">
+                <input is="emby-input" type="number" label="Horizontal Edge Padding (% of width, default: -1)" min="-1" max="50" step="0.1" data-profile-key="EdgePaddingHorizontal" />
+                <div class="fieldDescription">Distance from left/right poster edges to icons. Default is -1 (automatic: icon size ÷ 4), 0 removes padding, positive values set custom padding.</div>
+            </div>
+            <div class="inputContainer" style="margin-top: 1.5em;">
+                <input is="emby-input" type="number" label="Vertical Edge Padding (% of height, default: -1)" min="-1" max="50" step="0.1" data-profile-key="EdgePaddingVertical" />
+                <div class="fieldDescription">Distance from top/bottom poster edges to icons. Default is -1 (automatic: icon size ÷ 4), 0 removes padding, positive values set custom padding.</div>
             </div>
         </div>
             </div>
         </div>
+
+        <div class="collapsible-section" style="margin-top: 1.5em;">
+            <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
+                <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
+                <span>Per-Corner Edge Padding</span>
+            </h3>
+            <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 1.5em;">Override the default edge padding for specific corners. Set to -1 (default) to use the global Edge Padding settings above. When global settings are automatic (-1), padding will be icon size ÷ 4.</p>
+                
+                <div class="paper-card" style="padding: 1.5em; margin-bottom: 1em;">
+                    <h4 style="margin-top: 0;">Top Left Corner</h4>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" label="Horizontal Padding (% of width, default: -1)" min="-1" max="50" step="0.1" data-profile-key="TopLeftHorizontalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1em;">
+                        <input is="emby-input" type="number" label="Vertical Padding (% of height, default: -1)" min="-1" max="50" step="0.1" data-profile-key="TopLeftVerticalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                </div>
+
+                <div class="paper-card" style="padding: 1.5em; margin-bottom: 1em;">
+                    <h4 style="margin-top: 0;">Top Right Corner</h4>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" label="Horizontal Padding (% of width, default: -1)" min="-1" max="50" step="0.1" data-profile-key="TopRightHorizontalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1em;">
+                        <input is="emby-input" type="number" label="Vertical Padding (% of height, default: -1)" min="-1" max="50" step="0.1" data-profile-key="TopRightVerticalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                </div>
+
+                <div class="paper-card" style="padding: 1.5em; margin-bottom: 1em;">
+                    <h4 style="margin-top: 0;">Bottom Left Corner</h4>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" label="Horizontal Padding (% of width, default: -1)" min="-1" max="50" step="0.1" data-profile-key="BottomLeftHorizontalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1em;">
+                        <input is="emby-input" type="number" label="Vertical Padding (% of height, default: -1)" min="-1" max="50" step="0.1" data-profile-key="BottomLeftVerticalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                </div>
+
+                <div class="paper-card" style="padding: 1.5em; margin-bottom: 1em;">
+                    <h4 style="margin-top: 0;">Bottom Right Corner</h4>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" label="Horizontal Padding (% of width, default: -1)" min="-1" max="50" step="0.1" data-profile-key="BottomRightHorizontalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1em;">
+                        <input is="emby-input" type="number" label="Vertical Padding (% of height, default: -1)" min="-1" max="50" step="0.1" data-profile-key="BottomRightVerticalPadding" />
+                        <div class="fieldDescription">-1 uses global setting, 0 removes padding, positive values set custom padding.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="collapsible-section" style="margin-top: 1.5em;">
+            <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
+                <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
+                <span>Per-Corner Icon Sizing</span>
+            </h3>
+            <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 1.5em;">Override the default icon size for specific corners. Set to 0 to use the default Icon Size for that corner.</p>
+                <div class="paper-card" style="padding: 1.5em;">
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" label="Top Left Icon Size (% of poster height, 0 = use default):" min="0" max="100" step="0.1" data-profile-key="TopLeftIconSize" />
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1.5em;">
+                        <input is="emby-input" type="number" label="Top Right Icon Size (% of poster height, 0 = use default):" min="0" max="100" step="0.1" data-profile-key="TopRightIconSize" />
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1.5em;">
+                        <input is="emby-input" type="number" label="Bottom Left Icon Size (% of poster height, 0 = use default):" min="0" max="100" step="0.1" data-profile-key="BottomLeftIconSize" />
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1.5em;">
+                        <input is="emby-input" type="number" label="Bottom Right Icon Size (% of poster height, 0 = use default):" min="0" max="100" step="0.1" data-profile-key="BottomRightIconSize" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="collapsible-section" style="margin-top: 1.5em;">
+            <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
+                <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
+                <span>Icon Bars</span>
+            </h3>
+            <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <p class="fieldDescription" style="margin-bottom: 1.5em;">Add colored bars at the top or bottom of posters where icons can be placed. Choose whether to scale the poster (default) or overlay the bars on top of the image.</p>
+                
+                <div class="paper-card" style="padding: 1.5em; margin-bottom: 1.5em;">
+                    <h4 style="margin-top: 0;">Top Icon Bar</h4>
+                    <div class="checkboxContainer">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableTopIconBar" /><span>Enable Top Icon Bar</span></label>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1.5em;">
+                        <input is="emby-input" type="number" label="Bar Height (% of poster height, default: 8%):" min="1" max="33" data-profile-key="TopIconBarHeight" />
+                    </div>
+                    <div style="margin-top: 1.5em; display: flex; gap: 1em; align-items: center;">
+                        <label style="flex-shrink: 0;">Bar Color:</label>
+                        <input type="color" data-profile-key="TopIconBarColor" style="width: 4em; height: 2.5em; padding: 0; border: 1px solid rgba(255,255,255,0.2);" />
+                        <label style="flex-shrink: 0; margin-left: 1em;">Opacity (%):</label>
+                        <input type="range" min="0" max="100" step="1" data-profile-key="TopIconBarOpacity" class="slider" style="flex: 1;" />
+                    </div>
+                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="TopIconBarOverlay" /><span>Overlay on poster (covers top of image instead of scaling)</span></label>
+                    </div>
+                </div>
+
+                <div class="paper-card" style="padding: 1.5em;">
+                    <h4 style="margin-top: 0;">Bottom Icon Bar</h4>
+                    <div class="checkboxContainer">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableBottomIconBar" /><span>Enable Bottom Icon Bar</span></label>
+                    </div>
+                    <div class="inputContainer" style="margin-top: 1.5em;">
+                        <input is="emby-input" type="number" label="Bar Height (% of poster height, default: 8%):" min="1" max="33" data-profile-key="BottomIconBarHeight" />
+                    </div>
+                    <div style="margin-top: 1.5em; display: flex; gap: 1em; align-items: center;">
+                        <label style="flex-shrink: 0;">Bar Color:</label>
+                        <input type="color" data-profile-key="BottomIconBarColor" style="width: 4em; height: 2.5em; padding: 0; border: 1px solid rgba(255,255,255,0.2);" />
+                        <label style="flex-shrink: 0; margin-left: 1em;">Opacity (%):</label>
+                        <input type="range" min="0" max="100" step="1" data-profile-key="BottomIconBarOpacity" class="slider" style="flex: 1;" />
+                    </div>
+                    <div class="checkboxContainer" style="margin-top: 1.5em;">
+                        <label><input is="emby-checkbox" type="checkbox" data-profile-key="BottomIconBarOverlay" /><span>Overlay on poster (covers bottom of image instead of scaling)</span></label>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="previewContainer" style="text-align: center; margin-top: 2em; margin-bottom: 2em; padding: 1.5em; background: rgba(0,0,0,0.2); border-radius: 12px;">
+        <h3 style="margin-top: 0; margin-bottom: 1em;">Live Preview</h3>
+        <img class="previewImage" alt="Loading Preview..." style="max-height: 28em; max-width: 100%; display: block; background-color: #101010; margin: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);" />
+        <p class="fieldDescription" style="margin-top: 1em; margin-bottom: 0;">Preview updates as you change settings</p>
     </div>
 
     <div style="margin-top: 2em;">

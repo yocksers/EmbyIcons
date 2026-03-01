@@ -48,22 +48,29 @@ namespace EmbyIcons.Caching
             bool isHorizontal)
         {
             using var md5 = MD5.Create();
-            var sb = new StringBuilder();
+            var encoding = Encoding.UTF8;
             
-            sb.Append($"sz{iconSize}_pad{interIconPadding}_{(isHorizontal ? "h" : "v")}_");
+            void HashString(string str)
+            {
+                var bytes = encoding.GetBytes(str);
+                md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+            }
+
+            HashString($"sz{iconSize}_pad{interIconPadding}_{(isHorizontal ? "h" : "v")}_");
             
             foreach (var group in iconGroups.OrderBy(g => g.Type))
             {
-                sb.Append($"{group.Type}:");
+                HashString($"{group.Type}:");
                 foreach (var name in group.Names.OrderBy(n => n))
                 {
-                    sb.Append(name).Append(',');
+                    HashString(name);
+                    HashString(",");
                 }
-                sb.Append('|');
+                HashString("|");
             }
 
-            var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
-            return Convert.ToBase64String(hash).Replace('/', '_').Replace('+', '-');
+            md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return Convert.ToBase64String(md5.Hash!).Replace('/', '_').Replace('+', '-');
         }
         public async Task<SKImage?> GetOrCreateTemplateAsync(
             List<(IconCacheManager.IconType Type, List<string> Names)> iconGroups,

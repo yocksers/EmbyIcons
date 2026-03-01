@@ -98,6 +98,8 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         const currentSettings = instance.getCurrentProfileSettingsFromForm();
         if (!currentSettings) return;
 
+        if (!instance.dom.previewImage) return;
+
         instance.dom.previewImage.src = ApiClient.getUrl(instance.apiRoutes.Preview, {
             OptionsJson: JSON.stringify(currentSettings),
             v: new Date().getTime()

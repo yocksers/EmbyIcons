@@ -286,8 +286,7 @@ namespace EmbyIcons.Caching
 
                     var cacheEntryOptions = new MemoryCacheEntryOptions()
                         .SetSize(bytes.LongLength)
-                        .SetSlidingExpiration(TimeSpan.FromHours(2))
-                        .RegisterPostEvictionCallback((key, value, reason, state) => { /* no-op */ });
+                        .SetSlidingExpiration(TimeSpan.FromHours(2));
 
                     try { cache.Set(baseFileName, bytes, cacheEntryOptions); } catch { }
 
@@ -338,8 +337,7 @@ namespace EmbyIcons.Caching
 
             var cacheEntryOptions = new MemoryCacheEntryOptions()
                 .SetSize(bytes.LongLength)
-                .SetSlidingExpiration(TimeSpan.FromHours(2))
-                .RegisterPostEvictionCallback((key, value, reason, state) => { /* no-op */ });
+                .SetSlidingExpiration(TimeSpan.FromHours(2));
 
             try { cache.Set(cacheKey, bytes, cacheEntryOptions); } catch { }
 

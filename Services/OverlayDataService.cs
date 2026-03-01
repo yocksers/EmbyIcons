@@ -10,6 +10,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -27,6 +28,12 @@ namespace EmbyIcons.Services
         private readonly object _timerInitLock = new object();
         private static readonly System.Reflection.PropertyInfo? _providerIdsProperty = typeof(BaseItem).GetProperty("ProviderIds");
         private readonly MDBListService _mdbListService = new MDBListService();
+        private static readonly ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]> _propertyCache = new ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]>();
+
+        private static System.Reflection.PropertyInfo[] GetCachedProperties(Type type)
+        {
+            return _propertyCache.GetOrAdd(type, t => t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
+        }
 
         public OverlayDataService(EmbyIconsEnhancer enhancer, ILibraryManager libraryManager)
         {
@@ -161,8 +168,7 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var props = item.GetType().GetProperties(
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                var props = GetCachedProperties(item.GetType());
                 
                 foreach (var p in props)
                 {
@@ -330,8 +336,7 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var props = item.GetType().GetProperties(
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                var props = GetCachedProperties(item.GetType());
                 
                 foreach (var p in props)
                 {

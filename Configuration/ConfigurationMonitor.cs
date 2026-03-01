@@ -153,7 +153,12 @@ namespace EmbyIcons.Configuration
                    s.ResolutionIconAlignment != IconAlignment.Disabled || s.CommunityScoreIconAlignment != IconAlignment.Disabled ||
                    s.AudioCodecIconAlignment != IconAlignment.Disabled || s.VideoCodecIconAlignment != IconAlignment.Disabled ||
                    s.TagIconAlignment != IconAlignment.Disabled || s.AspectRatioIconAlignment != IconAlignment.Disabled ||
-                   s.ParentalRatingIconAlignment != IconAlignment.Disabled;
+                   s.ParentalRatingIconAlignment != IconAlignment.Disabled ||
+                   s.SourceIconAlignment != IconAlignment.Disabled || s.FavoriteCountIconAlignment != IconAlignment.Disabled ||
+                   s.FrameRateIconAlignment != IconAlignment.Disabled || s.OriginalLanguageIconAlignment != IconAlignment.Disabled ||
+                   s.SeriesStatusIconAlignment != IconAlignment.Disabled ||
+                   s.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled || s.PopcornScoreIconAlignment != IconAlignment.Disabled ||
+                   s.MyAnimeListScoreIconAlignment != IconAlignment.Disabled;
         }
 
         private List<BaseItem> GetItemsForLibraries(List<string> libraryIds)

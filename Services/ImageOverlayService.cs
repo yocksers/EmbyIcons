@@ -21,7 +21,7 @@ namespace EmbyIcons.Services
 
         private record OverlayGroupInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, List<SKImage> Icons) : IOverlayInfo;
         private record RatingOverlayInfo(IconAlignment Alignment, int Priority, bool HorizontalLayout, float Score, SKImage? Icon, bool IsPercent, ScoreBackgroundShape BackgroundShape, string BackgroundColor, int BackgroundOpacity) : IOverlayInfo;
-        private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int EdgePadding, int InterIconPadding, int CanvasWidth, int CanvasHeight, float RatingFontSizeMultiplier, string RatingPercentageSuffix, float RatingTextVerticalOffset);
+        private record DrawingContext(SKCanvas Canvas, SKPaint Paint, SKPaint TextPaint, ProfileSettings Options, int IconSize, int TopLeftIconSize, int TopRightIconSize, int BottomLeftIconSize, int BottomRightIconSize, int EdgePaddingHorizontal, int EdgePaddingVertical, int TopLeftHPadding, int TopLeftVPadding, int TopRightHPadding, int TopRightVPadding, int BottomLeftHPadding, int BottomLeftVPadding, int BottomRightHPadding, int BottomRightVPadding, int InterIconPadding, int CanvasWidth, int CanvasHeight, float RatingFontSizeMultiplier, string RatingPercentageSuffix, float RatingTextVerticalOffset, int PosterYOffset, int TopBarHeight, int BottomBarHeight);
 
         private record IconGroupDefinition(
             Func<ProfileSettings, IconAlignment> GetAlignment,
@@ -55,6 +55,28 @@ namespace EmbyIcons.Services
             _iconCache = iconCache;
         }
 
+        private bool HasAnyOverlaysEnabled(ProfileSettings profileOptions)
+        {
+            foreach (var def in _groupDefinitions)
+            {
+                if (def.GetAlignment(profileOptions) != IconAlignment.Disabled)
+                    return true;
+            }
+
+            if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled)
+                return true;
+            if (profileOptions.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled)
+                return true;
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled)
+                return true;
+            if (profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
+                return true;
+            if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
+                return true;
+
+            return false;
+        }
+
         public async Task<Stream> ApplyOverlaysAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
             var outputStream = new MemoryStream();
@@ -73,6 +95,21 @@ namespace EmbyIcons.Services
 
         public async Task ApplyOverlaysToStreamAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
+            if (!HasAnyOverlaysEnabled(profileOptions))
+            {
+                var format = globalOptions.OutputFormat switch
+                {
+                    OutputFormat.Png => SKEncodedImageFormat.Png,
+                    OutputFormat.Jpeg => SKEncodedImageFormat.Jpeg,
+                    _ => (sourceBitmap.Info.AlphaType == SKAlphaType.Opaque) ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png
+                };
+                int quality = Math.Clamp(globalOptions.JpegQuality, 10, 100);
+                using var image = SKImage.FromBitmap(sourceBitmap);
+                using var encodedData = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? quality : 100);
+                encodedData.SaveTo(outputStream);
+                return;
+            }
+
             await _iconCache.InitializeAsync(globalOptions.IconsFolder, cancellationToken).ConfigureAwait(false);
 
             List<OverlayGroupInfo>? iconGroups = null;
@@ -84,26 +121,97 @@ namespace EmbyIcons.Services
             
             try
             {
-                using var surface = SKSurface.Create(new SKImageInfo(sourceBitmap.Width, sourceBitmap.Height));
-                var canvas = surface.Canvas;
-                canvas.DrawBitmap(sourceBitmap, 0, 0);
+                int topBarHeight = profileOptions.EnableTopIconBar ? Math.Clamp((sourceBitmap.Height * profileOptions.TopIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                int bottomBarHeight = profileOptions.EnableBottomIconBar ? Math.Clamp((sourceBitmap.Height * profileOptions.BottomIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                
+                bool topBarScalesImage = profileOptions.EnableTopIconBar && !profileOptions.TopIconBarOverlay;
+                bool bottomBarScalesImage = profileOptions.EnableBottomIconBar && !profileOptions.BottomIconBarOverlay;
+                
+                int topBarSpace = topBarScalesImage ? topBarHeight : 0;
+                int bottomBarSpace = bottomBarScalesImage ? bottomBarHeight : 0;
+                
+                int finalWidth = sourceBitmap.Width;
+                int finalHeight = sourceBitmap.Height + topBarSpace + bottomBarSpace;
+                int posterYOffset = topBarSpace;
 
-                var iconSize = Math.Clamp((Math.Min(sourceBitmap.Width, sourceBitmap.Height) * profileOptions.IconSize) / 100, 8, 512);
-                var edgePadding = Math.Clamp(iconSize / 4, 2, 64);
-                var interIconPadding = Math.Clamp(iconSize / 8, 1, 64);
+                using var surface = SKSurface.Create(new SKImageInfo(finalWidth, finalHeight));
+                var canvas = surface.Canvas;
+                canvas.Clear(SKColors.Transparent);
+
+                if (topBarScalesImage && topBarHeight > 0)
+                {
+                    using var barPaint = new SKPaint();
+                    var topColor = SKColor.Parse(profileOptions.TopIconBarColor);
+                    barPaint.Color = topColor.WithAlpha((byte)((profileOptions.TopIconBarOpacity * 255) / 100));
+                    canvas.DrawRect(0, 0, finalWidth, topBarHeight, barPaint);
+                }
+
+                canvas.DrawBitmap(sourceBitmap, 0, posterYOffset);
+
+                if (bottomBarScalesImage && bottomBarHeight > 0)
+                {
+                    using var barPaint = new SKPaint();
+                    var bottomColor = SKColor.Parse(profileOptions.BottomIconBarColor);
+                    barPaint.Color = bottomColor.WithAlpha((byte)((profileOptions.BottomIconBarOpacity * 255) / 100));
+                    canvas.DrawRect(0, posterYOffset + sourceBitmap.Height, finalWidth, bottomBarHeight, barPaint);
+                }
+
+                if (profileOptions.EnableTopIconBar && profileOptions.TopIconBarOverlay && topBarHeight > 0)
+                {
+                    using var barPaint = new SKPaint();
+                    var topColor = SKColor.Parse(profileOptions.TopIconBarColor);
+                    barPaint.Color = topColor.WithAlpha((byte)((profileOptions.TopIconBarOpacity * 255) / 100));
+                    canvas.DrawRect(0, posterYOffset, finalWidth, topBarHeight, barPaint);
+                }
+
+                if (profileOptions.EnableBottomIconBar && profileOptions.BottomIconBarOverlay && bottomBarHeight > 0)
+                {
+                    using var barPaint = new SKPaint();
+                    var bottomColor = SKColor.Parse(profileOptions.BottomIconBarColor);
+                    barPaint.Color = bottomColor.WithAlpha((byte)((profileOptions.BottomIconBarOpacity * 255) / 100));
+                    canvas.DrawRect(0, posterYOffset + sourceBitmap.Height - bottomBarHeight, finalWidth, bottomBarHeight, barPaint);
+                }
+
+                var posterMinDimension = Math.Min(sourceBitmap.Width, sourceBitmap.Height);
+                var iconSize = Math.Clamp((posterMinDimension * profileOptions.IconSize) / 100, 8, 512);
+                var topLeftIconSize = profileOptions.TopLeftIconSize > 0 ? (int)Math.Clamp((posterMinDimension * profileOptions.TopLeftIconSize) / 100, 8, 512) : iconSize;
+                var topRightIconSize = profileOptions.TopRightIconSize > 0 ? (int)Math.Clamp((posterMinDimension * profileOptions.TopRightIconSize) / 100, 8, 512) : iconSize;
+                var bottomLeftIconSize = profileOptions.BottomLeftIconSize > 0 ? (int)Math.Clamp((posterMinDimension * profileOptions.BottomLeftIconSize) / 100, 8, 512) : iconSize;
+                var bottomRightIconSize = profileOptions.BottomRightIconSize > 0 ? (int)Math.Clamp((posterMinDimension * profileOptions.BottomRightIconSize) / 100, 8, 512) : iconSize;
+                var edgePaddingHorizontal = profileOptions.EdgePaddingHorizontal >= 0 ? (int)Math.Clamp((sourceBitmap.Width * profileOptions.EdgePaddingHorizontal) / 100, 0, 256) : Math.Clamp(iconSize / 4, 2, 64);
+                var edgePaddingVertical = profileOptions.EdgePaddingVertical >= 0 ? (int)Math.Clamp((sourceBitmap.Height * profileOptions.EdgePaddingVertical) / 100, 0, 256) : Math.Clamp(iconSize / 4, 2, 64);
+                
+                var topLeftHPadding = profileOptions.TopLeftHorizontalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Width * profileOptions.TopLeftHorizontalPadding) / 100, 0, 256) : edgePaddingHorizontal;
+                var topLeftVPadding = profileOptions.TopLeftVerticalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Height * profileOptions.TopLeftVerticalPadding) / 100, 0, 256) : edgePaddingVertical;
+                var topRightHPadding = profileOptions.TopRightHorizontalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Width * profileOptions.TopRightHorizontalPadding) / 100, 0, 256) : edgePaddingHorizontal;
+                var topRightVPadding = profileOptions.TopRightVerticalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Height * profileOptions.TopRightVerticalPadding) / 100, 0, 256) : edgePaddingVertical;
+                var bottomLeftHPadding = profileOptions.BottomLeftHorizontalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Width * profileOptions.BottomLeftHorizontalPadding) / 100, 0, 256) : edgePaddingHorizontal;
+                var bottomLeftVPadding = profileOptions.BottomLeftVerticalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Height * profileOptions.BottomLeftVerticalPadding) / 100, 0, 256) : edgePaddingVertical;
+                var bottomRightHPadding = profileOptions.BottomRightHorizontalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Width * profileOptions.BottomRightHorizontalPadding) / 100, 0, 256) : edgePaddingHorizontal;
+                var bottomRightVPadding = profileOptions.BottomRightVerticalPadding >= 0 ? (int)Math.Clamp((sourceBitmap.Height * profileOptions.BottomRightVerticalPadding) / 100, 0, 256) : edgePaddingVertical;
+                
+                var interIconPadding = (int)Math.Clamp((iconSize * profileOptions.IconSpacing) / 100, 0, 64);
 
                 using var paint = new SKPaint { IsAntialias = globalOptions.EnableImageSmoothing, FilterQuality = globalOptions.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None };
                 using var textPaint = new SKPaint { IsAntialias = globalOptions.EnableImageSmoothing, FilterQuality = globalOptions.EnableImageSmoothing ? SKFilterQuality.Medium : SKFilterQuality.None, Color = SKColors.White };
 
-                var drawingContext = new DrawingContext(canvas, paint, textPaint, profileOptions, iconSize, edgePadding, interIconPadding, sourceBitmap.Width, sourceBitmap.Height, profileOptions.RatingFontSizeMultiplier, profileOptions.RatingPercentageSuffix ?? "%", profileOptions.RatingTextVerticalOffset);
+                var drawingContext = new DrawingContext(canvas, paint, textPaint, profileOptions, iconSize, topLeftIconSize, topRightIconSize, bottomLeftIconSize, bottomRightIconSize, edgePaddingHorizontal, edgePaddingVertical, topLeftHPadding, topLeftVPadding, topRightHPadding, topRightVPadding, bottomLeftHPadding, bottomLeftVPadding, bottomRightHPadding, bottomRightVPadding, interIconPadding, finalWidth, finalHeight, profileOptions.RatingFontSizeMultiplier, profileOptions.RatingPercentageSuffix ?? "%", profileOptions.RatingTextVerticalOffset, posterYOffset, topBarHeight, bottomBarHeight);
 
-                iconGroups = await CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons).ConfigureAwait(false);
-                ratingInfo = await CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                rottenInfo = await CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                popcornInfo = await CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                malInfo = await CreateMyAnimeListRatingInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                var iconGroupsTask = CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
+                var ratingInfoTask = CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var rottenInfoTask = CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var popcornInfoTask = CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var malInfoTask = CreateMyAnimeListRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var favoriteInfoTask = CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken);
 
-                favoriteInfo = await CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                await Task.WhenAll(iconGroupsTask, ratingInfoTask, rottenInfoTask, popcornInfoTask, malInfoTask, favoriteInfoTask).ConfigureAwait(false);
+
+                iconGroups = iconGroupsTask.Result;
+                ratingInfo = ratingInfoTask.Result;
+                rottenInfo = rottenInfoTask.Result;
+                popcornInfo = popcornInfoTask.Result;
+                malInfo = malInfoTask.Result;
+                favoriteInfo = favoriteInfoTask.Result;
 
                 var overlaysByCorner = new Dictionary<IconAlignment, List<IOverlayInfo>>();
                 foreach (var group in iconGroups)
@@ -316,8 +424,46 @@ namespace EmbyIcons.Services
                 profileOptions.FavoriteCountBackgroundOpacity);
         }
 
+        private int GetIconSizeForCorner(IconAlignment alignment, DrawingContext context)
+        {
+            return alignment switch
+            {
+                IconAlignment.TopLeft => context.TopLeftIconSize,
+                IconAlignment.TopRight => context.TopRightIconSize,
+                IconAlignment.BottomLeft => context.BottomLeftIconSize,
+                IconAlignment.BottomRight => context.BottomRightIconSize,
+                _ => context.IconSize
+            };
+        }
+
+        private int GetHorizontalPaddingForCorner(IconAlignment alignment, DrawingContext context)
+        {
+            return alignment switch
+            {
+                IconAlignment.TopLeft => context.TopLeftHPadding,
+                IconAlignment.TopRight => context.TopRightHPadding,
+                IconAlignment.BottomLeft => context.BottomLeftHPadding,
+                IconAlignment.BottomRight => context.BottomRightHPadding,
+                _ => context.EdgePaddingHorizontal
+            };
+        }
+
+        private int GetVerticalPaddingForCorner(IconAlignment alignment, DrawingContext context)
+        {
+            return alignment switch
+            {
+                IconAlignment.TopLeft => context.TopLeftVPadding,
+                IconAlignment.TopRight => context.TopRightVPadding,
+                IconAlignment.BottomLeft => context.BottomLeftVPadding,
+                IconAlignment.BottomRight => context.BottomRightVPadding,
+                _ => context.EdgePaddingVertical
+            };
+        }
+
         private void DrawCorner(List<IOverlayInfo> overlays, IconAlignment alignment, DrawingContext context)
         {
+            var cornerIconSize = GetIconSizeForCorner(alignment, context);
+            var cornerHPadding = GetHorizontalPaddingForCorner(alignment, context);
             var allOverlays = overlays.OrderBy(o => o.Priority);
 
             var horizontalDrawableItems = new List<object>();
@@ -347,19 +493,19 @@ namespace EmbyIcons.Services
             float maxHeightOfCurrentRow = 0;
             int rowCount = 1;
             const int maxRows = 2;
-            var rowWidthLimit = context.CanvasWidth - (context.EdgePadding * 2);
+            var rowWidthLimit = context.CanvasWidth - (cornerHPadding * 2);
 
             foreach (var item in horizontalDrawableItems)
             {
                 SKSize itemSize;
                 if (item is SKImage icon)
                 {
-                    int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(context.IconSize * ((float)i.Width / i.Height)) : context.IconSize;
-                    itemSize = new SKSize(GetIconWidth(icon), context.IconSize);
+                    int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(cornerIconSize * ((float)i.Width / i.Height)) : cornerIconSize;
+                    itemSize = new SKSize(GetIconWidth(icon), cornerIconSize);
                 }
                 else if (item is RatingOverlayInfo rating)
                 {
-                    itemSize = GetCommunityRatingOverlaySize(rating, context);
+                    itemSize = GetCommunityRatingOverlaySize(rating, context, cornerIconSize);
                 }
                 else
                 {
@@ -378,11 +524,11 @@ namespace EmbyIcons.Services
 
                 if (item is SKImage iconToDraw)
                 {
-                    DrawSingleIcon(iconToDraw, alignment, context, (int)currentVerticalOffset, (int)currentHorizontalOffset);
+                    DrawSingleIcon(iconToDraw, alignment, context, cornerIconSize, (int)currentVerticalOffset, (int)currentHorizontalOffset);
                 }
                 else if (item is RatingOverlayInfo ratingToDraw)
                 {
-                    DrawCommunityRatingOverlay(ratingToDraw, alignment, context, (int)currentVerticalOffset, (int)currentHorizontalOffset);
+                    DrawCommunityRatingOverlay(ratingToDraw, alignment, context, cornerIconSize, (int)currentVerticalOffset, (int)currentHorizontalOffset);
                 }
 
                 currentHorizontalOffset += itemSize.Width + context.InterIconPadding;
@@ -397,31 +543,31 @@ namespace EmbyIcons.Services
             currentHorizontalOffset = 0;
             foreach (var overlay in verticalDrawableItems)
             {
-                var consumedSize = DrawOverlay(overlay, alignment, context, (int)currentVerticalOffset, (int)currentHorizontalOffset);
+                var consumedSize = DrawOverlay(overlay, alignment, context, cornerIconSize, (int)currentVerticalOffset, (int)currentHorizontalOffset);
                 currentVerticalOffset += consumedSize.Height + context.InterIconPadding;
             }
         }
 
-        private SKSize DrawOverlay(IOverlayInfo overlay, IconAlignment alignment, DrawingContext context, int verticalOffset, int horizontalOffset)
+        private SKSize DrawOverlay(IOverlayInfo overlay, IconAlignment alignment, DrawingContext context, int cornerIconSize, int verticalOffset, int horizontalOffset)
         {
             if (overlay is OverlayGroupInfo iconGroup)
             {
-                return DrawIconGroup(iconGroup, context, verticalOffset, horizontalOffset);
+                return DrawIconGroup(iconGroup, context, cornerIconSize, verticalOffset, horizontalOffset);
             }
             if (overlay is RatingOverlayInfo ratingInfo)
             {
-                return DrawCommunityRatingOverlay(ratingInfo, alignment, context, verticalOffset, horizontalOffset);
+                return DrawCommunityRatingOverlay(ratingInfo, alignment, context, cornerIconSize, verticalOffset, horizontalOffset);
             }
             return SKSize.Empty;
         }
 
-        private SKSize GetCommunityRatingOverlaySize(RatingOverlayInfo rating, DrawingContext context)
+        private SKSize GetCommunityRatingOverlaySize(RatingOverlayInfo rating, DrawingContext context, int cornerIconSize)
         {
             var typeface = FontHelper.GetDefaultBold(_logger);
             if (typeface == null) return SKSize.Empty;
             
             string scoreText = GetRatingText(rating, context);
-            var fontSize = context.IconSize * context.RatingFontSizeMultiplier;
+            var fontSize = cornerIconSize * context.RatingFontSizeMultiplier;
 
             var textPaint = context.TextPaint;
             textPaint.Typeface = typeface;
@@ -431,45 +577,87 @@ namespace EmbyIcons.Services
             textPaint.Typeface = null;
 
             int textWidth = (int)Math.Ceiling(textBounds.Width);
-            int iconPadding = Math.Max(1, context.IconSize / 10);
-            int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(context.IconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
+            int iconPadding = Math.Max(1, cornerIconSize / 10);
+            int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(cornerIconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
 
-            float bgHorizontalPadding = context.IconSize * 0.2f;
+            float bgHorizontalPadding = cornerIconSize * 0.2f;
             int scoreAreaWidth = (rating.BackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
 
             int totalWidth = iconDisplayWidth + (iconDisplayWidth > 0 ? iconPadding : 0) + scoreAreaWidth;
-            int totalHeight = context.IconSize;
+            int totalHeight = cornerIconSize;
 
             return new SKSize(totalWidth, totalHeight);
         }
 
-        private void DrawSingleIcon(SKImage icon, IconAlignment alignment, DrawingContext context, int verticalOffset, int horizontalOffset)
+        private void DrawSingleIcon(SKImage icon, IconAlignment alignment, DrawingContext context, int cornerIconSize, int verticalOffset, int horizontalOffset)
         {
             bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
             bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
+            bool isTop = alignment == IconAlignment.TopLeft || alignment == IconAlignment.TopRight;
 
-            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(context.IconSize * ((float)i.Width / i.Height)) : context.IconSize;
+            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(cornerIconSize * ((float)i.Width / i.Height)) : cornerIconSize;
             var iconWidth = GetIconWidth(icon);
-            var iconHeight = context.IconSize;
+            var iconHeight = cornerIconSize;
 
-            float x = isRight ? context.CanvasWidth - context.EdgePadding - horizontalOffset - iconWidth : context.EdgePadding + horizontalOffset;
-            float y = isBottom ? context.CanvasHeight - context.EdgePadding - verticalOffset - iconHeight : context.EdgePadding + verticalOffset;
+            var hPadding = GetHorizontalPaddingForCorner(alignment, context);
+            var vPadding = GetVerticalPaddingForCorner(alignment, context);
+
+            float x = isRight ? context.CanvasWidth - hPadding - horizontalOffset - iconWidth : hPadding + horizontalOffset;
+            
+            float y;
+            if (isTop && context.TopBarHeight > 0)
+            {
+                y = vPadding + verticalOffset;
+            }
+            else if (isBottom && context.BottomBarHeight > 0)
+            {
+                y = context.CanvasHeight - vPadding - verticalOffset - iconHeight;
+            }
+            else if (isBottom)
+            {
+                y = context.PosterYOffset + (context.CanvasHeight - context.PosterYOffset - context.BottomBarHeight) - vPadding - verticalOffset - iconHeight;
+            }
+            else
+            {
+                y = context.PosterYOffset + vPadding + verticalOffset;
+            }
 
             context.Canvas.DrawImage(icon, SKRect.Create(x, y, iconWidth, iconHeight), context.Paint);
         }
 
-        private SKSize DrawIconGroup(OverlayGroupInfo group, DrawingContext context, int verticalOffset, int horizontalOffset)
+        private SKSize DrawIconGroup(OverlayGroupInfo group, DrawingContext context, int cornerIconSize, int verticalOffset, int horizontalOffset)
         {
             bool isRight = group.Alignment == IconAlignment.TopRight || group.Alignment == IconAlignment.BottomRight;
             bool isBottom = group.Alignment == IconAlignment.BottomLeft || group.Alignment == IconAlignment.BottomRight;
+            bool isTop = group.Alignment == IconAlignment.TopLeft || group.Alignment == IconAlignment.TopRight;
 
-            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(context.IconSize * ((float)i.Width / i.Height)) : context.IconSize;
+            int GetIconWidth(SKImage i) => i.Height > 0 ? (int)Math.Round(cornerIconSize * ((float)i.Width / i.Height)) : cornerIconSize;
 
             int totalWidth = group.HorizontalLayout ? group.Icons.Sum(GetIconWidth) + (group.Icons.Count - 1) * context.InterIconPadding : group.Icons.Select(GetIconWidth).DefaultIfEmpty(0).Max();
-            int totalHeight = group.HorizontalLayout ? context.IconSize : (group.Icons.Count * context.IconSize) + (group.Icons.Count - 1) * context.InterIconPadding;
+            int totalHeight = group.HorizontalLayout ? cornerIconSize : (group.Icons.Count * cornerIconSize) + (group.Icons.Count - 1) * context.InterIconPadding;
 
-            float startX = isRight ? context.CanvasWidth - totalWidth - context.EdgePadding - horizontalOffset : context.EdgePadding + horizontalOffset;
-            float startY = isBottom ? context.CanvasHeight - totalHeight - context.EdgePadding - verticalOffset : context.EdgePadding + verticalOffset;
+            var hPadding = GetHorizontalPaddingForCorner(group.Alignment, context);
+            var vPadding = GetVerticalPaddingForCorner(group.Alignment, context);
+
+            float startX = isRight ? context.CanvasWidth - totalWidth - hPadding - horizontalOffset : hPadding + horizontalOffset;
+            
+            float startY;
+            if (isTop && context.TopBarHeight > 0)
+            {
+                startY = vPadding + verticalOffset;
+            }
+            else if (isBottom && context.BottomBarHeight > 0)
+            {
+                startY = context.CanvasHeight - totalHeight - vPadding - verticalOffset;
+            }
+            else if (isBottom)
+            {
+                startY = context.PosterYOffset + (context.CanvasHeight - context.PosterYOffset - context.BottomBarHeight) - totalHeight - vPadding - verticalOffset;
+            }
+            else
+            {
+                startY = context.PosterYOffset + vPadding + verticalOffset;
+            }
 
             float currentX = startX;
             float currentY = startY;
@@ -477,7 +665,7 @@ namespace EmbyIcons.Services
             foreach (var img in group.Icons)
             {
                 var iconWidth = GetIconWidth(img);
-                var iconHeight = context.IconSize;
+                var iconHeight = cornerIconSize;
 
                 if (group.HorizontalLayout)
                 {
@@ -494,14 +682,14 @@ namespace EmbyIcons.Services
             return new SKSize(totalWidth, totalHeight);
         }
 
-        private SKSize DrawCommunityRatingOverlay(RatingOverlayInfo rating, IconAlignment alignment, DrawingContext context, int verticalOffset, int horizontalOffset)
+        private SKSize DrawCommunityRatingOverlay(RatingOverlayInfo rating, IconAlignment alignment, DrawingContext context, int cornerIconSize, int verticalOffset, int horizontalOffset)
         {
-            var totalSize = GetCommunityRatingOverlaySize(rating, context);
+            var totalSize = GetCommunityRatingOverlaySize(rating, context, cornerIconSize);
             if (totalSize.IsEmpty) return SKSize.Empty;
 
             var typeface = FontHelper.GetDefaultBold(_logger);
             string scoreText = GetRatingText(rating, context);
-            var fontSize = context.IconSize * context.RatingFontSizeMultiplier;
+            var fontSize = cornerIconSize * context.RatingFontSizeMultiplier;
 
             var textPaint = context.TextPaint;
 
@@ -512,16 +700,38 @@ namespace EmbyIcons.Services
             textPaint.MeasureText(scoreText, ref textBounds);
 
             int textWidth = (int)Math.Ceiling(textBounds.Width);
-            int iconPadding = Math.Max(1, context.IconSize / 10);
-            int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(context.IconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
-            float bgHorizontalPadding = context.IconSize * 0.2f;
+            int iconPadding = Math.Max(1, cornerIconSize / 10);
+            int iconDisplayWidth = (rating.Icon != null && rating.Icon.Height > 0) ? (int)Math.Round(cornerIconSize * ((float)rating.Icon.Width / rating.Icon.Height)) : 0;
+            float bgHorizontalPadding = cornerIconSize * 0.2f;
             int scoreAreaWidth = (rating.BackgroundShape != ScoreBackgroundShape.None) ? textWidth + (int)(bgHorizontalPadding * 2) : textWidth;
 
             bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;
             bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
+            bool isTop = alignment == IconAlignment.TopLeft || alignment == IconAlignment.TopRight;
 
-            float startX = isRight ? context.CanvasWidth - context.EdgePadding - horizontalOffset - totalSize.Width : context.EdgePadding + horizontalOffset;
-            float startY = isBottom ? context.CanvasHeight - context.EdgePadding - verticalOffset - totalSize.Height : context.EdgePadding + verticalOffset;
+            var hPadding = GetHorizontalPaddingForCorner(alignment, context);
+            var vPadding = GetVerticalPaddingForCorner(alignment, context);
+
+            float startX = isRight ? context.CanvasWidth - hPadding - horizontalOffset - totalSize.Width : hPadding + horizontalOffset;
+            
+            float startY;
+            if (isTop && context.TopBarHeight > 0)
+            {
+                startY = vPadding + verticalOffset;
+            }
+            else if (isBottom && context.BottomBarHeight > 0)
+            {
+                startY = context.CanvasHeight - vPadding - verticalOffset - totalSize.Height;
+            }
+            else if (isBottom)
+            {
+                startY = context.PosterYOffset + (context.CanvasHeight - context.PosterYOffset - context.BottomBarHeight) - vPadding - verticalOffset - totalSize.Height;
+            }
+            else
+            {
+                startY = context.PosterYOffset + vPadding + verticalOffset;
+            }
+            
             float currentX = startX;
 
             if (rating.Icon != null && iconDisplayWidth > 0)

@@ -14,8 +14,13 @@ define(['loading', 'toast'], function (loading, toast) {
             const key = el.getAttribute('data-profile-key');
             if (el.type === 'checkbox') {
                 settings[key] = el.checked;
-            } else if (key === 'RatingFontSizeMultiplier' || key === 'RatingTextVerticalOffset') {
-                settings[key] = parseFloat(el.value) || (key === 'RatingFontSizeMultiplier' ? 0.75 : 0);
+            } else if (key === 'RatingFontSizeMultiplier' || key === 'RatingTextVerticalOffset' || key === 'IconSpacing' || key === 'TopLeftIconSize' || key === 'TopRightIconSize' || key === 'BottomLeftIconSize' || key === 'BottomRightIconSize') {
+                const parsed = parseFloat(el.value);
+                if (!isNaN(parsed)) {
+                    settings[key] = parsed;
+                } else {
+                    settings[key] = key === 'RatingFontSizeMultiplier' ? 0.75 : (key === 'IconSpacing' ? 12.5 : 0);
+                }
             } else if (el.type === 'number' || el.classList.contains('slider') || key.endsWith('Priority')) {
                 settings[key] = parseInt(el.value, 10) || 0;
             } else {

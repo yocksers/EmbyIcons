@@ -310,7 +310,15 @@ namespace EmbyIcons
                    options.VideoCodecIconAlignment != IconAlignment.Disabled ||
                    options.TagIconAlignment != IconAlignment.Disabled ||
                    options.AspectRatioIconAlignment != IconAlignment.Disabled ||
-                   options.ParentalRatingIconAlignment != IconAlignment.Disabled;
+                   options.ParentalRatingIconAlignment != IconAlignment.Disabled ||
+                   options.SourceIconAlignment != IconAlignment.Disabled ||
+                   options.FavoriteCountIconAlignment != IconAlignment.Disabled ||
+                   options.FrameRateIconAlignment != IconAlignment.Disabled ||
+                   options.OriginalLanguageIconAlignment != IconAlignment.Disabled ||
+                   options.SeriesStatusIconAlignment != IconAlignment.Disabled ||
+                   options.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled ||
+                   options.PopcornScoreIconAlignment != IconAlignment.Disabled ||
+                   options.MyAnimeListScoreIconAlignment != IconAlignment.Disabled;
         }
 
         private static string SanitizeTagForKey(string tag)
@@ -351,59 +359,98 @@ namespace EmbyIcons
 
             var globalOptions = plugin.GetConfiguredOptions();
             var options = profile.Settings;
-            var sb = new StringBuilder(768);
+            var sb = new StringBuilder(512);
 
-            sb.Append("ei7_")
-              .Append(item.Id.ToString("N")).Append('_').Append((int)imageType)
-              .Append("_v").Append(plugin.ConfigurationVersion)
-              .Append("_p").Append(profile.Id.ToString("N"));
+            sb.Append("ei8_")
+              .Append(Convert.ToBase64String(item.Id.ToByteArray()).TrimEnd('='))
+              .Append('_').Append((int)imageType)
+              .Append('v').Append(plugin.ConfigurationVersion)
+              .Append('p').Append(Convert.ToBase64String(profile.Id.ToByteArray()).TrimEnd('='));
 
-            sb.Append('_').Append((int)options.AudioIconAlignment).Append(options.AudioOverlayHorizontal ? 't' : 'f').Append(options.AudioIconPriority);
-            sb.Append('_').Append((int)options.SubtitleIconAlignment).Append(options.SubtitleOverlayHorizontal ? 't' : 'f').Append(options.SubtitleIconPriority);
-            sb.Append('_').Append((int)options.ChannelIconAlignment).Append(options.ChannelOverlayHorizontal ? 't' : 'f').Append(options.ChannelIconPriority);
-            sb.Append('_').Append((int)options.AudioCodecIconAlignment).Append(options.AudioCodecOverlayHorizontal ? 't' : 'f').Append(options.AudioCodecIconPriority);
-            sb.Append('_').Append((int)options.VideoFormatIconAlignment).Append(options.VideoFormatOverlayHorizontal ? 't' : 'f').Append(options.VideoFormatIconPriority);
-            sb.Append('_').Append((int)options.VideoCodecIconAlignment).Append(options.VideoCodecOverlayHorizontal ? 't' : 'f').Append(options.VideoCodecIconPriority);
-            sb.Append('_').Append((int)options.TagIconAlignment).Append(options.TagOverlayHorizontal ? 't' : 'f').Append(options.TagIconPriority);
-            sb.Append('_').Append((int)options.ResolutionIconAlignment).Append(options.ResolutionOverlayHorizontal ? 't' : 'f').Append(options.ResolutionIconPriority);
-            sb.Append('_').Append((int)options.CommunityScoreIconAlignment).Append(options.CommunityScoreOverlayHorizontal ? 't' : 'f').Append(options.CommunityScoreIconPriority);
-            sb.Append('_').Append((int)options.AspectRatioIconAlignment).Append(options.AspectRatioOverlayHorizontal ? 't' : 'f').Append(options.AspectRatioIconPriority);
-            sb.Append('_').Append((int)options.ParentalRatingIconAlignment).Append(options.ParentalRatingOverlayHorizontal ? 't' : 'f').Append(options.ParentalRatingIconPriority);
+            int boolFlags1 = 
+                (options.AudioOverlayHorizontal ? 1 : 0) |
+                (options.SubtitleOverlayHorizontal ? 2 : 0) |
+                (options.ChannelOverlayHorizontal ? 4 : 0) |
+                (options.AudioCodecOverlayHorizontal ? 8 : 0) |
+                (options.VideoFormatOverlayHorizontal ? 16 : 0) |
+                (options.VideoCodecOverlayHorizontal ? 32 : 0) |
+                (options.TagOverlayHorizontal ? 64 : 0) |
+                (options.ResolutionOverlayHorizontal ? 128 : 0) |
+                (options.CommunityScoreOverlayHorizontal ? 256 : 0) |
+                (options.AspectRatioOverlayHorizontal ? 512 : 0) |
+                (options.ParentalRatingOverlayHorizontal ? 1024 : 0) |
+                (globalOptions.EnableImageSmoothing ? 2048 : 0) |
+                (options.UseSeriesLiteMode ? 4096 : 0) |
+                (options.UseCollectionLiteMode ? 8192 : 0) |
+                (options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 16384 : 0) |
+                (options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 32768 : 0);
+
+            int boolFlags2 = 
+                (options.ExcludeSpecialsFromSeriesAggregation ? 1 : 0) |
+                (options.SnapAspectRatioToCommon ? 2 : 0) |
+                (options.SnapFrameRateToCommon ? 4 : 0) |
+                (globalOptions.EnableCollectionProfileLookup ? 8 : 0);
+
+            sb.Append('_').Append((int)options.AudioIconAlignment).Append('.').Append(options.AudioIconPriority)
+              .Append('.').Append((int)options.SubtitleIconAlignment).Append('.').Append(options.SubtitleIconPriority)
+              .Append('.').Append((int)options.ChannelIconAlignment).Append('.').Append(options.ChannelIconPriority)
+              .Append('.').Append((int)options.AudioCodecIconAlignment).Append('.').Append(options.AudioCodecIconPriority)
+              .Append('.').Append((int)options.VideoFormatIconAlignment).Append('.').Append(options.VideoFormatIconPriority)
+              .Append('.').Append((int)options.VideoCodecIconAlignment).Append('.').Append(options.VideoCodecIconPriority)
+              .Append('.').Append((int)options.TagIconAlignment).Append('.').Append(options.TagIconPriority)
+              .Append('.').Append((int)options.ResolutionIconAlignment).Append('.').Append(options.ResolutionIconPriority)
+              .Append('.').Append((int)options.CommunityScoreIconAlignment).Append('.').Append(options.CommunityScoreIconPriority)
+              .Append('.').Append((int)options.AspectRatioIconAlignment).Append('.').Append(options.AspectRatioIconPriority)
+              .Append('.').Append((int)options.ParentalRatingIconAlignment).Append('.').Append(options.ParentalRatingIconPriority);
 
             sb.Append('_').Append(options.IconSize)
-              .Append(globalOptions.JpegQuality)
-              .Append(globalOptions.EnableImageSmoothing ? 't' : 'f')
-              .Append((int)globalOptions.OutputFormat);
+              .Append('.').Append(options.IconSpacing.ToString(StringConstants.PercentFormat))
+              .Append('.').Append(options.TopLeftIconSize.ToString(StringConstants.PercentFormat))
+              .Append('.').Append(options.TopRightIconSize.ToString(StringConstants.PercentFormat))
+              .Append('.').Append(options.BottomLeftIconSize.ToString(StringConstants.PercentFormat))
+              .Append('.').Append(options.BottomRightIconSize.ToString(StringConstants.PercentFormat))
+              .Append('.').Append(globalOptions.JpegQuality)
+              .Append('.').Append((int)globalOptions.OutputFormat)
+              .Append('.').Append(boolFlags1).Append('.').Append(boolFlags2);
 
-            sb.Append('_').Append((int)options.CommunityScoreBackgroundShape).Append(options.CommunityScoreBackgroundColor).Append(options.CommunityScoreBackgroundOpacity);
-            sb.Append('_').Append(options.UseSeriesLiteMode ? 't' : 'f').Append(options.UseCollectionLiteMode ? 't' : 'f');
-            sb.Append('_').Append(options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 't' : 'f').Append(options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 't' : 'f');
-            sb.Append('_').Append(options.ExcludeSpecialsFromSeriesAggregation ? 't' : 'f').Append(options.SnapAspectRatioToCommon ? 't' : 'f').Append(options.SnapFrameRateToCommon ? 't' : 'f');
-            sb.Append('_').Append(globalOptions.EnableCollectionProfileLookup ? 't' : 'f');
+            sb.Append('_').Append((int)options.CommunityScoreBackgroundShape)
+              .Append('.').Append(options.CommunityScoreBackgroundColor)
+              .Append('.').Append(options.CommunityScoreBackgroundOpacity);
+
+            sb.Append('_').Append(options.EnableTopIconBar ? 1 : 0)
+              .Append('.').Append(options.TopIconBarHeight)
+              .Append('.').Append(options.TopIconBarColor)
+              .Append('.').Append(options.TopIconBarOpacity)
+              .Append('.').Append(options.TopIconBarOverlay ? 1 : 0)
+              .Append('.').Append(options.EnableBottomIconBar ? 1 : 0)
+              .Append('.').Append(options.BottomIconBarHeight)
+              .Append('.').Append(options.BottomIconBarColor)
+              .Append('.').Append(options.BottomIconBarOpacity)
+              .Append('.').Append(options.BottomIconBarOverlay ? 1 : 0);
 
             if (item is Series series)
             {
                 var fullSeries = GetFullItem(series) as Series ?? series;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullSeries, options, globalOptions);
-                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                sb.Append("_c").Append(aggResult.CombinedEpisodesHashShort);
             }
             else if (item is Season season)
             {
                 var fullSeason = GetFullItem(season) as Season ?? season;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullSeason, options, globalOptions);
-                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                sb.Append("_c").Append(aggResult.CombinedEpisodesHashShort);
             }
             else if (item is BoxSet collection)
             {
                 var fullCollection = GetFullItem(collection) as BoxSet ?? collection;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, globalOptions);
-                sb.Append("_ch").Append(aggResult.CombinedEpisodesHashShort);
+                sb.Append("_c").Append(aggResult.CombinedEpisodesHashShort);
             }
             else
             {
                 var mediaStreams = item.GetMediaStreams();
                 if (mediaStreams == null) mediaStreams = new List<MediaStream>();
-                sb.Append("_ih").Append(MediaStreamHelper.GetItemMediaStreamHashV2(item, mediaStreams));
+                sb.Append("_i").Append(MediaStreamHelper.GetItemMediaStreamHashV2(item, mediaStreams));
             }
 
             if (item.Tags != null && item.Tags.Length > 0)
