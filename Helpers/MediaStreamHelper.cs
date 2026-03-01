@@ -153,7 +153,7 @@ namespace EmbyIcons.Helpers
             return null;
         }
 
-        public static string? GetResolutionIconNameFromStream(MediaStream? videoStream, IList<string> knownKeys)
+        public static string? GetResolutionIconNameFromStream(MediaStream? videoStream, IList<string> knownKeys, BaseItem? item = null)
         {
             if (videoStream == null) return null;
 
@@ -162,9 +162,24 @@ namespace EmbyIcons.Helpers
             {
                 foreach (var key in knownKeys)
                 {
-                    if (!string.IsNullOrWhiteSpace(key) && title.Contains(key))
+                    if (!string.IsNullOrWhiteSpace(key) && title.Contains(key.ToLowerInvariant()))
                     {
                         return key;
+                    }
+                }
+            }
+
+            if (item != null)
+            {
+                var itemTitle = (item.Name ?? "").ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(itemTitle))
+                {
+                    foreach (var key in knownKeys)
+                    {
+                        if (!string.IsNullOrWhiteSpace(key) && itemTitle.Contains(key.ToLowerInvariant()))
+                        {
+                            return key;
+                        }
                     }
                 }
             }

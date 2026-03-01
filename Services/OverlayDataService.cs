@@ -903,9 +903,17 @@ namespace EmbyIcons.Services
 
             if (profileOptions.ResolutionIconAlignment != IconAlignment.Disabled && primaryVideoStream != null)
             {
-                _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
-                    .TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutionKeys);
-                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys ?? new List<string>());
+                var customResolutionKeys = _enhancer._iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder)
+                    .GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+                var embeddedResolutionKeys = _enhancer._iconCacheManager.GetAllAvailableEmbeddedIconKeys()
+                    .GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+                var knownResolutionKeys = options.IconLoadingMode switch
+                {
+                    IconLoadingMode.CustomOnly => customResolutionKeys,
+                    IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                    _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+                };
+                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys, item);
             }
 
             if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)

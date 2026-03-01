@@ -151,8 +151,16 @@ namespace EmbyIcons.Services
             if (episodes.Count == 0) return report;
 
             var config = Plugin.Instance?.Configuration ?? new PluginOptions();
-            var knownResolutions = _iconCacheManager.GetAllAvailableIconKeys(config.IconsFolder)
+            var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(config.IconsFolder)
                                     .GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys()
+                                    .GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            var knownResolutions = config.IconLoadingMode switch
+            {
+                IconLoadingMode.CustomOnly => customResolutionKeys,
+                IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+            };
 
             var baseItems = episodes.Cast<BaseItem>().ToList();
 
@@ -178,7 +186,7 @@ namespace EmbyIcons.Services
             if (runAllChecks || requestedChecks.Contains(CheckNames.Resolution))
                 report.Checks.Add(CheckProperty(baseItems, "Resolution", ep => {
                     var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
-                    var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions) : null;
+                    var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, ep) : null;
                     return resName != null ? new List<string> { resName } : new List<string>();
                 }));
 

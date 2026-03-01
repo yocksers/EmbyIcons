@@ -146,8 +146,14 @@ namespace EmbyIcons.Services
             int processedCount = 0;
 
             var customIcons = _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
-            customIcons.TryGetValue(IconCacheManager.IconType.Resolution, out var knownResolutions);
-            knownResolutions ??= new List<string>();
+            var customResolutionKeys = customIcons.GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            var knownResolutions = options.IconLoadingMode switch
+            {
+                IconLoadingMode.CustomOnly => customResolutionKeys,
+                IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+            };
 
             var finalReportData = allItems
                 .AsParallel()
@@ -232,7 +238,7 @@ namespace EmbyIcons.Services
                                     localReport.VideoCodecs.Add(videoCodec);
                                     localReport.VideoCodec = videoCodec;
                                 }
-                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
+                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, item);
                                 if (res != null)
                                 {
                                     localReport.Resolutions.Add(res);
@@ -368,7 +374,7 @@ namespace EmbyIcons.Services
                     var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
                     isLikelyImage = fps.HasValue && fps.Value > 1000;
 
-                    var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
+                    var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, item);
                     if (res != null) resolutionCounts.AddOrUpdate(res, 1, (k, v) => v + 1);
 
                     var ar = MediaStreamHelper.GetAspectRatioIconName(videoStream, true);

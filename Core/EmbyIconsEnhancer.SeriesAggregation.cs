@@ -235,7 +235,7 @@ namespace EmbyIcons
                     IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
                     _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
                 };
-                commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys);
+                commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys, firstItem);
             }
 
             var itemHashes = new List<string>(itemList.Count) { $"{firstItem.Id}:{MediaStreamHelper.GetItemMediaStreamHash(firstItem, firstStreams)}" };
@@ -285,7 +285,7 @@ namespace EmbyIcons
 
                 if (checkResolution && commonResolution != null)
                 {
-                    var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
+                    var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys, item);
                     if (commonResolution != currentRes) commonResolution = null;
                 }
 

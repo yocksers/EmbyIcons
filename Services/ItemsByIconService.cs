@@ -86,11 +86,14 @@ namespace EmbyIcons.Services
                 var iconCacheManager = Plugin.Instance?.Enhancer._iconCacheManager;
                 if (iconCacheManager != null)
                 {
-                    var customIcons = iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
-                    if (customIcons.TryGetValue(Caching.IconCacheManager.IconType.Resolution, out var resolutionKeys))
+                    var customResolutionKeys = iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder).GetValueOrDefault(Caching.IconCacheManager.IconType.Resolution, new List<string>());
+                    var embeddedResolutionKeys = iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(Caching.IconCacheManager.IconType.Resolution, new List<string>());
+                    knownResolutions = options.IconLoadingMode switch
                     {
-                        knownResolutions = resolutionKeys;
-                    }
+                        IconLoadingMode.CustomOnly => customResolutionKeys,
+                        IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                        _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+                    };
                 }
             }
 
@@ -150,7 +153,7 @@ namespace EmbyIcons.Services
                         var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
                         if (videoStream != null)
                         {
-                            var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
+                            var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, item);
                             matches = res != null && res.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         }
                         break;
