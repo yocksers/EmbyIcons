@@ -169,64 +169,6 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            if (item != null)
-            {
-                var itemTitle = (item.Name ?? "").ToLowerInvariant();
-                if (!string.IsNullOrWhiteSpace(itemTitle))
-                {
-                    foreach (var key in knownKeys)
-                    {
-                        if (!string.IsNullOrWhiteSpace(key) && itemTitle.Contains(key.ToLowerInvariant()))
-                        {
-                            return key;
-                        }
-                    }
-                }
-            }
-
-            if (videoStream.Width.HasValue && videoStream.Height.HasValue)
-            {
-                var width = videoStream.Width.Value;
-                var height = videoStream.Height.Value;
-                var scanType = videoStream.IsInterlaced ? "i" : "p";
-
-                string? resolutionName = null;
-
-                if (height >= 2160)
-                {
-                    resolutionName = "4k";
-                }
-                else if (height >= 1440)
-                {
-                    resolutionName = "1440p";
-                }
-                else if (height >= 1080)
-                {
-                    resolutionName = "1080" + scanType;
-                }
-                else if (height >= 720)
-                {
-                    resolutionName = "720" + scanType;
-                }
-                else if (height >= 576)
-                {
-                    resolutionName = "576" + scanType;
-                }
-                else if (height >= 480)
-                {
-                    resolutionName = "480" + scanType;
-                }
-                else if (height >= 360)
-                {
-                    resolutionName = "360" + scanType;
-                }
-
-                if (resolutionName != null)
-                {
-                    return resolutionName;
-                }
-            }
-
             return null;
         }
 
