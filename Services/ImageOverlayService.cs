@@ -121,8 +121,9 @@ namespace EmbyIcons.Services
             
             try
             {
-                int topBarHeight = profileOptions.EnableTopIconBar ? Math.Clamp((sourceBitmap.Height * profileOptions.TopIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
-                int bottomBarHeight = profileOptions.EnableBottomIconBar ? Math.Clamp((sourceBitmap.Height * profileOptions.BottomIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                int barRefDimension = Math.Max(sourceBitmap.Width, sourceBitmap.Height);
+                int topBarHeight = profileOptions.EnableTopIconBar ? Math.Clamp((barRefDimension * profileOptions.TopIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                int bottomBarHeight = profileOptions.EnableBottomIconBar ? Math.Clamp((barRefDimension * profileOptions.BottomIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
                 
                 bool topBarScalesImage = profileOptions.EnableTopIconBar && !profileOptions.TopIconBarOverlay;
                 bool bottomBarScalesImage = profileOptions.EnableBottomIconBar && !profileOptions.BottomIconBarOverlay;
