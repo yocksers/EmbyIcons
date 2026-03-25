@@ -159,13 +159,9 @@ namespace EmbyIcons
 
                 foreach (var key in keysToRemove)
                 {
-                    if (_locks.TryRemove(key, out var semaphore))
+                    if (_locks.TryRemove(key, out _))
                     {
                         _lockLastUsed.TryRemove(key, out _);
-                        try { semaphore.Dispose(); }
-                        catch
-                        { 
-                        }
                     }
                 }
 
@@ -502,7 +498,7 @@ namespace EmbyIcons
                 itemLockAcquired = true;
                 
                 item = GetFullItem(item);
-                var overlayData = _overlayDataService.GetOverlayData(item, profileOptions, globalOptions);
+                var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
                 await using var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true);
                 using var sourceBitmap = SKBitmap.Decode(inputStream);

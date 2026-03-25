@@ -5,13 +5,17 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EmbyIcons.Configuration;
 using MediaBrowser.Controller.Entities;
 
 namespace EmbyIcons.Services
 {
     internal class MDBListService
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
         private static readonly Dictionary<string, CachedRatingData> _ratingsCache = new Dictionary<string, CachedRatingData>();
         private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
         private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
@@ -21,6 +25,7 @@ namespace EmbyIcons.Services
 
         static MDBListService()
         {
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("EmbyIcons/1.0");
             lock (_timerLock)
             {
                 if (_cacheCleanupTimer == null)
@@ -83,18 +88,6 @@ namespace EmbyIcons.Services
             }
         }
 
-        public MDBListRatingData? FetchRatings(BaseItem item, string apiKey)
-        {
-            try
-            {
-                return FetchRatingsAsync(item, apiKey, CancellationToken.None).GetAwaiter().GetResult();
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
-
         public async Task<MDBListRatingData?> FetchRatingsAsync(BaseItem item, string apiKey, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -108,7 +101,7 @@ namespace EmbyIcons.Services
                 return null;
             }
 
-            var mediaType = item is MediaBrowser.Controller.Entities.Movies.Movie ? "movie" : "show";
+            var mediaType = item is MediaBrowser.Controller.Entities.Movies.Movie ? StringConstants.MediaTypeMovie : StringConstants.MediaTypeShow;
             var cacheKey = $"mdblist_{mediaType}_{tmdbId}";
 
             await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -161,7 +154,7 @@ namespace EmbyIcons.Services
 
                     var source = sourceElement.GetString()?.ToLowerInvariant() ?? string.Empty;
                     
-                    if (source.Contains("popcorn") || source.Contains("audience"))
+                    if (source.Contains(StringConstants.MdbListPopcornSource) || source.Contains(StringConstants.MdbListAudienceSource))
                     {
                         if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
                         {
@@ -173,7 +166,7 @@ namespace EmbyIcons.Services
                             popcornVotes = votesElement.GetInt32();
                         }
                     }
-                    else if (source.Contains("myanimelist") || source.Contains("mal"))
+                    else if (source.Contains(StringConstants.MdbListMyAnimeListSource) || source.Contains(StringConstants.MdbListMalSource))
                     {
                         if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
                         {

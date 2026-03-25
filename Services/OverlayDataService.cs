@@ -16,6 +16,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -493,28 +494,6 @@ namespace EmbyIcons.Services
             };
 
             var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
-            if (profileOptions?.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions?.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
-            {
-                try
-                {
-                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        var mdbData = _mdbListService.FetchRatings(item, apiKey);
-                        if (mdbData != null)
-                        {
-                            data.PopcornRating = mdbData.PopcornScore;  
-                            data.PopcornVotes = mdbData.PopcornVotes;
-                            data.MyAnimeListRating = mdbData.MyAnimeListScore;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for aggregate: {ex.Message}");
-                }
-            }
 
             if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
@@ -529,23 +508,23 @@ namespace EmbyIcons.Services
             return data;
         }
 
-        public OverlayData GetOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
+        public async Task<OverlayData> GetOverlayDataAsync(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
             EnsureMaintenanceTimerInitialized();
+
+            OverlayData overlayData;
 
             if (item is Series seriesItem)
             {
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
-                return CreateOverlayDataFromAggregate(aggResult, seriesItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, seriesItem);
             }
-
-            if (item is Season seasonItem)
+            else if (item is Season seasonItem)
             {
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
-                return CreateOverlayDataFromAggregate(aggResult, seasonItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, seasonItem);
             }
-
-            if (item is BoxSet collectionItem)
+            else if (item is BoxSet collectionItem)
             {
                 if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
                 {
@@ -557,8 +536,42 @@ namespace EmbyIcons.Services
                 }
 
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
-                return CreateOverlayDataFromAggregate(aggResult, collectionItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem);
             }
+            else
+            {
+                overlayData = await GetOverlayDataForItemAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                return overlayData;
+            }
+
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
+            {
+                try
+                {
+                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
+                        if (mdbData != null)
+                        {
+                            overlayData.PopcornRating = mdbData.PopcornScore;
+                            overlayData.PopcornVotes = mdbData.PopcornVotes;
+                            overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for aggregate: {ex.Message}");
+                }
+            }
+
+            return overlayData;
+        }
+
+        private async Task<OverlayData> GetOverlayDataForItemAsync(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
+        {
 
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
             if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
@@ -654,6 +667,29 @@ namespace EmbyIcons.Services
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
             EmbyIconsEnhancer._episodeIconCache?.Set(item.Id, newInfo, cacheEntryOptions);
 
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
+            {
+                try
+                {
+                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
+                        if (mdbData != null)
+                        {
+                            overlayData.PopcornRating = mdbData.PopcornScore;
+                            overlayData.PopcornVotes = mdbData.PopcornVotes;
+                            overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
+                }
+            }
+
             return overlayData;
         }
 
@@ -697,29 +733,6 @@ namespace EmbyIcons.Services
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _enhancer.Logger.Debug($"[EmbyIcons] Error extracting Rotten Tomatoes rating: {ex.Message}");
-                }
-            }
-
-            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
-            {
-                try
-                {
-                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        var mdbData = _mdbListService.FetchRatings(item, apiKey);
-                        if (mdbData != null)
-                        {
-                            data.PopcornRating = mdbData.PopcornScore;
-                            data.PopcornVotes = mdbData.PopcornVotes;
-                            data.MyAnimeListRating = mdbData.MyAnimeListScore;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
                 }
             }
 

@@ -260,18 +260,11 @@ namespace EmbyIcons.Caching
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (cache.TryGetValue(baseFileName, out byte[]? cachedBytes) && cachedBytes != null)
+            if (cache.TryGetValue(baseFileName, out SKBitmap? cachedBitmap) && cachedBitmap != null)
             {
                 try
                 {
-                    using var ms = new MemoryStream(cachedBytes);
-                    var bmp = SKBitmap.Decode(ms);
-                    if (bmp != null)
-                    {
-                        var img = SKImage.FromBitmap(bmp);
-                        bmp.Dispose();
-                        return img;
-                    }
+                    return SKImage.FromBitmap(cachedBitmap);
                 }
                 catch { }
             }
@@ -284,21 +277,26 @@ namespace EmbyIcons.Caching
                     var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
                     if (bytes.Length == 0) return null;
 
-                    var cacheEntryOptions = new MemoryCacheEntryOptions()
-                        .SetSize(bytes.LongLength)
-                        .SetSlidingExpiration(TimeSpan.FromHours(2));
-
-                    try { cache.Set(baseFileName, bytes, cacheEntryOptions); } catch { }
-
                     try
                     {
                         using var ms = new MemoryStream(bytes);
                         var bmp = SKBitmap.Decode(ms);
                         if (bmp != null)
                         {
-                            var image = SKImage.FromBitmap(bmp);
-                            bmp.Dispose();
-                            return image;
+                            long pixelSize = (long)bmp.Width * bmp.Height * 4;
+                            var cacheEntryOptions = new MemoryCacheEntryOptions()
+                                .SetSize(pixelSize)
+                                .SetSlidingExpiration(TimeSpan.FromHours(2))
+                                .RegisterPostEvictionCallback((_, v, _, _) =>
+                                {
+                                    if (v is SKBitmap evicted) try { evicted.Dispose(); } catch { }
+                                });
+
+                            try { cache.Set(baseFileName, bmp, cacheEntryOptions); }
+                            catch (ObjectDisposedException) { bmp.Dispose(); return null; }
+                            catch { }
+
+                            return SKImage.FromBitmap(bmp);
                         }
                     }
                     catch { }
@@ -310,18 +308,11 @@ namespace EmbyIcons.Caching
 
         private async Task<SKImage?> LoadEmbeddedIconAsync(string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
         {
-            if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
+            if (cache.TryGetValue(cacheKey, out SKBitmap? cachedBitmap) && cachedBitmap != null)
             {
                 try
                 {
-                    using var ms = new MemoryStream(cachedBytes);
-                    var bmp = SKBitmap.Decode(ms);
-                    if (bmp != null)
-                    {
-                        var img = SKImage.FromBitmap(bmp);
-                        bmp.Dispose();
-                        return img;
-                    }
+                    return SKImage.FromBitmap(cachedBitmap);
                 }
                 catch { }
             }
@@ -335,21 +326,26 @@ namespace EmbyIcons.Caching
             await stream.CopyToAsync(memoryStream, cancellationToken).ConfigureAwait(false);
             var bytes = memoryStream.ToArray();
 
-            var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSize(bytes.LongLength)
-                .SetSlidingExpiration(TimeSpan.FromHours(2));
-
-            try { cache.Set(cacheKey, bytes, cacheEntryOptions); } catch { }
-
             try
             {
                 using var ms = new MemoryStream(bytes);
                 var bmp = SKBitmap.Decode(ms);
                 if (bmp != null)
                 {
-                    var img = SKImage.FromBitmap(bmp);
-                    bmp.Dispose();
-                    return img;
+                    long pixelSize = (long)bmp.Width * bmp.Height * 4;
+                    var cacheEntryOptions = new MemoryCacheEntryOptions()
+                        .SetSize(pixelSize)
+                        .SetSlidingExpiration(TimeSpan.FromHours(2))
+                        .RegisterPostEvictionCallback((_, v, _, _) =>
+                        {
+                            if (v is SKBitmap evicted) try { evicted.Dispose(); } catch { }
+                        });
+
+                    try { cache.Set(cacheKey, bmp, cacheEntryOptions); }
+                    catch (ObjectDisposedException) { bmp.Dispose(); return null; }
+                    catch { }
+
+                    return SKImage.FromBitmap(bmp);
                 }
             }
             catch { }

@@ -250,6 +250,19 @@ namespace EmbyIcons
                     break;
                 }
 
+                bool allCommonExhausted =
+                    (!checkAudioCodecs || commonAudioCodecs.Count == 0) &&
+                    (!checkVideoCodecs || commonVideoCodecs.Count == 0) &&
+                    (!checkChannels || commonChannelType == null) &&
+                    (!checkAspectRatio || commonAspectRatio == null) &&
+                    (!checkResolution || commonResolution == null) &&
+                    (!requireAllItemsToMatchForLanguage ||
+                        (!checkAudioLangs || commonAudioLangs.Count == 0) &&
+                        (!checkSubLangs || commonSubtitleLangs.Count == 0));
+
+                if (allCommonExhausted)
+                    break;
+
                 var item = itemList[i];
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
                 var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);

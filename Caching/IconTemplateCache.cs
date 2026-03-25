@@ -93,7 +93,7 @@ namespace EmbyIcons.Caching
             {
                 try
                 {
-                    if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
+                    if (cache.TryGetValue(cacheKey, out SKBitmap? cachedBitmap) && cachedBitmap != null)
                     {
                         Interlocked.Increment(ref _cacheHits);
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
@@ -101,8 +101,7 @@ namespace EmbyIcons.Caching
                         
                         try
                         {
-                            using var ms = new MemoryStream(cachedBytes);
-                            return SKImage.FromEncodedData(ms);
+                            return SKImage.FromBitmap(cachedBitmap);
                         }
                         catch (Exception ex)
                         {
@@ -130,12 +129,11 @@ namespace EmbyIcons.Caching
                 
                 try
                 {
-                    if (cache.TryGetValue(cacheKey, out byte[]? reCheckedBytes) && reCheckedBytes != null)
+                    if (cache.TryGetValue(cacheKey, out SKBitmap? reCheckedBitmap) && reCheckedBitmap != null)
                     {
                         try
                         {
-                            using var ms = new MemoryStream(reCheckedBytes);
-                            return SKImage.FromEncodedData(ms);
+                            return SKImage.FromBitmap(reCheckedBitmap);
                         }
                         catch (Exception ex)
                         {
@@ -154,32 +152,42 @@ namespace EmbyIcons.Caching
                 {
                     try
                     {
-                        using var encodedData = template.Encode(SKEncodedImageFormat.Png, 100);
-                        if (encodedData != null)
+                        var bitmap = SKBitmap.FromImage(template);
+                        if (bitmap != null)
                         {
-                            var bytes = encodedData.ToArray();
+                            long pixelSize = (long)bitmap.Width * bitmap.Height * 4;
                             var cacheOptions = new MemoryCacheEntryOptions()
-                                .SetSize(bytes.LongLength)
-                                .SetSlidingExpiration(TimeSpan.FromHours(2));
+                                .SetSize(pixelSize)
+                                .SetSlidingExpiration(TimeSpan.FromHours(2))
+                                .RegisterPostEvictionCallback((_, v, _, _) =>
+                                {
+                                    if (v is SKBitmap evicted) try { evicted.Dispose(); } catch { }
+                                });
 
                             try
                             {
                                 if (cache != null && !_disposed)
                                 {
-                                    cache.Set(cacheKey, bytes, cacheOptions);
+                                    cache.Set(cacheKey, bitmap, cacheOptions);
                                     Interlocked.Increment(ref _templatesGenerated);
-                                    
+
                                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                                        _logger.Debug($"[EmbyIcons] Generated and cached template: {cacheKey} ({bytes.Length} bytes)");
+                                        _logger.Debug($"[EmbyIcons] Generated and cached template: {cacheKey} ({pixelSize} bytes)");
+                                }
+                                else
+                                {
+                                    bitmap.Dispose();
                                 }
                             }
-                            catch (ObjectDisposedException)
+                            catch
                             {
+                                bitmap.Dispose();
                             }
                         }
                     }
-                    finally
+                    catch (Exception ex)
                     {
+                        _logger?.Debug($"[EmbyIcons] Error caching template bitmap: {ex.Message}");
                     }
                 }
 
@@ -283,6 +291,7 @@ namespace EmbyIcons.Caching
                 
                 try
                 {
+                    oldCache?.Compact(1.0);
                     oldCache?.Dispose();
                 }
                 catch (Exception ex)
@@ -361,6 +370,7 @@ namespace EmbyIcons.Caching
             {
                 try
                 {
+                    _templateCache?.Compact(1.0);
                     _templateCache?.Dispose();
                     _templateCache = null;
                 }
