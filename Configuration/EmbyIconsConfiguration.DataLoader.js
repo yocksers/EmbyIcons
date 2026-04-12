@@ -14,8 +14,9 @@ define([], function () {
             { id: 'renameProfileDialogTemplate', page: 'EmbyIconsConfigurationRenameProfileTemplate' }
         ];
 
+        const baseUrl = ApiClient.serverAddress() + '/web';
         const promises = parts.map(p =>
-            fetch('/web/configurationpage?name=' + p.page)
+            fetch(baseUrl + '/configurationpage?name=' + p.page)
                 .then(r => r.ok ? r.text() : '')
                 .then(html => {
                     if (html) {
