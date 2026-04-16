@@ -42,19 +42,6 @@ namespace EmbyIcons.Services
 
         public void InvalidateLibraryCache()
         {
-            if (_libraryPathTrieLazy.IsValueCreated)
-            {
-                try
-                {
-                    var oldTrie = _libraryPathTrieLazy.Value;
-                    oldTrie?.Clear();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug($"[EmbyIcons] Error clearing old trie: {ex.Message}");
-                }
-            }
-            
             _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
 
             var maxItemCacheSize = Math.Max(1000, _configuration.MaxItemToProfileCacheSize);

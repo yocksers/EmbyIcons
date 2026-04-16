@@ -6,7 +6,7 @@ namespace EmbyIcons.Helpers
 {
     internal static class FontHelper
     {
-        private static SKTypeface? _typeface;
+        private static volatile SKTypeface? _typeface;
         private static readonly object _lock = new object();
 
         public static SKTypeface GetDefaultBold(ILogger logger)

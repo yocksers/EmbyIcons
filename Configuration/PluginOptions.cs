@@ -35,14 +35,11 @@ namespace EmbyIcons.Configuration
     public class PluginOptions : BasePluginConfiguration
     {
         public string PersistedVersion { get; set; } = "1.0.0";
-        public string IconsFolder { get; set; } = GetDefaultIconsFolder();
+        public string IconsFolder { get; set; } = string.Empty;
 
         private static string GetDefaultIconsFolder()
         {
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-                return @"C:\";
-            else
-                return "/";
+            return string.Empty;
         }
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;

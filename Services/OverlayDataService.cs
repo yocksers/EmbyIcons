@@ -14,6 +14,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,9 +26,19 @@ namespace EmbyIcons.Services
         private readonly EmbyIconsEnhancer _enhancer;
         private readonly ILibraryManager _libraryManager;
         private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = Constants.DefaultProviderPathCacheSize });
-        private Timer? _cacheMaintenanceTimer;
+        private volatile Timer? _cacheMaintenanceTimer;
         private readonly object _timerInitLock = new object();
-        private static readonly System.Reflection.PropertyInfo? _providerIdsProperty = typeof(BaseItem).GetProperty("ProviderIds");
+        private static readonly Func<BaseItem, System.Collections.IDictionary?>? _getProviderIds = BuildProviderIdsDelegate();
+
+        private static Func<BaseItem, System.Collections.IDictionary?>? BuildProviderIdsDelegate()
+        {
+            var prop = typeof(BaseItem).GetProperty("ProviderIds");
+            if (prop?.GetMethod == null) return null;
+            if (!typeof(System.Collections.IDictionary).IsAssignableFrom(prop.PropertyType)) return null;
+            var param = Expression.Parameter(typeof(BaseItem), "item");
+            var body = Expression.TypeAs(Expression.Property(param, prop), typeof(System.Collections.IDictionary));
+            return Expression.Lambda<Func<BaseItem, System.Collections.IDictionary?>>(body, param).Compile();
+        }
         private readonly MDBListService _mdbListService = new MDBListService();
         private static readonly ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]> _propertyCache = new ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]>();
 
@@ -74,16 +85,18 @@ namespace EmbyIcons.Services
 
         public void Dispose()
         {
+            var logger = _enhancer?.Logger;
+
             try
             {
                 _providerPathCache?.Dispose();
             }
             catch (Exception ex)
             {
-                _enhancer.Logger.Debug($"[EmbyIcons] Error disposing provider path cache: {ex.Message}");
+                logger?.Debug($"[EmbyIcons] Error disposing provider path cache: {ex.Message}");
             }
             
-            try { _cacheMaintenanceTimer?.Dispose(); } catch (Exception ex) { _enhancer.Logger.Debug($"[EmbyIcons] Error disposing cache maintenance timer: {ex.Message}"); }
+            try { _cacheMaintenanceTimer?.Dispose(); } catch (Exception ex) { logger?.Debug($"[EmbyIcons] Error disposing cache maintenance timer: {ex.Message}"); }
         }
 
         private static string NormalizeTag(string tag)
@@ -139,15 +152,15 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var providerIds = _providerIdsProperty?.GetValue(item) as System.Collections.IDictionary;
+                var providerIds = _getProviderIds?.Invoke(item);
                 if (providerIds == null) return null;
 
                 foreach (System.Collections.DictionaryEntry de in providerIds)
                 {
                     var key = de.Key?.ToString() ?? string.Empty;
                     var val = de.Value?.ToString() ?? string.Empty;
-                    
-                    if (key.IndexOf(StringConstants.RottenTomatoesProvider, StringComparison.OrdinalIgnoreCase) >= 0 || 
+
+                    if (key.IndexOf(StringConstants.RottenTomatoesProvider, StringComparison.OrdinalIgnoreCase) >= 0 ||
                         key.Equals(StringConstants.RTShort, StringComparison.OrdinalIgnoreCase))
                     {
                         var parsed = TryParsePercent(val);
@@ -228,15 +241,23 @@ namespace EmbyIcons.Services
             return null;
         }
 
+        private static readonly ConcurrentDictionary<(Type, string), System.Reflection.PropertyInfo?> _entryPropertyCache
+            = new ConcurrentDictionary<(Type, string), System.Reflection.PropertyInfo?>();
+
+        private static System.Reflection.PropertyInfo? GetEntryProperty(Type type, string name)
+        {
+            return _entryPropertyCache.GetOrAdd((type, name), k => k.Item1.GetProperty(k.Item2));
+        }
+
         private static float? TryExtractFromRatingEntry(object entry)
         {
             var entryType = entry.GetType();
-            var sourceProp = entryType.GetProperty(StringConstants.SourcePropertyName) ?? 
-                           entryType.GetProperty(StringConstants.NamePropertyName) ?? 
-                           entryType.GetProperty(StringConstants.KeyPropertyName);
-            var valueProp = entryType.GetProperty(StringConstants.ValuePropertyName) ?? 
-                          entryType.GetProperty(StringConstants.RatingPropertyName) ?? 
-                          entryType.GetProperty(StringConstants.ScorePropertyName);
+            var sourceProp = GetEntryProperty(entryType, StringConstants.SourcePropertyName) ?? 
+                           GetEntryProperty(entryType, StringConstants.NamePropertyName) ?? 
+                           GetEntryProperty(entryType, StringConstants.KeyPropertyName);
+            var valueProp = GetEntryProperty(entryType, StringConstants.ValuePropertyName) ?? 
+                          GetEntryProperty(entryType, StringConstants.RatingPropertyName) ?? 
+                          GetEntryProperty(entryType, StringConstants.ScorePropertyName);
             
             var source = sourceProp?.GetValue(entry)?.ToString() ?? string.Empty;
             var value = valueProp?.GetValue(entry)?.ToString() ?? string.Empty;
@@ -248,8 +269,7 @@ namespace EmbyIcons.Services
                 if (parsed.HasValue) return parsed.Value;
             }
             
-            var parsed2 = TryParsePercent(source) ?? TryParsePercent(value);
-            return parsed2;
+            return null;
         }
 
         private static float? TryParsePercent(string s)
@@ -307,15 +327,15 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var providerIds = _providerIdsProperty?.GetValue(item) as System.Collections.IDictionary;
+                var providerIds = _getProviderIds?.Invoke(item);
                 if (providerIds == null) return null;
 
                 foreach (System.Collections.DictionaryEntry de in providerIds)
                 {
                     var key = de.Key?.ToString() ?? string.Empty;
                     var val = de.Value?.ToString() ?? string.Empty;
-                    
-                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) || 
+
+                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) ||
                         key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
                     {
                         var parsed = TryParseCommunityRating(val);
@@ -385,12 +405,12 @@ namespace EmbyIcons.Services
         private static float? TryExtractCommunityRatingFromEntry(object entry)
         {
             var entryType = entry.GetType();
-            var sourceProp = entryType.GetProperty(StringConstants.SourcePropertyName) ?? 
-                           entryType.GetProperty(StringConstants.NamePropertyName) ?? 
-                           entryType.GetProperty(StringConstants.KeyPropertyName);
-            var valueProp = entryType.GetProperty(StringConstants.ValuePropertyName) ?? 
-                          entryType.GetProperty(StringConstants.RatingPropertyName) ?? 
-                          entryType.GetProperty(StringConstants.ScorePropertyName);
+            var sourceProp = GetEntryProperty(entryType, StringConstants.SourcePropertyName) ?? 
+                           GetEntryProperty(entryType, StringConstants.NamePropertyName) ?? 
+                           GetEntryProperty(entryType, StringConstants.KeyPropertyName);
+            var valueProp = GetEntryProperty(entryType, StringConstants.ValuePropertyName) ?? 
+                          GetEntryProperty(entryType, StringConstants.RatingPropertyName) ?? 
+                          GetEntryProperty(entryType, StringConstants.ScorePropertyName);
             
             var source = sourceProp?.GetValue(entry)?.ToString() ?? string.Empty;
             var value = valueProp?.GetValue(entry)?.ToString() ?? string.Empty;

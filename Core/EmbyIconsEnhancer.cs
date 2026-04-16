@@ -31,14 +31,14 @@ namespace EmbyIcons
     {
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
         private static readonly ConcurrentDictionary<string, DateTime> _lockLastUsed = new();
-        private static Timer? _lockCleanupTimer;
+        private static volatile Timer? _lockCleanupTimer;
         private static readonly object _lockCleanupInitLock = new object();
         
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
         private readonly IFileSystem _fileSystem;
 
-        private SemaphoreSlim? _globalConcurrencyLock;
+        private volatile SemaphoreSlim? _globalConcurrencyLock;
         private readonly object _lockInitializationLock = new object();
         private readonly object _templateCacheLock = new object();
 
@@ -67,7 +67,7 @@ namespace EmbyIcons
 
         internal readonly OverlayDataService _overlayDataService;
         private readonly ImageOverlayService _imageOverlayService;
-        private IconTemplateCache? _templateCache;
+        private volatile IconTemplateCache? _templateCache;
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
         public ILogger Logger => _logger;
@@ -159,9 +159,15 @@ namespace EmbyIcons
 
                 foreach (var key in keysToRemove)
                 {
-                    if (_locks.TryRemove(key, out _))
+                    if (_locks.TryGetValue(key, out var semToCheck) && semToCheck.CurrentCount == 0)
+                    {
+                        _lockLastUsed[key] = DateTime.UtcNow;
+                        continue;
+                    }
+                    if (_locks.TryRemove(key, out var removedSem))
                     {
                         _lockLastUsed.TryRemove(key, out _);
+                        try { removedSem.Dispose(); } catch { }
                     }
                 }
 
@@ -170,8 +176,9 @@ namespace EmbyIcons
                     Plugin.Instance?.Logger.Debug($"[EmbyIcons] Cleaned up {keysToRemove.Count} unused item locks. Remaining: {_locks.Count}");
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during lock cleanup: {ex.Message}");
             }
         }
         public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -410,17 +417,17 @@ namespace EmbyIcons
               .Append('.').Append(boolFlags1).Append('.').Append(boolFlags2);
 
             sb.Append('_').Append((int)options.CommunityScoreBackgroundShape)
-              .Append('.').Append(options.CommunityScoreBackgroundColor)
+              .Append('.').Append(Uri.EscapeDataString(options.CommunityScoreBackgroundColor ?? string.Empty))
               .Append('.').Append(options.CommunityScoreBackgroundOpacity);
 
             sb.Append('_').Append(options.EnableTopIconBar ? 1 : 0)
               .Append('.').Append(options.TopIconBarHeight)
-              .Append('.').Append(options.TopIconBarColor)
+              .Append('.').Append(Uri.EscapeDataString(options.TopIconBarColor ?? string.Empty))
               .Append('.').Append(options.TopIconBarOpacity)
               .Append('.').Append(options.TopIconBarOverlay ? 1 : 0)
               .Append('.').Append(options.EnableBottomIconBar ? 1 : 0)
               .Append('.').Append(options.BottomIconBarHeight)
-              .Append('.').Append(options.BottomIconBarColor)
+              .Append('.').Append(Uri.EscapeDataString(options.BottomIconBarColor ?? string.Empty))
               .Append('.').Append(options.BottomIconBarOpacity)
               .Append('.').Append(options.BottomIconBarOverlay ? 1 : 0);
 
@@ -492,6 +499,7 @@ namespace EmbyIcons
                 globalLockAcquired = true;
 
                 var itemKey = item.Id.ToString("N");
+                _lockLastUsed[itemKey] = DateTime.UtcNow;
                 itemSemaphore = _locks.GetOrAdd(itemKey, _ => new SemaphoreSlim(1, 1));
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
                 await itemSemaphore.WaitAsync(cancellationToken);

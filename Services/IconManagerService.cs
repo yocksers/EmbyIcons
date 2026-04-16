@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.IconManagerReport, "GET", Summary = "Generates a report of used, missing, and unused icons")]
     public class GetIconManagerReport : IReturn<IconManagerReport> { }
 
@@ -157,7 +158,7 @@ namespace EmbyIcons.Services
 
             var finalReportData = allItems
                 .AsParallel()
-                .WithDegreeOfParallelism(Environment.ProcessorCount)
+                .WithDegreeOfParallelism(Math.Max(1, Environment.ProcessorCount / 2))
                 .Select(item =>
                 {
                     var localReport = new LocalItemReport();
@@ -441,6 +442,9 @@ namespace EmbyIcons.Services
             return stats;
         }
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo? OriginalLanguage, System.Reflection.PropertyInfo? ProductionLocations)> _originalLangPropCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo?, System.Reflection.PropertyInfo?)>();
+
         private static string? GetOriginalLanguageFromItem(BaseItem item)
         {
             if (item == null) return null;
@@ -448,24 +452,22 @@ namespace EmbyIcons.Services
             try
             {
                 var itemType = item.GetType();
-                var originalLangProp = itemType.GetProperty("OriginalLanguage");
-                if (originalLangProp != null)
+                var props = _originalLangPropCache.GetOrAdd(itemType, t => (
+                    t.GetProperty("OriginalLanguage"),
+                    t.GetProperty("ProductionLocations")
+                ));
+
+                if (props.OriginalLanguage != null)
                 {
-                    var value = originalLangProp.GetValue(item) as string;
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        return value;
-                    }
+                    var value = props.OriginalLanguage.GetValue(item) as string;
+                    if (!string.IsNullOrWhiteSpace(value)) return value;
                 }
 
-                var productionLocationsProp = itemType.GetProperty("ProductionLocations");
-                if (productionLocationsProp != null)
+                if (props.ProductionLocations != null)
                 {
-                    var locations = productionLocationsProp.GetValue(item) as string[];
+                    var locations = props.ProductionLocations.GetValue(item) as string[];
                     if (locations != null && locations.Length > 0 && !string.IsNullOrWhiteSpace(locations[0]))
-                    {
                         return locations[0];
-                    }
                 }
             }
             catch { }

@@ -53,7 +53,7 @@ namespace EmbyIcons.Helpers
                 } 
                 catch (Exception cleanupEx) 
                 { 
-                    System.Diagnostics.Debug.WriteLine($"[EmbyIcons] Failed to clean up temp file '{tempOutput}': {cleanupEx.Message}");
+                    Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to clean up temp file '{tempOutput}': {cleanupEx.Message}");
                 }
                 throw;
             }

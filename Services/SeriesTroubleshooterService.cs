@@ -5,6 +5,7 @@ using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
@@ -14,6 +15,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.SeriesTroubleshooter, "GET", Summary = "Finds inconsistencies in episodes of a series")]
     public class GetSeriesTroubleshooterReport : IReturn<List<SeriesTroubleshooterReport>>
     {
@@ -96,7 +98,7 @@ namespace EmbyIcons.Services
             }
 
             const int MAX_SERIES_TO_ANALYZE = 1000;
-            const int MAX_EPISODES_TO_ANALYZE = 100000;
+            const int MAX_EPISODES_TO_ANALYZE = 25000;
 
             var allSeries = _libraryManager.GetItemList(new InternalItemsQuery 
             { 
@@ -164,48 +166,57 @@ namespace EmbyIcons.Services
 
             var baseItems = episodes.Cast<BaseItem>().ToList();
 
+            var streamCache = new Dictionary<long, List<MediaStream>>(episodes.Count);
+            foreach (var ep in episodes)
+                streamCache[ep.InternalId] = ep.GetMediaStreams() ?? new List<MediaStream>();
+
             if (runAllChecks || requestedChecks.Contains(CheckNames.AudioLanguage))
-                report.Checks.Add(CheckProperty(baseItems, "Audio Language", ep => ep.GetMediaStreams().Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage)).ToList()));
+                report.Checks.Add(CheckProperty(baseItems, "Audio Language", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(x.DisplayLanguage)).Select(x => LanguageHelper.NormalizeLangCode(x.DisplayLanguage)).ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.Subtitles))
-                report.Checks.Add(CheckProperty(baseItems, "Subtitles", ep => ep.GetMediaStreams().Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage)).ToList()));
+                report.Checks.Add(CheckProperty(baseItems, "Subtitles", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(x.DisplayLanguage)).Select(x => LanguageHelper.NormalizeLangCode(x.DisplayLanguage)).ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.AudioCodec))
-                report.Checks.Add(CheckProperty(baseItems, "Audio Codec", ep => ep.GetMediaStreams().Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(c => c != null).Select(c => c!).Distinct().ToList()));
+                report.Checks.Add(CheckProperty(baseItems, "Audio Codec", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(c => c != null).Select(c => c!).Distinct().ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.VideoCodec))
-                report.Checks.Add(CheckProperty(baseItems, "Video Codec", ep => ep.GetMediaStreams().Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(c => c != null).Select(c => c!).Distinct().ToList()));
+                report.Checks.Add(CheckProperty(baseItems, "Video Codec", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(c => c != null).Select(c => c!).Distinct().ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.AudioChannels))
                 report.Checks.Add(CheckProperty(baseItems, "Audio Channels", ep => {
-                    var stream = ep.GetMediaStreams().Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                    var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
+                    var stream = s.Where(x => x.Type == MediaStreamType.Audio).OrderByDescending(x => x.Channels).FirstOrDefault();
                     var channelName = stream != null ? MediaStreamHelper.GetChannelIconName(stream) : null;
                     return channelName != null ? new List<string> { channelName } : new List<string>();
                 }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.Resolution))
                 report.Checks.Add(CheckProperty(baseItems, "Resolution", ep => {
-                    var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
+                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
                     var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, ep) : null;
                     return resName != null ? new List<string> { resName } : new List<string>();
                 }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.AspectRatio))
                 report.Checks.Add(CheckProperty(baseItems, "Aspect Ratio", ep => {
-                    var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
+                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
                     var arName = stream != null ? MediaStreamHelper.GetAspectRatioIconName(stream, true) : null;
                     return arName != null ? new List<string> { arName } : new List<string>();
                 }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.VideoFormat))
                 report.Checks.Add(CheckProperty(baseItems, "Video Format (HDR)", ep => {
-                    var formatName = MediaStreamHelper.GetVideoFormatIconName(ep, ep.GetMediaStreams());
+                    var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
+                    var formatName = MediaStreamHelper.GetVideoFormatIconName(ep, s);
                     return formatName != null ? new List<string> { formatName } : new List<string>();
                 }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.FrameRate))
                 report.Checks.Add(CheckProperty(baseItems, "Frame Rate (FPS)", ep => {
-                    var stream = ep.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
+                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
                     var fpsName = stream != null ? MediaStreamHelper.GetFrameRateIconName(stream) : null;
                     return fpsName != null ? new List<string> { fpsName } : new List<string>();
                 }));

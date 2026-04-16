@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
-    [Unauthenticated]
+    [Authenticated]
     [Route(ApiRoutes.Preview, "GET", Summary = "Generates a live preview image based on current settings")]
     public class GetIconPreview : IReturn<Stream>
     {
@@ -29,6 +29,11 @@ namespace EmbyIcons
     public class PreviewService : IService
     {
         private readonly ImageOverlayService _imageOverlayService;
+        private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() }
+        };
 
         public PreviewService()
         {
@@ -45,11 +50,24 @@ namespace EmbyIcons
                 return new MemoryStream();
             }
 
-            var profileSettings = JsonSerializer.Deserialize<ProfileSettings>(request.OptionsJson, new JsonSerializerOptions
+            const int MaxJsonLength = 256 * 1024;
+            if (request.OptionsJson.Length > MaxJsonLength)
             {
-                PropertyNameCaseInsensitive = true,
-                Converters = { new JsonStringEnumConverter() }
-            }) ?? throw new ArgumentException("Could not deserialize profile settings from JSON.");
+                plugin.Logger.Warn("[EmbyIcons] Preview request OptionsJson exceeds maximum allowed size.");
+                return new MemoryStream();
+            }
+
+            ProfileSettings profileSettings;
+            try
+            {
+                profileSettings = JsonSerializer.Deserialize<ProfileSettings>(request.OptionsJson, _jsonOptions)
+                    ?? throw new ArgumentException("Could not deserialize profile settings from JSON.");
+            }
+            catch (Exception ex) when (ex is JsonException || ex is ArgumentException)
+            {
+                plugin.Logger.Warn($"[EmbyIcons] Preview request contained invalid options JSON: {ex.Message}");
+                return new MemoryStream();
+            }
 
             var globalOptions = plugin.GetConfiguredOptions();
 
@@ -75,7 +93,7 @@ namespace EmbyIcons
                 };
             }
 
-            var random = new Random();
+            var random = Random.Shared;
             string GetRandom(IconCacheManager.IconType type, string fallback)
             {
                 var list = masterIconList.GetValueOrDefault(type, new List<string>());

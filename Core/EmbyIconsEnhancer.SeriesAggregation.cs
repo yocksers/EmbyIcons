@@ -48,11 +48,10 @@ namespace EmbyIcons
                 var toRemove = count - MaxSeriesCacheSize;
                 if (toRemove <= 0) return;
                 
-                var keysToRemove = _seriesAggregationCache
-                    .OrderBy(kvp => kvp.Value.Timestamp)
-                    .Take(toRemove)
-                    .Select(kvp => kvp.Key)
-                    .ToArray();
+                var entries = _seriesAggregationCache.ToArray();
+                Array.Sort(entries, (a, b) => a.Value.Timestamp.CompareTo(b.Value.Timestamp));
+                var keysToRemove = new Guid[toRemove];
+                for (int k = 0; k < toRemove; k++) keysToRemove[k] = entries[k].Key;
                     
                 foreach (var key in keysToRemove)
                 {
@@ -238,6 +237,8 @@ namespace EmbyIcons
                 commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys, firstItem);
             }
 
+            var processedStreams = checkVideoFormat ? new List<List<MediaStream>>(itemList.Count) : null;
+            processedStreams?.Add(firstStreams);
             var itemHashes = new List<string>(itemList.Count) { $"{firstItem.Id}:{MediaStreamHelper.GetItemMediaStreamHash(firstItem, firstStreams)}" };
 
             for (int i = 1; i < itemList.Count; i++)
@@ -265,6 +266,7 @@ namespace EmbyIcons
 
                 var item = itemList[i];
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+                processedStreams?.Add(streams);
                 var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
 
                 if (checkAudioLangs)
@@ -317,15 +319,19 @@ namespace EmbyIcons
             var finalVideoFormats = new HashSet<string>();
             if (checkVideoFormat && itemList.Any())
             {
-                var itemHdrStates = itemList.Select(ep =>
+                var fetched = processedStreams!;
+                var hdrStates = new List<string?>(itemList.Count);
+                for (int k = 0; k < fetched.Count; k++)
+                    hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], fetched[k]));
+                for (int k = fetched.Count; k < itemList.Count; k++)
                 {
-                    var streams = ep.GetMediaStreams() ?? new List<MediaStream>();
-                    return MediaStreamHelper.GetVideoFormatIconName(ep, streams);
-                }).ToList();
+                    var s = itemList[k].GetMediaStreams() ?? new List<MediaStream>();
+                    hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], s));
+                }
 
-                if (!itemHdrStates.Contains(null))
+                if (!hdrStates.Contains(null))
                 {
-                    var distinctFormats = itemHdrStates.Where(s => s != null).Distinct().ToList();
+                    var distinctFormats = hdrStates.Where(s => s != null).Distinct().ToList();
                     if (distinctFormats.Count > 1)
                     {
                         finalVideoFormats.Add("hdr");

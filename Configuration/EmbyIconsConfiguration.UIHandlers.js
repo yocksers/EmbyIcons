@@ -102,6 +102,7 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
 
         instance.dom.previewImage.src = ApiClient.getUrl(instance.apiRoutes.Preview, {
             OptionsJson: JSON.stringify(currentSettings),
+            api_key: ApiClient.accessToken(),
             v: new Date().getTime()
         });
     }

@@ -1,3 +1,4 @@
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 using MediaBrowser.Model.Logging;
 using EmbyIcons.Api;
@@ -5,10 +6,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.MemoryUsage, "GET", Summary = "Returns memory usage statistics for the plugin and process")]
     public class MemoryUsageRequest : IReturn<MemoryUsageResult>
     {
@@ -43,17 +46,19 @@ namespace EmbyIcons.Services
 
         public Task<object> Get(MemoryUsageRequest request)
         {
-            var proc = Process.GetCurrentProcess();
-
-            long workingSet = proc.WorkingSet64;
+            long workingSet;
             long privateBytes = 0;
-            try
+            using (var proc = Process.GetCurrentProcess())
             {
-                privateBytes = proc.PrivateMemorySize64;
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug($"[EmbyIcons] Unable to read PrivateMemorySize64: {ex.Message}");
+                workingSet = proc.WorkingSet64;
+                try
+                {
+                    privateBytes = proc.PrivateMemorySize64;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug($"[EmbyIcons] Unable to read PrivateMemorySize64: {ex.Message}");
+                }
             }
 
             long managed = GC.GetTotalMemory(forceFullCollection: false);
@@ -71,7 +76,7 @@ namespace EmbyIcons.Services
                     var enhancer = plugin.Enhancer;
                     
                     var seriesCacheField = GetCachedField(typeof(EmbyIconsEnhancer), "_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    if (seriesCacheField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<Guid, object> seriesCache)
+                    if (seriesCacheField?.GetValue(null) is ConcurrentDictionary<Guid, EmbyIconsEnhancer.AggregatedSeriesResult> seriesCache)
                     {
                         seriesCacheCount = seriesCache.Count;
                     }
@@ -83,7 +88,7 @@ namespace EmbyIcons.Services
                     }
                     
                     var locksField = GetCachedField(typeof(EmbyIconsEnhancer), "_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    if (locksField?.GetValue(null) is System.Collections.Concurrent.ConcurrentDictionary<string, object> locks)
+                    if (locksField?.GetValue(null) is ConcurrentDictionary<string, SemaphoreSlim> locks)
                     {
                         itemLocksCount = locks.Count;
                     }

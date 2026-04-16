@@ -56,8 +56,8 @@ namespace EmbyIcons.Helpers
                 
                 return lowerCodec switch
                 {
-                    var c when c.Contains("e-ac-3") => c.Replace("e-ac-3", "eac3"),
-                    var c when c.Contains("ac-3") => c.Replace("ac-3", "ac3"),
+                    var c when c.Contains("e-ac-3") => "eac3",
+                    var c when c.Contains("ac-3") => "ac3",
                     _ => lowerCodec
                 };
             }
@@ -110,29 +110,30 @@ namespace EmbyIcons.Helpers
             }
         }
 
+        private static readonly (double Ratio, string Name)[] _aspectRatioPairs =
+        {
+            (16.0/9.0, "16x9"),
+            (21.0/9.0, "21x9"),
+            (2.35, "2.35x1"),
+            (2.39, "2.39x1"),
+            (2.40, "2.40x1"),
+            (1.85, "1.85x1"),
+            (4.0/3.0, "4x3"),
+        };
+
         public static string? GetAspectRatioIconName(int width, int height, bool snapToCommon)
         {
             if (!snapToCommon || height <= 0 || width <= 0) return null;
 
             var ratio = (double)width / height;
-            var pairs = new (double v, string name)[] {
-                (16.0/9.0, "16x9"),
-                (21.0/9.0, "21x9"),
-                (2.35, "2.35x1"),
-                (2.39, "2.39x1"),
-                (2.40, "2.40x1"),
-                (1.85, "1.85x1"),
-                (4.0/3.0, "4x3"),
-            };
-
-            var best = pairs.OrderBy(p => Math.Abs(p.v - ratio)).First();
-
-            if (Math.Abs(best.v - ratio) < 0.1)
+            var best = _aspectRatioPairs[0];
+            double bestDiff = Math.Abs(best.Ratio - ratio);
+            for (int i = 1; i < _aspectRatioPairs.Length; i++)
             {
-                return best.name;
+                double diff = Math.Abs(_aspectRatioPairs[i].Ratio - ratio);
+                if (diff < bestDiff) { bestDiff = diff; best = _aspectRatioPairs[i]; }
             }
-
-            return null;
+            return bestDiff < 0.1 ? best.Name : null;
         }
 
         public static string? GetAspectRatioIconName(MediaStream? videoStream, bool snapToCommon)
@@ -201,26 +202,26 @@ namespace EmbyIcons.Helpers
 
             if (!hasDV || !hasHDR10Plus)
             {
-                var path = item.Path ?? string.Empty;
+                var filename = System.IO.Path.GetFileName(item.Path ?? string.Empty);
                 var name = item.Name ?? string.Empty;
                 
-                if (!hasDV && (path.Contains(StringConstants.DolbyVision, StringComparison.OrdinalIgnoreCase) || 
-                              path.Contains(StringConstants.DolbyVisionCompact, StringComparison.OrdinalIgnoreCase) ||
+                if (!hasDV && (filename.Contains(StringConstants.DolbyVision, StringComparison.OrdinalIgnoreCase) || 
+                              filename.Contains(StringConstants.DolbyVisionCompact, StringComparison.OrdinalIgnoreCase) ||
                               name.Contains(StringConstants.DolbyVision, StringComparison.OrdinalIgnoreCase) ||
                               name.Contains(StringConstants.DolbyVisionCompact, StringComparison.OrdinalIgnoreCase)))
                 {
                     hasDV = true;
                 }
 
-                if (!hasHDR10Plus && (path.Contains(StringConstants.HDR10Plus, StringComparison.OrdinalIgnoreCase) || 
-                                     path.Contains(StringConstants.HDR10PlusCompact, StringComparison.OrdinalIgnoreCase) ||
+                if (!hasHDR10Plus && (filename.Contains(StringConstants.HDR10Plus, StringComparison.OrdinalIgnoreCase) || 
+                                     filename.Contains(StringConstants.HDR10PlusCompact, StringComparison.OrdinalIgnoreCase) ||
                                      name.Contains(StringConstants.HDR10Plus, StringComparison.OrdinalIgnoreCase) ||
                                      name.Contains(StringConstants.HDR10PlusCompact, StringComparison.OrdinalIgnoreCase)))
                 {
                     hasHDR10Plus = true;
                     hasHDR = true;
                 }
-                else if (!hasHDR && (path.Contains(StringConstants.HDR, StringComparison.OrdinalIgnoreCase) || 
+                else if (!hasHDR && (filename.Contains(StringConstants.HDR, StringComparison.OrdinalIgnoreCase) || 
                                      name.Contains(StringConstants.HDR, StringComparison.OrdinalIgnoreCase)))
                 {
                     hasHDR = true;
@@ -270,87 +271,118 @@ namespace EmbyIcons.Helpers
 
         public static string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
-            using (var md5 = System.Security.Cryptography.MD5.Create())
+            var audioLangList = new List<string>();
+            var subLangList = new List<string>();
+            var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            MediaStream? videoStream = null;
+            MediaStream? topAudio = null;
+
+            foreach (var s in streams)
             {
-                var encoding = System.Text.Encoding.UTF8;
-                var separator = encoding.GetBytes("|");
-
-                void HashPart(string part)
+                switch (s.Type)
                 {
-                    var bytes = encoding.GetBytes(part);
-                    md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                    md5.TransformBlock(separator, 0, separator.Length, null, 0);
+                    case MediaStreamType.Audio:
+                        if (!string.IsNullOrEmpty(s.Language))
+                            audioLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
+                        var ac = GetAudioCodecIconName(s);
+                        if (ac != null) audioCodecSet.Add(ac);
+                        if (topAudio == null || (s.Channels ?? 0) > (topAudio.Channels ?? 0))
+                            topAudio = s;
+                        break;
+                    case MediaStreamType.Subtitle:
+                        if (!string.IsNullOrEmpty(s.Language))
+                            subLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
+                        break;
+                    case MediaStreamType.Video:
+                        if (videoStream == null) videoStream = s;
+                        break;
                 }
-
-                var audioLangs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Audio).Where(s => !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).OrderBy(l => l));
-                HashPart(audioLangs);
-
-                var subLangs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Subtitle).Where(s => !string.IsNullOrEmpty(s.Language)).Select(s => LanguageHelper.NormalizeLangCode(s.Language)).OrderBy(l => l));
-                HashPart(subLangs);
-
-                var audioCodecs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Audio).Select(GetAudioCodecIconName).Where(c => c != null).Select(c => c!).Distinct().OrderBy(c => c));
-                HashPart(audioCodecs);
-
-                var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
-                HashPart(videoStream != null ? GetVideoCodecIconName(videoStream) ?? "none" : "none");
-
-                var audioStreamForChannels = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
-                HashPart(audioStreamForChannels != null ? GetChannelIconName(audioStreamForChannels) ?? "none" : "none");
-
-                HashPart(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
-                HashPart(item.DateModified.Ticks.ToString());
-
-                md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-                return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
             }
+
+            audioLangList.Sort(StringComparer.Ordinal);
+            subLangList.Sort(StringComparer.Ordinal);
+            var audioCodecList = new List<string>(audioCodecSet);
+            audioCodecList.Sort(StringComparer.Ordinal);
+
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            var encoding = System.Text.Encoding.UTF8;
+            var separator = encoding.GetBytes("|");
+
+            void HashPart(string part)
+            {
+                var bytes = encoding.GetBytes(part);
+                md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+                md5.TransformBlock(separator, 0, separator.Length, null, 0);
+            }
+
+            HashPart(string.Join(",", audioLangList));
+            HashPart(string.Join(",", subLangList));
+            HashPart(string.Join(",", audioCodecList));
+            HashPart(videoStream != null ? GetVideoCodecIconName(videoStream) ?? "none" : "none");
+            HashPart(topAudio != null ? GetChannelIconName(topAudio) ?? "none" : "none");
+            HashPart(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
+            HashPart(item.DateModified.Ticks.ToString());
+
+            md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
         }
 
         public static string GetItemMediaStreamHashV2(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
-            using (var md5 = System.Security.Cryptography.MD5.Create())
+            var audioLangList = new List<string>();
+            var subLangList = new List<string>();
+            var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            MediaStream? videoStream = null;
+            MediaStream? topAudio = null;
+
+            foreach (var s in streams)
             {
-                var encoding = System.Text.Encoding.UTF8;
-                var separator = encoding.GetBytes("|");
-
-                void HashPart(string part)
+                switch (s.Type)
                 {
-                    var bytes = encoding.GetBytes(part);
-                    md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                    md5.TransformBlock(separator, 0, separator.Length, null, 0);
+                    case MediaStreamType.Audio:
+                        if (!string.IsNullOrEmpty(s.DisplayLanguage))
+                            audioLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        var ac = GetAudioCodecIconName(s);
+                        if (ac != null) audioCodecSet.Add(ac);
+                        if (topAudio == null || (s.Channels ?? 0) > (topAudio.Channels ?? 0))
+                            topAudio = s;
+                        break;
+                    case MediaStreamType.Subtitle:
+                        if (!string.IsNullOrEmpty(s.DisplayLanguage))
+                            subLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        break;
+                    case MediaStreamType.Video:
+                        if (videoStream == null) videoStream = s;
+                        break;
                 }
-
-                var audioLangs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage))
-                                    .Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage))
-                                    .OrderBy(l => l));
-                HashPart(audioLangs);
-
-                var subLangs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage))
-                                  .Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage))
-                                  .OrderBy(l => l));
-                HashPart(subLangs);
-
-                var audioCodecs = string.Join(",", streams.Where(s => s.Type == MediaStreamType.Audio)
-                                     .Select(GetAudioCodecIconName)
-                                     .Where(c => c != null)
-                                     .Select(c => c!)
-                                     .Distinct()
-                                     .OrderBy(c => c));
-                HashPart(audioCodecs);
-
-                var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
-                HashPart(videoStream != null ? (GetVideoCodecIconName(videoStream) ?? "none") : "none");
-
-                var audioStreamForChannels = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
-                HashPart(audioStreamForChannels != null ? (GetChannelIconName(audioStreamForChannels) ?? "none") : "none");
-
-                var aspect = videoStream != null ? (GetAspectRatioIconName(videoStream, true) ?? "none") : "none";
-                HashPart(aspect);
-
-                HashPart(item.DateModified.Ticks.ToString());
-
-                md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-                return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
             }
+
+            audioLangList.Sort(StringComparer.Ordinal);
+            subLangList.Sort(StringComparer.Ordinal);
+            var audioCodecList = new List<string>(audioCodecSet);
+            audioCodecList.Sort(StringComparer.Ordinal);
+
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            var encoding = System.Text.Encoding.UTF8;
+            var separator = encoding.GetBytes("|");
+
+            void HashPart(string part)
+            {
+                var bytes = encoding.GetBytes(part);
+                md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+                md5.TransformBlock(separator, 0, separator.Length, null, 0);
+            }
+
+            HashPart(string.Join(",", audioLangList));
+            HashPart(string.Join(",", subLangList));
+            HashPart(string.Join(",", audioCodecList));
+            HashPart(videoStream != null ? (GetVideoCodecIconName(videoStream) ?? "none") : "none");
+            HashPart(topAudio != null ? (GetChannelIconName(topAudio) ?? "none") : "none");
+            HashPart(videoStream != null ? (GetAspectRatioIconName(videoStream, true) ?? "none") : "none");
+            HashPart(item.DateModified.Ticks.ToString());
+
+            md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
         }
 
         public static string? GetSeriesStatusIconName(MediaBrowser.Controller.Entities.TV.Series? series)
@@ -384,7 +416,7 @@ namespace EmbyIcons.Helpers
                 if (endDateProperty != null)
                 {
                     var endDate = endDateProperty.GetValue(series) as DateTime?;
-                    if (endDate.HasValue && endDate.Value < DateTime.Now)
+                    if (endDate.HasValue && endDate.Value.ToUniversalTime() < DateTime.UtcNow)
                     {
                         return "ended";
                     }

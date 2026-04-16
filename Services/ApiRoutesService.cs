@@ -1,4 +1,5 @@
 ﻿using EmbyIcons.Api;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.GetApiRoutes, "GET", Summary = "Gets all API routes for the plugin")]
     public class GetApiRoutesRequest : IReturn<Dictionary<string, string>> { }
 

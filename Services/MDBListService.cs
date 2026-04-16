@@ -18,6 +18,7 @@ namespace EmbyIcons.Services
         };
         private static readonly Dictionary<string, CachedRatingData> _ratingsCache = new Dictionary<string, CachedRatingData>();
         private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
+        private static readonly SemaphoreSlim _httpConcurrencyLock = new SemaphoreSlim(4, 4);
         private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
         private static Timer? _cacheCleanupTimer;
         private static readonly object _timerLock = new object();
@@ -40,7 +41,7 @@ namespace EmbyIcons.Services
         {
             try
             {
-                _cacheLock.Wait();
+                if (!_cacheLock.Wait(0)) return;
                 try
                 {
                     var now = DateTime.UtcNow;
@@ -126,16 +127,21 @@ namespace EmbyIcons.Services
 
             try
             {
-                var url = $"https://api.mdblist.com/tmdb/{mediaType}/{tmdbId}?apikey={apiKey}";
+                await _httpConcurrencyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}";
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
+                requestMessage.Headers.Add("X-Api-Key", apiKey);
                 
-                var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var jsonDoc = JsonDocument.Parse(content);
+                using var jsonDoc = JsonDocument.Parse(content);
                 var root = jsonDoc.RootElement;
 
                 if (!root.TryGetProperty("ratings", out var ratingsArray))
@@ -197,6 +203,15 @@ namespace EmbyIcons.Services
                 }
 
                 return result;
+                }
+                finally
+                {
+                    _httpConcurrencyLock.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -221,19 +236,6 @@ namespace EmbyIcons.Services
             return null;
         }
 
-        public static void ClearCache()
-        {
-            _cacheLock.Wait();
-            try
-            {
-                _ratingsCache.Clear();
-            }
-            finally
-            {
-                _cacheLock.Release();
-            }
-        }
-
         public static void Dispose()
         {
             lock (_timerLock)
@@ -245,6 +247,9 @@ namespace EmbyIcons.Services
                 }
                 catch { }
             }
+
+            try { _cacheLock.Dispose(); } catch { }
+            try { _httpConcurrencyLock.Dispose(); } catch { }
         }
     }
 

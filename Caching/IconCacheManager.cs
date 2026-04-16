@@ -16,7 +16,7 @@ namespace EmbyIcons.Caching
     public class IconCacheManager : IDisposable
     {
         private readonly ILogger _logger;
-        private MemoryCache _iconImageCache;
+        private volatile MemoryCache _iconImageCache;
         private readonly long _cacheSizeLimitInBytes;
         private Timer? _cacheMaintenanceTimer;
         private readonly object _cacheInstanceLock = new object(); 
@@ -25,7 +25,7 @@ namespace EmbyIcons.Caching
         private static readonly object _embeddedCacheLock = new object();
         private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
-        private string? _iconsFolder;
+        private volatile string? _iconsFolder;
 
         internal static readonly HashSet<string> SupportedCustomIconExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -54,8 +54,9 @@ namespace EmbyIcons.Caching
                 var maintenanceInterval = TimeSpan.FromHours(Math.Max(0.5, Plugin.Instance?.Configuration.CacheMaintenanceIntervalHours ?? 1));
                 _cacheMaintenanceTimer = new Timer(_ => CompactCache(), null, maintenanceInterval, maintenanceInterval);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Warn($"[EmbyIcons] Failed to initialize cache maintenance timer: {ex.Message}");
             }
         }
 
@@ -80,32 +81,48 @@ namespace EmbyIcons.Caching
                 {
                     return _customIconKeys;
                 }
+            }
 
-                var allKeys = CreateEmptyIconKeyMap();
-                try
+            var allKeys = CreateEmptyIconKeyMap();
+            string[]? files = null;
+            try
+            {
+                _logger.Debug($"[EmbyIcons] Scanning for icon keys in folder: '{iconsFolder}'");
+                files = Directory.GetFiles(iconsFolder);
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan. This may be due to a permissions issue or an inaccessible path.", ex);
+            }
+
+            if (files != null)
+            {
+                foreach (var file in files)
                 {
-                    _logger.Debug($"[EmbyIcons] Scanning for icon keys in folder: '{iconsFolder}'");
-                    foreach (var file in Directory.GetFiles(iconsFolder))
-                    {
-                        var ext = Path.GetExtension(file);
-                        if (string.IsNullOrEmpty(ext) || !SupportedCustomIconExtensions.Contains(ext)) continue;
+                    var ext = Path.GetExtension(file);
+                    if (string.IsNullOrEmpty(ext) || !SupportedCustomIconExtensions.Contains(ext)) continue;
 
-                        var parts = Path.GetFileNameWithoutExtension(file).Split(new[] { '.' }, 2);
-                        if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
-                        {
-                            allKeys[iconType].Add(parts[1].ToLowerInvariant());
-                        }
-                    }
-                    _logger.Debug($"[EmbyIcons] Finished scanning. Found keys for {allKeys.Count(kv => kv.Value.Any())} icon types.");
-
-                    if (allKeys.ContainsKey(IconType.Resolution))
+                    var parts = Path.GetFileNameWithoutExtension(file).Split(new[] { '.' }, 2);
+                    if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
                     {
-                        allKeys[IconType.Resolution] = allKeys[IconType.Resolution].OrderByDescending(x => x.Length).ToList();
+                        allKeys[iconType].Add(parts[1].ToLowerInvariant());
                     }
                 }
-                catch (Exception ex)
+                _logger.Debug($"[EmbyIcons] Finished scanning. Found keys for {allKeys.Count(kv => kv.Value.Any())} icon types.");
+
+                if (allKeys.ContainsKey(IconType.Resolution))
                 {
-                    _logger.ErrorException($"[EmbyIcons] Failed to read files from '{iconsFolder}' during key scan. This may be due to a permissions issue or an inaccessible path.", ex);
+                    allKeys[IconType.Resolution] = allKeys[IconType.Resolution].OrderByDescending(x => x.Length).ToList();
+                }
+            }
+
+            lock (_customKeysLock)
+            {
+                if (_customIconKeys != null &&
+                    _customKeysFolder != null &&
+                    string.Equals(_customKeysFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
+                {
+                    return _customIconKeys;
                 }
 
                 _customKeysFolder = iconsFolder;
@@ -116,33 +133,31 @@ namespace EmbyIcons.Caching
 
         public Dictionary<IconType, List<string>> GetAllAvailableEmbeddedIconKeys()
         {
+            if (_embeddedIconKeysCache != null) return _embeddedIconKeysCache;
+
             lock (_embeddedCacheLock)
             {
                 if (_embeddedIconKeysCache != null) return _embeddedIconKeysCache;
-            }
 
-            var embeddedKeys = CreateEmptyIconKeyMap();
+                var embeddedKeys = CreateEmptyIconKeyMap();
 
-            var assembly = Assembly.GetExecutingAssembly();
-            const string resourcePrefix = "EmbyIcons.EmbeddedIcons.";
-            var resourceNames = assembly.GetManifestResourceNames().Where(name => name.StartsWith(resourcePrefix) && name.EndsWith(".png"));
+                var assembly = Assembly.GetExecutingAssembly();
+                const string resourcePrefix = "EmbyIcons.EmbeddedIcons.";
+                var resourceNames = assembly.GetManifestResourceNames().Where(name => name.StartsWith(resourcePrefix) && name.EndsWith(".png"));
 
-            foreach (var name in resourceNames)
-            {
-                var fileNameWithExt = name.Substring(resourcePrefix.Length);
-                var parts = Path.GetFileNameWithoutExtension(fileNameWithExt).Split(new[] { '_' }, 2);
-                if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
+                foreach (var name in resourceNames)
                 {
-                    embeddedKeys[iconType].Add(parts[1].ToLowerInvariant());
+                    var fileNameWithExt = name.Substring(resourcePrefix.Length);
+                    var parts = Path.GetFileNameWithoutExtension(fileNameWithExt).Split(new[] { '_' }, 2);
+                    if (parts.Length == 2 && _prefixLookup.TryGetValue(parts[0], out var iconType))
+                    {
+                        embeddedKeys[iconType].Add(parts[1].ToLowerInvariant());
+                    }
                 }
-            }
 
-            lock (_embeddedCacheLock)
-            {
                 _embeddedIconKeysCache = embeddedKeys;
+                return embeddedKeys;
             }
-
-            return embeddedKeys;
         }
 
         public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
@@ -190,11 +205,7 @@ namespace EmbyIcons.Caching
 
         public async Task<SKImage?> GetIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
         {
-            MemoryCache currentCache;
-            lock (_cacheInstanceLock)
-            {
-                currentCache = _iconImageCache;
-            }
+            var currentCache = _iconImageCache;
 
             var loadingMode = options.IconLoadingMode;
             var prefix = Constants.PrefixMap[iconType];
@@ -274,15 +285,16 @@ namespace EmbyIcons.Caching
                 var fullPath = Path.Combine(iconsFolder, baseFileName + ext);
                 if (File.Exists(fullPath))
                 {
-                    var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
-                    if (bytes.Length == 0) return null;
-
                     try
                     {
-                        using var ms = new MemoryStream(bytes);
-                        var bmp = SKBitmap.Decode(ms);
+                        await using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+                        if (fs.Length == 0) return null;
+                        var bmp = SKBitmap.Decode(fs);
                         if (bmp != null)
                         {
+                            var image = SKImage.FromBitmap(bmp);
+                            if (image == null) { bmp.Dispose(); return null; }
+
                             long pixelSize = (long)bmp.Width * bmp.Height * 4;
                             var cacheEntryOptions = new MemoryCacheEntryOptions()
                                 .SetSize(pixelSize)
@@ -293,13 +305,20 @@ namespace EmbyIcons.Caching
                                 });
 
                             try { cache.Set(baseFileName, bmp, cacheEntryOptions); }
-                            catch (ObjectDisposedException) { bmp.Dispose(); return null; }
+                            catch (ObjectDisposedException) { bmp.Dispose(); image.Dispose(); return null; }
                             catch { }
 
-                            return SKImage.FromBitmap(bmp);
+                            return image;
+                        }
+                        else
+                        {
+                            _logger.Debug($"[EmbyIcons] Failed to decode icon file: {fullPath}");
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug($"[EmbyIcons] Error loading icon file '{fullPath}': {ex.Message}");
+                    }
                 }
             }
 
@@ -322,16 +341,14 @@ namespace EmbyIcons.Caching
             await using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
             if (stream == null) return null;
 
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream, cancellationToken).ConfigureAwait(false);
-            var bytes = memoryStream.ToArray();
-
             try
             {
-                using var ms = new MemoryStream(bytes);
-                var bmp = SKBitmap.Decode(ms);
+                var bmp = SKBitmap.Decode(stream);
                 if (bmp != null)
                 {
+                    var image = SKImage.FromBitmap(bmp);
+                    if (image == null) { bmp.Dispose(); return null; }
+
                     long pixelSize = (long)bmp.Width * bmp.Height * 4;
                     var cacheEntryOptions = new MemoryCacheEntryOptions()
                         .SetSize(pixelSize)
@@ -342,10 +359,10 @@ namespace EmbyIcons.Caching
                         });
 
                     try { cache.Set(cacheKey, bmp, cacheEntryOptions); }
-                    catch (ObjectDisposedException) { bmp.Dispose(); return null; }
+                    catch (ObjectDisposedException) { bmp.Dispose(); image.Dispose(); return null; }
                     catch { }
 
-                    return SKImage.FromBitmap(bmp);
+                    return image;
                 }
             }
             catch { }

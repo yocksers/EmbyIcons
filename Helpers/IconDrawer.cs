@@ -4,7 +4,6 @@ using MediaBrowser.Model.Entities;
 using SkiaSharp;
 using System.Collections.Generic;
 using System.Linq;
-using static System.Net.Mime.MediaTypeNames;
 using System;
 
 namespace EmbyIcons.Helpers
@@ -33,7 +32,14 @@ namespace EmbyIcons.Helpers
                 return (int)Math.Round(size * ((float)i.Width / i.Height));
             }
 
-            int totalWidth = horizontal ? icons.Sum(GetIconWidth) + (count - 1) * interIconPadding : icons.Select(GetIconWidth).DefaultIfEmpty(0).Max();
+            int sum = 0, max = 0;
+            for (int k = 0; k < count; k++)
+            {
+                var w = GetIconWidth(icons[k]);
+                sum += w;
+                if (w > max) max = w;
+            }
+            int totalWidth = horizontal ? sum + (count - 1) * interIconPadding : max;
             int totalHeight = horizontal ? size : (count * size) + (count - 1) * interIconPadding;
 
             bool isRight = alignment == IconAlignment.TopRight || alignment == IconAlignment.BottomRight;

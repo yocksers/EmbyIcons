@@ -5,6 +5,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
@@ -14,6 +15,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.ItemsByIcon, "GET", Summary = "Gets media items that use a specific icon")]
     public class GetItemsByIcon : IReturn<ItemsByIconResponse>
     {
@@ -60,7 +62,7 @@ namespace EmbyIcons.Services
                 return new ItemsByIconResponse();
             }
 
-            var iconType = request.IconType;
+            var iconType = request.IconType.Trim();
             var iconName = request.IconName.ToLowerInvariant();
             var limit = request.Limit ?? 100;
 
@@ -107,21 +109,21 @@ namespace EmbyIcons.Services
 
                 bool matches = false;
 
-                switch (iconType)
+                switch (iconType.ToUpperInvariant())
                 {
-                    case "Language":
+                    case "LANGUAGE":
                         matches = streams.Any(s => s.Type == MediaStreamType.Audio && 
                             !string.IsNullOrEmpty(s.DisplayLanguage) && 
                             LanguageHelper.NormalizeLangCode(s.DisplayLanguage).Equals(iconName, StringComparison.OrdinalIgnoreCase));
                         break;
 
-                    case "Subtitle":
+                    case "SUBTITLE":
                         matches = streams.Any(s => s.Type == MediaStreamType.Subtitle && 
                             !string.IsNullOrEmpty(s.DisplayLanguage) && 
                             LanguageHelper.NormalizeLangCode(s.DisplayLanguage).Equals(iconName, StringComparison.OrdinalIgnoreCase));
                         break;
 
-                    case "Channel":
+                    case "CHANNEL":
                         var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
                         if (primaryAudio != null)
                         {
@@ -130,26 +132,26 @@ namespace EmbyIcons.Services
                         }
                         break;
 
-                    case "AudioCodec":
+                    case "AUDIOCODEC":
                         matches = streams.Any(s => s.Type == MediaStreamType.Audio)
                             && streams.Where(s => s.Type == MediaStreamType.Audio)
                                 .Select(MediaStreamHelper.GetAudioCodecIconName)
                                 .Any(codec => codec != null && codec.Equals(iconName, StringComparison.OrdinalIgnoreCase));
                         break;
 
-                    case "VideoCodec":
+                    case "VIDEOCODEC":
                         matches = streams.Any(s => s.Type == MediaStreamType.Video)
                             && streams.Where(s => s.Type == MediaStreamType.Video)
                                 .Select(MediaStreamHelper.GetVideoCodecIconName)
                                 .Any(codec => codec != null && codec.Equals(iconName, StringComparison.OrdinalIgnoreCase));
                         break;
 
-                    case "VideoFormat":
+                    case "VIDEOFORMAT":
                         var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
                         matches = format != null && format.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         break;
 
-                    case "Resolution":
+                    case "RESOLUTION":
                         var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
                         if (videoStream != null)
                         {
@@ -158,7 +160,7 @@ namespace EmbyIcons.Services
                         }
                         break;
 
-                    case "AspectRatio":
+                    case "ASPECTRATIO":
                         var videoStreamAR = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
                         if (videoStreamAR != null)
                         {
@@ -167,7 +169,7 @@ namespace EmbyIcons.Services
                         }
                         break;
 
-                    case "FrameRate":
+                    case "FRAMERATE":
                         var videoStreamFPS = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
                         if (videoStreamFPS != null)
                         {
@@ -176,16 +178,16 @@ namespace EmbyIcons.Services
                         }
                         break;
 
-                    case "Tag":
+                    case "TAG":
                         matches = item.Tags != null && item.Tags.Any(tag => tag.Equals(iconName, StringComparison.OrdinalIgnoreCase));
                         break;
 
-                    case "ParentalRating":
+                    case "PARENTALRATING":
                         var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
                         matches = rating != null && rating.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         break;
 
-                    case "OriginalLanguage":
+                    case "ORIGINALLANGUAGE":
                         var originalLang = GetOriginalLanguageFromItem(item);
                         if (!string.IsNullOrEmpty(originalLang))
                         {
@@ -194,7 +196,7 @@ namespace EmbyIcons.Services
                         }
                         break;
 
-                    case "SeriesStatus":
+                    case "SERIESSTATUS":
                         if (item is MediaBrowser.Controller.Entities.TV.Series series)
                         {
                             var status = MediaStreamHelper.GetSeriesStatusIconName(series);

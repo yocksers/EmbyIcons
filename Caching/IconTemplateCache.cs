@@ -41,13 +41,16 @@ namespace EmbyIcons.Caching
             _maintenanceTimer = new Timer(_ => PerformMaintenance(), null, 
                 TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
         }
+        private readonly ThreadLocal<MD5> _md5Pool = new ThreadLocal<MD5>(MD5.Create);
+
         private string GenerateTemplateKey(
             List<(IconCacheManager.IconType Type, List<string> Names)> iconGroups,
             int iconSize,
             int interIconPadding,
             bool isHorizontal)
         {
-            using var md5 = MD5.Create();
+            var md5 = _md5Pool.Value!;
+            md5.Initialize();
             var encoding = Encoding.UTF8;
             
             void HashString(string str)
@@ -120,7 +123,16 @@ namespace EmbyIcons.Caching
 
             var lockObj = _generationLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
             
-            await lockObj.WaitAsync(cancellationToken).ConfigureAwait(false);
+            bool lockAcquired = false;
+            try
+            {
+                await lockObj.WaitAsync(cancellationToken).ConfigureAwait(false);
+                lockAcquired = true;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
             try
             {
                 cache = _templateCache;
@@ -195,21 +207,24 @@ namespace EmbyIcons.Caching
             }
             finally
             {
-                try
+                if (lockAcquired)
                 {
-                    lockObj.Release();
-                }
-                catch (ObjectDisposedException)
-                {
-                    _generationLocks.TryRemove(cacheKey, out _);
-                }
-                catch (SemaphoreFullException ex)
-                {
-                    _logger?.Debug($"[EmbyIcons] SemaphoreFullException releasing template lock: {ex.Message}");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.Debug($"[EmbyIcons] Error releasing template generation lock: {ex.Message}");
+                    try
+                    {
+                        lockObj.Release();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        _generationLocks.TryRemove(cacheKey, out _);
+                    }
+                    catch (SemaphoreFullException ex)
+                    {
+                        _logger?.Debug($"[EmbyIcons] SemaphoreFullException releasing template lock: {ex.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Debug($"[EmbyIcons] Error releasing template generation lock: {ex.Message}");
+                    }
                 }
             }
         }
@@ -234,15 +249,19 @@ namespace EmbyIcons.Caching
                 if (allIcons.Count == 0)
                     return null;
 
+                var iconWidths = allIcons.Select(icon =>
+                    icon.Height > 0 ? (int)Math.Round((double)icon.Width / icon.Height * iconSize) : iconSize
+                ).ToList();
+
                 int width, height;
                 if (isHorizontal)
                 {
-                    width = allIcons.Count * iconSize + (allIcons.Count - 1) * interIconPadding;
+                    width = iconWidths.Sum() + (allIcons.Count - 1) * interIconPadding;
                     height = iconSize;
                 }
                 else
                 {
-                    width = iconSize;
+                    width = iconWidths.Max();
                     height = allIcons.Count * iconSize + (allIcons.Count - 1) * interIconPadding;
                 }
 
@@ -258,13 +277,15 @@ namespace EmbyIcons.Caching
                 };
 
                 int x = 0, y = 0;
-                foreach (var icon in allIcons)
+                for (int i = 0; i < allIcons.Count; i++)
                 {
-                    var destRect = new SKRect(x, y, x + iconSize, y + iconSize);
+                    var icon = allIcons[i];
+                    var iw = iconWidths[i];
+                    var destRect = new SKRect(x, y, x + iw, y + iconSize);
                     canvas.DrawImage(icon, destRect, paint);
 
                     if (isHorizontal)
-                        x += iconSize + interIconPadding;
+                        x += iw + interIconPadding;
                     else
                         y += iconSize + interIconPadding;
                 }
@@ -305,10 +326,7 @@ namespace EmbyIcons.Caching
             foreach (var lockObj in locks)
             {
                 try { lockObj.Dispose(); } 
-                catch (Exception ex) 
-                { 
-                    _logger?.Debug($"[EmbyIcons] Error disposing lock during clear: {ex.Message}"); 
-                }
+                catch { }
             }
             
             _cacheHits = 0;
@@ -339,6 +357,18 @@ namespace EmbyIcons.Caching
             try
             {
                 _templateCache?.Compact(0.2);
+
+                var staleLocks = _generationLocks
+                    .Where(kvp => kvp.Value.CurrentCount > 0)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in staleLocks)
+                {
+                    if (_generationLocks.TryRemove(key, out var sem))
+                    {
+                        try { sem.Dispose(); } catch { }
+                    }
+                }
                 
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
@@ -389,6 +419,12 @@ namespace EmbyIcons.Caching
                 { 
                     _logger?.Debug($"[EmbyIcons] Error disposing generation lock: {ex.Message}"); 
                 }
+            }
+
+            try { _md5Pool?.Dispose(); }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing MD5 pool: {ex.Message}");
             }
         }
     }

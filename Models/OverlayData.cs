@@ -9,7 +9,7 @@ namespace EmbyIcons.Models
         public HashSet<string> SubtitleLanguages { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public HashSet<string> AudioCodecs { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public HashSet<string> VideoCodecs { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
-        public HashSet<string> Tags { get; set; } = new();
+        public HashSet<string> Tags { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public HashSet<string> SourceIcons { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public List<FilenameBasedIconData> FilenameBasedIcons { get; set; } = new();
         public string? ChannelIconName { get; set; }

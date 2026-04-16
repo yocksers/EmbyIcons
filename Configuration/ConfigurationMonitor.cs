@@ -205,7 +205,7 @@ namespace EmbyIcons.Configuration
 
                     foreach (var item in items)
                     {
-                        item.RefreshMetadata(refreshOptions, CancellationToken.None);
+                        item.RefreshMetadata(refreshOptions, cancellationToken);
                     }
                     _logger.Info($"[EmbyIcons] Queued soft refresh for {items.Count} items.");
                 }
@@ -244,7 +244,7 @@ namespace EmbyIcons.Configuration
 
                     foreach (var item in items)
                     {
-                        item.RefreshMetadata(refreshOptions, CancellationToken.None);
+                        item.RefreshMetadata(refreshOptions, cancellationToken);
                     }
                     _logger.Info($"[EmbyIcons] Queued hard refresh for {items.Count} items.");
                 }

@@ -6,12 +6,14 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using EmbyIcons.Api;
 using EmbyIcons.Caching;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 
 namespace EmbyIcons.Services
 {
     #region Export Profiles
 
+    [Authenticated]
     [Route(ApiRoutes.ExportProfiles, "GET", Summary = "Export icon profiles to JSON")]
     public class ExportProfilesRequest : IReturn<ExportProfilesResponse>
     {
@@ -84,6 +86,7 @@ namespace EmbyIcons.Services
 
     #region Import Profiles
 
+    [Authenticated]
     [Route(ApiRoutes.ImportProfiles, "POST", Summary = "Import icon profiles from JSON")]
     public class ImportProfilesRequest : IReturn<ImportProfilesResponse>
     {
@@ -131,6 +134,16 @@ namespace EmbyIcons.Services
                     };
                 }
 
+                const int MaxJsonBytes = 1 * 1024 * 1024;
+                if (request.JsonData.Length > MaxJsonBytes)
+                {
+                    return new ImportProfilesResponse
+                    {
+                        Success = false,
+                        Error = "JsonData exceeds maximum allowed size."
+                    };
+                }
+
                 var service = new ProfileImportExportService(plugin.Logger, plugin.Configuration);
 
                 var importOptions = new ImportOptions
@@ -143,7 +156,7 @@ namespace EmbyIcons.Services
 
                 if (result.Success && (result.ImportedCount > 0 || result.UpdatedCount > 0))
                 {
-                    plugin.SaveConfiguration();
+                    plugin.SaveCurrentConfiguration();
                 }
 
                 return new ImportProfilesResponse
@@ -175,6 +188,7 @@ namespace EmbyIcons.Services
 
     #region Validate Profile Import
 
+    [Authenticated]
     [Route(ApiRoutes.ValidateProfileImport, "POST", Summary = "Validate profile import JSON without importing")]
     public class ValidateProfileImportRequest : IReturn<ValidateProfileImportResponse>
     {
@@ -215,6 +229,16 @@ namespace EmbyIcons.Services
                     };
                 }
 
+                const int MaxJsonBytes = 1 * 1024 * 1024;
+                if (request.JsonData.Length > MaxJsonBytes)
+                {
+                    return new ValidateProfileImportResponse
+                    {
+                        IsValid = false,
+                        Errors = new List<string> { "JsonData exceeds maximum allowed size." }
+                    };
+                }
+
                 var service = new ProfileImportExportService(plugin.Logger, plugin.Configuration);
                 var result = service.ValidateProfileJson(request.JsonData);
 
@@ -242,6 +266,7 @@ namespace EmbyIcons.Services
 
     #region Template Cache Stats
 
+    [Authenticated]
     [Route(ApiRoutes.TemplateCacheStats, "GET", Summary = "Get icon template cache statistics")]
     public class TemplateCacheStatsRequest : IReturn<TemplateCacheStatsResponse> { }
 
@@ -318,6 +343,7 @@ namespace EmbyIcons.Services
 
     #region Clear Template Cache
 
+    [Authenticated]
     [Route(ApiRoutes.ClearTemplateCache, "POST", Summary = "Clear the icon template cache")]
     public class ClearTemplateCacheRequest : IReturn<ClearTemplateCacheResponse> { }
 

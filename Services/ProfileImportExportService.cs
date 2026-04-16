@@ -27,6 +27,10 @@ namespace EmbyIcons.Services
         {
             try
             {
+                string resolvedPath;
+                try { resolvedPath = Path.GetFullPath(filePath); }
+                catch (Exception ex) { throw new ArgumentException("Invalid file path.", nameof(filePath), ex); }
+
                 var result = ExportProfiles(profileIds, includeLibraryMappings);
                 
                 var options = new JsonSerializerOptions
@@ -36,9 +40,9 @@ namespace EmbyIcons.Services
                 };
 
                 var json = JsonSerializer.Serialize(result.ExportData, options);
-                await File.WriteAllTextAsync(filePath, json);
+                await File.WriteAllTextAsync(resolvedPath, json);
 
-                _logger.Info($"[EmbyIcons] Exported {result.ProfileCount} profile(s) to: {filePath}");
+                _logger.Info($"[EmbyIcons] Exported {result.ProfileCount} profile(s) to: {resolvedPath}");
                 
                 return result;
             }
@@ -90,15 +94,19 @@ namespace EmbyIcons.Services
         {
             try
             {
-                if (!File.Exists(filePath))
+                string resolvedPath;
+                try { resolvedPath = Path.GetFullPath(filePath); }
+                catch (Exception ex) { throw new ArgumentException("Invalid file path.", nameof(filePath), ex); }
+
+                if (!File.Exists(resolvedPath))
                 {
-                    throw new FileNotFoundException("Profile file not found", filePath);
+                    throw new FileNotFoundException("Profile file not found", resolvedPath);
                 }
 
-                var json = await File.ReadAllTextAsync(filePath);
+                var json = await File.ReadAllTextAsync(resolvedPath);
                 var result = ImportProfilesFromJson(json, options);
 
-                _logger.Info($"[EmbyIcons] Imported {result.ImportedCount} profile(s) from: {filePath}");
+                _logger.Info($"[EmbyIcons] Imported {result.ImportedCount} profile(s) from: {resolvedPath}");
                 
                 return result;
             }
@@ -133,8 +141,20 @@ namespace EmbyIcons.Services
 
                 foreach (var exportedProfile in exportData.Profiles)
                 {
+                    if (exportedProfile == null) continue;
                     try
                     {
+                        if (string.IsNullOrWhiteSpace(exportedProfile.Name))
+                        {
+                            result.FailedProfiles.Add("(unnamed)");
+                            continue;
+                        }
+
+                        if (exportedProfile.Name.Length > 256)
+                        {
+                            result.FailedProfiles.Add(exportedProfile.Name.Substring(0, 32) + "...");
+                            continue;
+                        }
                         var existingProfile = _configuration.Profiles.FirstOrDefault(p => 
                             p.Name.Equals(exportedProfile.Name, StringComparison.OrdinalIgnoreCase));
 
@@ -255,20 +275,14 @@ namespace EmbyIcons.Services
                             errors.Add("Found profile with empty name");
                         }
 
+                        if (profile.Name != null && profile.Name.Length > 256)
+                        {
+                            errors.Add($"Profile name is too long (max 256 characters): '{profile.Name.Substring(0, 32)}...'");
+                        }
+
                         if (profile.Settings == null)
                         {
                             errors.Add($"Profile '{profile.Name}' has no settings");
-                        }
-                        else
-                        {
-                            try
-                            {
-                                var _ = profile.Settings.EnableForPosters;
-                            }
-                            catch (Exception ex)
-                            {
-                                errors.Add($"Profile '{profile.Name}' has invalid settings: {ex.Message}");
-                            }
                         }
 
                         var existingProfile = _configuration.Profiles.FirstOrDefault(p => 

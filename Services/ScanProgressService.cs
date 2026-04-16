@@ -1,11 +1,14 @@
 ﻿using EmbyIcons.Api;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.ScanProgress, "GET", Summary = "Gets the progress of a long-running scan")]
     public class GetScanProgress : IReturn<ScanProgress>
     {
@@ -33,14 +36,16 @@ namespace EmbyIcons.Services
             // Auto-clear completed scans after a delay to prevent memory buildup
             if (progress.IsComplete)
             {
-                _ = Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(_ => 
+                var shutdownToken = Plugin.Instance?.ShutdownToken ?? CancellationToken.None;
+                _ = Task.Delay(TimeSpan.FromMinutes(5), shutdownToken).ContinueWith(t =>
                 {
+                    if (t.IsCanceled) return;
                     ClearProgress(scanType);
                     if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                     {
                         Plugin.Instance?.Logger.Debug($"[EmbyIcons] Auto-cleared completed scan progress: {scanType}");
                     }
-                });
+                }, TaskContinuationOptions.NotOnFaulted);
             }
         }
 

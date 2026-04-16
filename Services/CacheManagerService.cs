@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.RefreshCache, "POST", Summary = "Forces the icon cache to be cleared and refreshed")]
     public class RefreshCacheRequest : IReturnVoid
     {
@@ -24,7 +25,7 @@ namespace EmbyIcons.Services
             _enhancer = Plugin.Instance?.Enhancer ?? throw new InvalidOperationException("Enhancer is not available.");
         }
 
-    public Task Post(RefreshCacheRequest request)
+        public Task Post(RefreshCacheRequest request)
         {
             _logger.Info("[EmbyIcons] Received request to clear all icon and data caches from the settings page.");
             IconManagerService.InvalidateCache();
@@ -38,7 +39,11 @@ namespace EmbyIcons.Services
 
             var config = plugin.Configuration;
             var iconsFolder = config.IconsFolder;
-            var cts = new CancellationTokenSource();
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(plugin.ShutdownToken);
+
+            config.PersistedVersion = Guid.NewGuid().ToString("N");
+            plugin.SaveCurrentConfiguration();
+            _logger.Info($"[EmbyIcons] Cache clear requested. New cache-busting version is '{config.PersistedVersion}'. Cache refresh running in background.");
 
             var cacheRefreshTask = Task.Run(async () =>
             {
@@ -47,6 +52,10 @@ namespace EmbyIcons.Services
                     _logger.Info("[EmbyIcons] Starting background cache refresh.");
                     await _enhancer.ForceCacheRefreshAsync(iconsFolder, cts.Token);
                     _logger.Info("[EmbyIcons] Background cache refresh completed successfully.");
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("[EmbyIcons] Background cache refresh was cancelled.");
                 }
                 catch (Exception ex)
                 {
@@ -58,9 +67,6 @@ namespace EmbyIcons.Services
                 }
             });
 
-            config.PersistedVersion = Guid.NewGuid().ToString("N");
-            plugin.SaveCurrentConfiguration();
-            _logger.Info($"[EmbyIcons] Cache clear requested. New cache-busting version is '{config.PersistedVersion}'. Cache refresh running in background.");
             return Task.CompletedTask;
         }
     }

@@ -2,13 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace EmbyIcons
 {
     public partial class EmbyIconsEnhancer
     {
-        internal static MemoryCache? _episodeIconCache;
+        internal static volatile MemoryCache? _episodeIconCache;
         private static readonly object _episodeCacheInitLock = new object();
 
         private static int MaxEpisodeCacheSize => Plugin.Instance?.Configuration.MaxEpisodeCacheSize ?? 2000;
@@ -63,11 +64,12 @@ namespace EmbyIcons
 
         public void ClearAllEpisodeCaches()
         {
-            var oldCache = _episodeIconCache;
-            _episodeIconCache = new MemoryCache(new MemoryCacheOptions
+            var newCache = new MemoryCache(new MemoryCacheOptions
             {
                 SizeLimit = MaxEpisodeCacheSize
             });
+
+            var oldCache = Interlocked.Exchange(ref _episodeIconCache, newCache);
             
             if (oldCache != null)
             {

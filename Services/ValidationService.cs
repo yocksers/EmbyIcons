@@ -1,5 +1,6 @@
 ﻿using EmbyIcons.Api;
 using EmbyIcons.Caching;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Services;
 using System.IO;
@@ -7,6 +8,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.ValidatePath, "GET", Summary = "Validates if a given path exists on the server")]
     public class ValidatePathRequest : IReturn<ValidatePathResponse>
     {
@@ -36,7 +38,16 @@ namespace EmbyIcons.Services
                 return new ValidatePathResponse { Exists = false, HasImages = false };
             }
 
-            var path = System.Environment.ExpandEnvironmentVariables(request.Path);
+            string path;
+            try
+            {
+                path = Path.GetFullPath(request.Path);
+            }
+            catch
+            {
+                return new ValidatePathResponse { Exists = false, HasImages = false };
+            }
+
             var exists = _fileSystem.DirectoryExists(path);
             var hasImages = false;
 

@@ -1,11 +1,13 @@
 ﻿using EmbyIcons.Api;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 using System;
 
 namespace EmbyIcons.Services
 {
+    [Authenticated]
     [Route(ApiRoutes.AspectRatio, "GET", Summary = "Calculates aspect ratio information for given dimensions")]
     public class GetAspectRatio : IReturn<AspectRatioResponse>
     {

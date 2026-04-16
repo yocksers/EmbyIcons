@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 
 namespace EmbyIcons.Helpers
 {
@@ -10,7 +7,7 @@ namespace EmbyIcons.Helpers
         public static string NormalizeLangCode(string code)
         {
             if (string.IsNullOrWhiteSpace(code))
-                return code;
+                return string.Empty;
 
             return code.ToLowerInvariant();
         }

@@ -40,8 +40,8 @@ namespace EmbyIcons
         private readonly ILogManager _logManager;
         private readonly Lazy<EmbyIconsEnhancer> _enhancerLazy;
         private Timer? _pruningTimer;
-        private ProfileManagerService? _profileManager;
-        private ConfigurationMonitor? _configMonitor;
+        private volatile Lazy<ProfileManagerService> _profileManagerLazy = null!;
+        private Lazy<ConfigurationMonitor> _configMonitorLazy = null!;
         private CancellationTokenSource? _backgroundTasksCts;
         private MediaBrowser.Controller.Library.IUserDataManager? _userDataManager;
 
@@ -57,6 +57,15 @@ namespace EmbyIcons
         public IUserManager UserManager => _userManager;
         
         public IApplicationHost ApplicationHost => _appHost;
+
+        public CancellationToken ShutdownToken
+        {
+            get
+            {
+                var cts = _backgroundTasksCts;
+                return cts?.Token ?? CancellationToken.None;
+            }
+        }
 
         public string ConfigurationVersion => Configuration.PersistedVersion;
 
@@ -76,8 +85,8 @@ namespace EmbyIcons
             }
         }
 
-        private ProfileManagerService ProfileManager => _profileManager ??= new ProfileManagerService(_libraryManager, _logger, Configuration);
-        private ConfigurationMonitor ConfigMonitor => _configMonitor ??= new ConfigurationMonitor(_logger, _libraryManager, _fileSystem);
+        private ProfileManagerService ProfileManager => _profileManagerLazy.Value;
+        private ConfigurationMonitor ConfigMonitor => _configMonitorLazy.Value;
 
 
         public Plugin(
@@ -98,8 +107,14 @@ namespace EmbyIcons
             _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
             _logger = logManager.GetLogger(nameof(Plugin));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-            Instance = this;
             _backgroundTasksCts = new CancellationTokenSource();
+
+            _profileManagerLazy = new Lazy<ProfileManagerService>(
+                () => new ProfileManagerService(_libraryManager, _logger, Configuration),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            _configMonitorLazy = new Lazy<ConfigurationMonitor>(
+                () => new ConfigurationMonitor(_logger, _libraryManager, _fileSystem),
+                LazyThreadSafetyMode.ExecutionAndPublication);
 
             try
             {
@@ -118,6 +133,8 @@ namespace EmbyIcons
                 return enhancer;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
+            Instance = this;
+
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
         }
@@ -131,6 +148,7 @@ namespace EmbyIcons
                 if (Configuration.Profiles != null && Configuration.Profiles.Any())
                 {
                     _migrationPerformed = true;
+                    _migrationAttempted = true;
                     return;
                 }
 
@@ -536,7 +554,9 @@ namespace EmbyIcons
             Enhancer.ClearAllItemDataCaches();
             IconManagerService.InvalidateCache();
             ProfileManager.InvalidateLibraryCache();
-            _profileManager = null;
+            _profileManagerLazy = new Lazy<ProfileManagerService>(
+                () => new ProfileManagerService(_libraryManager, _logger, newOptions),
+                LazyThreadSafetyMode.ExecutionAndPublication);
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{newOptions.PersistedVersion}'. Images will refresh as they are viewed.");
         }
@@ -584,15 +604,7 @@ namespace EmbyIcons
             
             try
             {
-                ImageProcessing.ImageProcessorFactory.Reset();
-            }
-            catch (Exception ex)
-            {
-                logger?.Debug($"[EmbyIcons] Error resetting image processor factory: {ex.Message}");
-            }
-            
-            try
-            {
+
                 Services.MDBListService.Dispose();
             }
             catch (Exception ex)
@@ -603,9 +615,10 @@ namespace EmbyIcons
 
         public void Dispose()
         {
+            var cts = Interlocked.Exchange(ref _backgroundTasksCts, null);
             try
             {
-                _backgroundTasksCts?.Cancel();
+                cts?.Cancel();
             }
             catch (Exception ex)
             {
@@ -636,19 +649,25 @@ namespace EmbyIcons
                 }
             }
             
-            try { _profileManager?.Dispose(); } 
-            catch (Exception ex) 
-            { 
-                _logger?.Debug($"[EmbyIcons] Error disposing profile manager: {ex.Message}");
-            }
-            
-            try { _configMonitor?.Dispose(); }
-            catch (Exception ex)
+            if (_profileManagerLazy.IsValueCreated)
             {
-                _logger?.Debug($"[EmbyIcons] Error disposing config monitor: {ex.Message}");
+                try { _profileManagerLazy.Value?.Dispose(); } 
+                catch (Exception ex) 
+                { 
+                    _logger?.Debug($"[EmbyIcons] Error disposing profile manager: {ex.Message}");
+                }
             }
             
-            try { _backgroundTasksCts?.Dispose(); }
+            if (_configMonitorLazy.IsValueCreated)
+            {
+                try { (_configMonitorLazy.Value as IDisposable)?.Dispose(); }
+                catch (Exception ex)
+                {
+                    _logger?.Debug($"[EmbyIcons] Error disposing config monitor: {ex.Message}");
+                }
+            }
+            
+            try { cts?.Dispose(); }
             catch (Exception ex)
             {
                 _logger?.Debug($"[EmbyIcons] Error disposing background tasks CTS: {ex.Message}");
@@ -656,9 +675,6 @@ namespace EmbyIcons
             
             CleanupStaticResources(_logger);
             
-            _profileManager = null;
-            _configMonitor = null;
-            _backgroundTasksCts = null;
             Instance = null;
             
             _logger?.Debug("EmbyIcons plugin disposed.");
