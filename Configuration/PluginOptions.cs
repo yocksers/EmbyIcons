@@ -57,8 +57,8 @@ namespace EmbyIcons.Configuration
         public List<LibraryMapping> LibraryProfileMappings { get; set; } = new List<LibraryMapping>();
 
         #region Advanced Settings
-        public int MaxEpisodeCacheSize { get; set; } = 2000;
-        public int MaxSeriesCacheSize { get; set; } = 500;
+        public int MaxEpisodeCacheSize { get; set; } = 10000;
+        public int MaxSeriesCacheSize { get; set; } = 5000;
         public int MaxItemToProfileCacheSize { get; set; } = 20000;
         public int MaxCollectionToProfileCacheSize { get; set; } = 5000;
         public int EpisodeCacheSlidingExpirationHours { get; set; } = 6;

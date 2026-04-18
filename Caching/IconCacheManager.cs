@@ -162,15 +162,15 @@ namespace EmbyIcons.Caching
 
         public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
         {
-            if (!string.IsNullOrEmpty(_iconsFolder) &&
-                string.Equals(_iconsFolder, iconsFolder, StringComparison.OrdinalIgnoreCase))
+            var effectiveFolder = iconsFolder ?? string.Empty;
+
+            if (_iconsFolder != null &&
+                string.Equals(_iconsFolder, effectiveFolder, StringComparison.OrdinalIgnoreCase))
             {
                 return Task.CompletedTask;
             }
 
-            _iconsFolder = iconsFolder;
-
-            return RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true);
+            return RefreshCacheOnDemandAsync(effectiveFolder, cancellationToken, force: true);
         }
 
         public Task RefreshCacheOnDemandAsync(string iconsFolder, CancellationToken cancellationToken, bool force = false)

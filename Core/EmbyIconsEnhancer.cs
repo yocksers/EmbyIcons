@@ -33,6 +33,7 @@ namespace EmbyIcons
         private static readonly ConcurrentDictionary<string, DateTime> _lockLastUsed = new();
         private static volatile Timer? _lockCleanupTimer;
         private static readonly object _lockCleanupInitLock = new object();
+        private const int LockDictionaryMaxSize = 10000;
         
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
@@ -62,6 +63,7 @@ namespace EmbyIcons
             }
         }
 
+        private MediaBrowser.Controller.Library.IUserDataManager? _userDataManager;
         internal readonly IconCacheManager _iconCacheManager;
         internal static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
 
@@ -101,7 +103,7 @@ namespace EmbyIcons
                 {
                     if (_lockCleanupTimer == null)
                     {
-                        _lockCleanupTimer = new Timer(_ => CleanupUnusedLocks(), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+                        _lockCleanupTimer = new Timer(_ => CleanupUnusedLocks(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
                     }
                 }
             }
@@ -151,7 +153,9 @@ namespace EmbyIcons
             try
             {
                 var now = DateTime.UtcNow;
-                var staleThreshold = TimeSpan.FromHours(2);
+                var staleThreshold = _locks.Count > LockDictionaryMaxSize
+                    ? TimeSpan.FromMinutes(1)
+                    : TimeSpan.FromMinutes(15);
                 var keysToRemove = _lockLastUsed
                     .Where(kvp => now - kvp.Value > staleThreshold)
                     .Select(kvp => kvp.Key)
@@ -667,12 +671,17 @@ namespace EmbyIcons
                 }
 
                 int favoriteCount = 0;
-                
-                var userDataManager = appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
+
+                var userDataManager = _userDataManager;
                 if (userDataManager == null)
                 {
-                    _logger?.Debug("[EmbyIcons] IUserDataManager not available.");
-                    return 0;
+                    userDataManager = appHost.Resolve<MediaBrowser.Controller.Library.IUserDataManager>();
+                    if (userDataManager == null)
+                    {
+                        _logger?.Debug("[EmbyIcons] IUserDataManager not available.");
+                        return 0;
+                    }
+                    _userDataManager = userDataManager;
                 }
                 
                 var userQuery = new UserQuery();

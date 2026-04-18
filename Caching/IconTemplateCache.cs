@@ -39,7 +39,7 @@ namespace EmbyIcons.Caching
             });
 
             _maintenanceTimer = new Timer(_ => PerformMaintenance(), null, 
-                TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
+                TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(15));
         }
         private readonly ThreadLocal<MD5> _md5Pool = new ThreadLocal<MD5>(MD5.Create);
 
