@@ -637,7 +637,7 @@ namespace EmbyIcons.Services
                     }
                 }
                 
-                return new OverlayData
+                var cachedOverlayData = new OverlayData
                 {
                     AudioLanguages = cachedInfo.AudioLangs,
                     SubtitleLanguages = cachedInfo.SubtitleLangs,
@@ -655,6 +655,31 @@ namespace EmbyIcons.Services
                     FrameRateIconName = cachedInfo.FrameRateIconName,
                     OriginalLanguageIconName = cachedInfo.OriginalLanguageIconName
                 };
+
+                if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
+                {
+                    try
+                    {
+                        var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(apiKey))
+                        {
+                            var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
+                            if (mdbData != null)
+                            {
+                                cachedOverlayData.PopcornRating = mdbData.PopcornScore;
+                                cachedOverlayData.PopcornVotes = mdbData.PopcornVotes;
+                                cachedOverlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
+                    }
+                }
+
+                return cachedOverlayData;
             }
 
             if (Helpers.PluginHelper.IsDebugLoggingEnabled) 

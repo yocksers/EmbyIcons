@@ -130,9 +130,8 @@ namespace EmbyIcons.Services
                 await _httpConcurrencyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}";
+                var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}?apikey={Uri.EscapeDataString(apiKey)}";
                 using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
-                requestMessage.Headers.Add("X-Api-Key", apiKey);
                 
                 var response = await _httpClient.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)

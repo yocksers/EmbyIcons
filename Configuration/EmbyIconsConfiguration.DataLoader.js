@@ -3,7 +3,7 @@ define([], function () {
 
     const pluginId = "b8d0f5a4-3e96-4c0f-a6e2-9f0c2ecb5c5f";
 
-    async function loadPagePartials() {
+    async function loadPagePartials(view) {
         const parts = [
             { id: 'settingsPage', page: 'EmbyIconsConfigurationSettings' },
             { id: 'advancedPage', page: 'EmbyIconsConfigurationAdvanced' },
@@ -20,7 +20,7 @@ define([], function () {
                 .then(r => r.ok ? r.text() : '')
                 .then(html => {
                     if (html) {
-                        const el = document.getElementById(p.id);
+                        const el = view.querySelector('#' + p.id);
                         if (el) el.innerHTML = html;
                     }
                 })

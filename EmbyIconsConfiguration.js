@@ -64,7 +64,7 @@ define([
             super.onResume(options);
             loading.show();
             try {
-                await dataLoader.loadPagePartials();
+                await dataLoader.loadPagePartials(this.view);
                 
                 await new Promise(resolve => setTimeout(resolve, 0));
                 

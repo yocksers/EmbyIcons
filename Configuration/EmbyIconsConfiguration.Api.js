@@ -27,6 +27,7 @@ define(['loading', 'toast'], function (loading, toast) {
     }
 
     async function validateIconsFolder(instance) {
+        if (!instance.dom.txtIconsFolder) return;
         const path = instance.dom.txtIconsFolder.value;
         if (!path) {
             if (instance.dom.folderWarningIcon) instance.dom.folderWarningIcon.style.display = 'none';
