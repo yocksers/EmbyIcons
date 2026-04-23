@@ -18,6 +18,9 @@ define(['loading', 'toast'], function (loading, toast) {
             lines.push('Private Bytes: ' + fmt(stats.ProcessPrivateBytes));
             lines.push('Managed Heap: ' + fmt(stats.ManagedHeapBytes));
             if (stats.IconCacheEstimatedBytes && stats.IconCacheEstimatedBytes > 0) lines.push('Icon Cache (est): ' + fmt(stats.IconCacheEstimatedBytes));
+            lines.push('Series Cache: ' + stats.SeriesAggregationCacheCount + ' entries');
+            lines.push('Episode Cache: ' + stats.EpisodeCacheCount + ' entries');
+            lines.push('Active Locks: ' + stats.ItemLocksCount);
             lines.push('As of: ' + (stats.TimestampUtc || ''));
             instance.dom.memoryUsageReport.innerHTML = lines.map(l => '<div>' + l + '</div>').join('');
         } catch (err) {
