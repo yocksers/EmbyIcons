@@ -170,9 +170,9 @@ namespace EmbyIcons
                     }
                     if (_locks.TryRemove(key, out var removedSem))
                     {
-                        _lockLastUsed.TryRemove(key, out _);
                         try { removedSem.Dispose(); } catch { }
                     }
+                    _lockLastUsed.TryRemove(key, out _);
                 }
 
                 if (keysToRemove.Count > 0 && Helpers.PluginHelper.IsDebugLoggingEnabled)

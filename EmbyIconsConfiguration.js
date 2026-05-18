@@ -72,7 +72,7 @@ define([
                 eventsModule.bindEvents(this);
 
                 await this.fetchApiRoutes();
-                await dataLoader.loadData(this);
+                await this.loadData();
             } catch (error) {
                 console.error('Failed to initialize EmbyIcons configuration page', error);
                 toast({ type: 'error', text: 'Error loading page. Please refresh.' });
@@ -128,6 +128,10 @@ define([
 
         async fetchApiRoutes() {
             return apiModule.fetchApiRoutes(this);
+        }
+
+        async loadData() {
+            return dataLoader.loadData(this);
         }
 
         async validateIconsFolder() {
