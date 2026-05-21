@@ -200,7 +200,7 @@ define(['loading', 'toast'], function (loading, toast) {
                 if (found.length === 0 && missing.length === 0 && unused.length === 0) continue;
 
                 htmlParts.push(`<div class="paper-card" style="margin-top: 1.5em; padding: 1em 1.5em;">`);
-                htmlParts.push(`<h3 style="margin-top: 0; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">${friendlyNames[groupName]}</h3>`);
+                htmlParts.push(`<h3 class="scan-report-group-header" style="margin-top: 0; cursor: pointer;">${friendlyNames[groupName]}</h3>`);
                 htmlParts.push(`<div class="collapsible-content" style="display: none;">`);
 
                 if (missing.length > 0) {
@@ -221,6 +221,13 @@ define(['loading', 'toast'], function (loading, toast) {
         htmlParts.push(`<style>.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5em; } .icon-grid code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; } .icon-grid code.highlighted { background-color: #52B54B; color: white; }</style>`);
 
         container.innerHTML = htmlParts.join('');
+
+        container.querySelectorAll('.scan-report-group-header').forEach(header => {
+            header.addEventListener('click', function () {
+                const content = this.nextElementSibling;
+                if (content) content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            });
+        });
 
         const clickableIcons = container.querySelectorAll('.clickable-icon');
         clickableIcons.forEach(icon => {
