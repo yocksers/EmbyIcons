@@ -170,6 +170,7 @@ namespace EmbyIcons.Caching
                 return Task.CompletedTask;
             }
 
+            _iconsFolder = effectiveFolder;
             return RefreshCacheOnDemandAsync(effectiveFolder, cancellationToken, force: true);
         }
 

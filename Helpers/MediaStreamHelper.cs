@@ -121,6 +121,21 @@ namespace EmbyIcons.Helpers
             (4.0/3.0, "4x3"),
         };
 
+        private static readonly (float Rate, string Name)[] _commonFrameRates =
+        {
+            (23.976f, "23.976"),
+            (24f, "24"),
+            (25f, "25"),
+            (29.97f, "29.97"),
+            (30f, "30"),
+            (48f, "48"),
+            (50f, "50"),
+            (59.94f, "59.94"),
+            (60f, "60"),
+            (100f, "100"),
+            (120f, "120"),
+        };
+
         public static string? GetAspectRatioIconName(int width, int height, bool snapToCommon)
         {
             if (!snapToCommon || height <= 0 || width <= 0) return null;
@@ -140,10 +155,13 @@ namespace EmbyIcons.Helpers
         {
             if (videoStream == null) return null;
 
-            if (snapToCommon && videoStream.Width.HasValue && videoStream.Height.HasValue)
+            if (snapToCommon)
             {
-                var snappedName = GetAspectRatioIconName(videoStream.Width.Value, videoStream.Height.Value, true);
-                if (snappedName != null) return snappedName;
+                if (videoStream.Width.HasValue && videoStream.Height.HasValue)
+                {
+                    return GetAspectRatioIconName(videoStream.Width.Value, videoStream.Height.Value, true);
+                }
+                return null;
             }
 
             if (!string.IsNullOrWhiteSpace(videoStream.AspectRatio))
@@ -255,15 +273,14 @@ namespace EmbyIcons.Helpers
 
             if (snapToCommon)
             {
-                var tolerance = 0.01f;
-                var commonRates = new[] { 23.976f, 24f, 25f, 29.97f, 30f, 50f, 59.94f, 60f, 120f };
-                foreach (var rate in commonRates)
+                var best = _commonFrameRates[0];
+                float bestDiff = Math.Abs(best.Rate - fpsValue);
+                for (int i = 1; i < _commonFrameRates.Length; i++)
                 {
-                    if (Math.Abs(fpsValue - rate) < tolerance)
-                    {
-                        return rate.ToString(CultureInfo.InvariantCulture);
-                    }
+                    float diff = Math.Abs(_commonFrameRates[i].Rate - fpsValue);
+                    if (diff < bestDiff) { bestDiff = diff; best = _commonFrameRates[i]; }
                 }
+                return bestDiff < 0.5f ? best.Name : null;
             }
 
             return fpsValue.ToString("0.###", CultureInfo.InvariantCulture);

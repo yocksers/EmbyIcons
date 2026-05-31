@@ -464,7 +464,7 @@ namespace EmbyIcons.Services
             return null;
         }
 
-        private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item)
+        private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item, ProfileSettings profileOptions)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             if (item.Tags != null && item.Tags.Length > 0)
@@ -513,8 +513,6 @@ namespace EmbyIcons.Services
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
 
-            var profileOptions = Plugin.Instance?.GetProfileForItem(item)?.Settings;
-
             if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
                 data.FavoriteCount = _enhancer.GetFavoriteCount(item);
@@ -537,12 +535,12 @@ namespace EmbyIcons.Services
             if (item is Series seriesItem)
             {
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, seriesItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, seriesItem, profileOptions);
             }
             else if (item is Season seasonItem)
             {
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, seasonItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, seasonItem, profileOptions);
             }
             else if (item is BoxSet collectionItem)
             {
@@ -556,7 +554,7 @@ namespace EmbyIcons.Services
                 }
 
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem);
+                overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
             }
             else
             {

@@ -43,7 +43,7 @@ namespace EmbyIcons.Configuration
         }
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
-        public bool EnableDebugLogging { get; set; } = false;
+        public bool EnableDebugLogging { get; set; } = true;
         public bool EnableCollectionProfileLookup { get; set; } = true;
         public bool EnableLazyIconLoading { get; set; } = true;
         public bool EnableIconTemplateCaching { get; set; } = true;

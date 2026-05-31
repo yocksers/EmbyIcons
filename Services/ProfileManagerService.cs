@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -18,7 +19,10 @@ namespace EmbyIcons.Services
         private readonly ILogger _logger;
         private readonly PluginOptions _configuration;
 
-        private Lazy<Trie<string>> _libraryPathTrieLazy;
+        private volatile Trie<string>? _libraryPathTrie;
+        private readonly SemaphoreSlim _libraryPathTrieSemaphore = new SemaphoreSlim(1, 1);
+        [ThreadStatic]
+        private static bool _isCreatingTrie;
 
         private MemoryCache _itemToProfileIdCache;
         private MemoryCache _collectionToProfileIdCache;
@@ -29,8 +33,6 @@ namespace EmbyIcons.Services
             _libraryManager = libraryManager;
             _logger = logger;
             _configuration = configuration;
-            _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
-            
             var maxItemCacheSize = Math.Max(1000, configuration.MaxItemToProfileCacheSize);
             var maxCollectionCacheSize = Math.Max(100, configuration.MaxCollectionToProfileCacheSize);
             _itemToProfileIdCache = new(new MemoryCacheOptions { SizeLimit = maxItemCacheSize });
@@ -42,7 +44,15 @@ namespace EmbyIcons.Services
 
         public void InvalidateLibraryCache()
         {
-            _libraryPathTrieLazy = new Lazy<Trie<string>>(CreateLibraryPathTrie);
+            _libraryPathTrieSemaphore.Wait();
+            try
+            {
+                _libraryPathTrie = null;
+            }
+            finally
+            {
+                _libraryPathTrieSemaphore.Release();
+            }
 
             var maxItemCacheSize = Math.Max(1000, _configuration.MaxItemToProfileCacheSize);
             var maxCollectionCacheSize = Math.Max(100, _configuration.MaxCollectionToProfileCacheSize);
@@ -77,6 +87,8 @@ namespace EmbyIcons.Services
             }
             
             try { _cacheMaintenanceTimer?.Dispose(); } catch (Exception ex) { _logger.Debug($"[EmbyIcons] Error disposing cache maintenance timer: {ex.Message}"); }
+
+            try { _libraryPathTrieSemaphore?.Dispose(); } catch (Exception ex) { _logger.Debug($"[EmbyIcons] Error disposing library path trie semaphore: {ex.Message}"); }
         }
 
         private void CompactCaches()
@@ -91,6 +103,58 @@ namespace EmbyIcons.Services
             catch (Exception ex)
             {
                 _logger.ErrorException("[EmbyIcons] Error during cache compaction.", ex);
+            }
+        }
+
+        private Trie<string> GetOrCreateLibraryPathTrie()
+        {
+            if (_libraryPathTrie != null) return _libraryPathTrie;
+            if (_isCreatingTrie) return new Trie<string>();
+
+            _libraryPathTrieSemaphore.Wait();
+            try
+            {
+                if (_libraryPathTrie != null) return _libraryPathTrie;
+                _isCreatingTrie = true;
+                try
+                {
+                    _libraryPathTrie = CreateLibraryPathTrie();
+                }
+                finally
+                {
+                    _isCreatingTrie = false;
+                }
+                return _libraryPathTrie;
+            }
+            finally
+            {
+                _libraryPathTrieSemaphore.Release();
+            }
+        }
+
+        private async Task<Trie<string>> GetOrCreateLibraryPathTrieAsync()
+        {
+            if (_libraryPathTrie != null) return _libraryPathTrie;
+            if (_isCreatingTrie) return new Trie<string>();
+
+            await _libraryPathTrieSemaphore.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_libraryPathTrie != null) return _libraryPathTrie;
+                _isCreatingTrie = true;
+                try
+                {
+                    _libraryPathTrie = CreateLibraryPathTrie();
+                }
+                finally
+                {
+                    _isCreatingTrie = false;
+                }
+                return _libraryPathTrie;
+            }
+            finally
+            {
+                _libraryPathTrieSemaphore.Release();
             }
         }
 
@@ -126,13 +190,30 @@ namespace EmbyIcons.Services
                 return null;
             }
 
-            var currentLibraryTrie = _libraryPathTrieLazy.Value;
+            var currentLibraryTrie = GetOrCreateLibraryPathTrie();
 
-            if (currentLibraryTrie == null)
+            var libraryId = currentLibraryTrie.FindLongestPrefix(path);
+
+            if (libraryId != null)
             {
-                _logger.Warn("[EmbyIcons] Library path Trie is null, cannot check library restrictions.");
+                var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libraryId);
+                if (mapping != null)
+                {
+                    return _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<IconProfile?> GetProfileForPathAsync(string? path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
                 return null;
             }
+
+            var currentLibraryTrie = await GetOrCreateLibraryPathTrieAsync().ConfigureAwait(false);
 
             var libraryId = currentLibraryTrie.FindLongestPrefix(path);
 
@@ -178,7 +259,7 @@ namespace EmbyIcons.Services
                             CollectionIds = new[] { boxSet.InternalId },
                             Limit = 1,
                             Recursive = true,
-                            IncludeItemTypes = new[] { "Movie", "Episode" }
+                            IncludeItemTypes = new[] { "Movie", "Series", "Episode" }
                         }).FirstOrDefault();
 
                         if (firstChild != null)
@@ -216,6 +297,79 @@ namespace EmbyIcons.Services
                     .SetSize(1)
                     .SetSlidingExpiration(TimeSpan.FromDays(1));
 
+                _itemToProfileIdCache.Set(item.Id, profileIdToCache, cacheEntryOptions);
+            }
+
+            return foundProfile;
+        }
+
+        public async Task<IconProfile?> GetProfileForItemAsync(BaseItem item)
+        {
+            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
+            {
+                if (cachedProfileId == Guid.Empty) return null;
+                return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
+            }
+
+            IconProfile? foundProfile;
+
+            if (item is BoxSet boxSet)
+            {
+                var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == boxSet.ParentId.ToString());
+                if (mapping != null)
+                {
+                    foundProfile = _configuration.Profiles?.FirstOrDefault(p => p.Id == mapping.ProfileId);
+                }
+                else if (_configuration.EnableCollectionProfileLookup)
+                {
+                    if (_collectionToProfileIdCache.TryGetValue(boxSet.InternalId, out Guid cachedCollectionProfileId))
+                    {
+                        foundProfile = cachedCollectionProfileId == Guid.Empty ? null : _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedCollectionProfileId);
+                    }
+                    else
+                    {
+                        var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
+                        {
+                            CollectionIds = new[] { boxSet.InternalId },
+                            Limit = 1,
+                            Recursive = true,
+                            IncludeItemTypes = new[] { "Movie", "Series", "Episode" }
+                        }).FirstOrDefault();
+
+                        if (firstChild != null)
+                        {
+                            foundProfile = await GetProfileForPathAsync(firstChild.Path).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            if (_configuration.EnableDebugLogging)
+                                _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
+                            foundProfile = null;
+                        }
+
+                        var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
+                        var cacheEntryOptions = new MemoryCacheEntryOptions()
+                            .SetSize(1)
+                            .SetSlidingExpiration(TimeSpan.FromHours(6));
+                        _collectionToProfileIdCache.Set(boxSet.InternalId, profileIdToCache, cacheEntryOptions);
+                    }
+                }
+                else
+                {
+                    foundProfile = null;
+                }
+            }
+            else
+            {
+                foundProfile = await GetProfileForPathAsync(item.Path).ConfigureAwait(false);
+            }
+
+            if (item.Id != Guid.Empty)
+            {
+                var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                    .SetSize(1)
+                    .SetSlidingExpiration(TimeSpan.FromDays(1));
                 _itemToProfileIdCache.Set(item.Id, profileIdToCache, cacheEntryOptions);
             }
 

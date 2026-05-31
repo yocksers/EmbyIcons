@@ -483,7 +483,7 @@ namespace EmbyIcons
             var plugin = Plugin.Instance;
             if (plugin == null) return;
 
-            var profile = plugin.GetProfileForItem(item);
+            var profile = await plugin.GetProfileForItemAsync(item).ConfigureAwait(false);
             if (profile == null)
             {
                 await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, cancellationToken);

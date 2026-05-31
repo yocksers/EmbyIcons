@@ -40,6 +40,8 @@ namespace EmbyIcons
         private readonly ILogManager _logManager;
         private readonly Lazy<EmbyIconsEnhancer> _enhancerLazy;
         private Timer? _pruningTimer;
+        private Timer? _libraryInvalidationDebounceTimer;
+        private readonly object _libraryInvalidationDebounceLock = new object();
         private volatile Lazy<ProfileManagerService> _profileManagerLazy = null!;
         private Lazy<ConfigurationMonitor> _configMonitorLazy = null!;
         private CancellationTokenSource? _backgroundTasksCts;
@@ -279,6 +281,11 @@ namespace EmbyIcons
             return ProfileManager.GetProfileForItem(item);
         }
 
+        public Task<IconProfile?> GetProfileForItemAsync(BaseItem item)
+        {
+            return ProfileManager.GetProfileForItemAsync(item);
+        }
+
         public bool IsLibraryAllowed(BaseItem item)
         {
             return GetProfileForItem(item) != null;
@@ -484,42 +491,50 @@ namespace EmbyIcons
             {
                 var enhancer = Enhancer;
                 
-                if (e.Item is Folder && e.Parent == _libraryManager.RootFolder)
+                var rootFolder = _libraryManager.RootFolder;
+                if (e.Item is Folder && rootFolder != null && e.Parent != null && e.Parent.Id == rootFolder.Id)
                 {
-                    ProfileManager.InvalidateLibraryCache();
+                    lock (_libraryInvalidationDebounceLock)
+                    {
+                        _libraryInvalidationDebounceTimer?.Dispose();
+                        _libraryInvalidationDebounceTimer = new Timer(_ => ProfileManager.InvalidateLibraryCache(), null, 2000, Timeout.Infinite);
+                    }
                     return;
                 }
 
-                bool dateModifiedChanged = e.UpdateReason == ItemUpdateType.MetadataEdit ||
-                                         e.UpdateReason == ItemUpdateType.MetadataImport ||
-                                         e.UpdateReason == ItemUpdateType.None;
-
                 enhancer.ClearEpisodeIconCache(e.Item.Id);
 
-                var seriesToClear = (e.Item as Episode)?.Series
-                                 ?? (e.Item as Season)?.Series
-                                 ?? e.Item as Series;
+                Guid seriesIdToClear = Guid.Empty;
+                Guid seasonIdToClear = Guid.Empty;
 
-                var seasonToClear = (e.Item as Episode)?.Season;
-
-                if (dateModifiedChanged && e.Item is Episode episode && episode.Series != null)
+                if (e.Item is Episode ep)
                 {
-                    if (Configuration?.EnableDebugLogging ?? false)
-                        _logger.Debug($"[EmbyIcons] DateModified change detected for episode '{episode.Name}', clearing series and season caches.");
+                    var seriesItem = _libraryManager.GetItemById(ep.SeriesId);
+                    seriesIdToClear = seriesItem?.Id ?? Guid.Empty;
+                    seasonIdToClear = e.Parent?.Id ?? Guid.Empty;
+                }
+                else if (e.Item is Season seasonItem)
+                {
+                    seriesIdToClear = e.Parent?.Id ?? Guid.Empty;
+                    seasonIdToClear = seasonItem.Id;
+                }
+                else if (e.Item is Series)
+                {
+                    seriesIdToClear = e.Item.Id;
                 }
 
-                if (seasonToClear != null && seasonToClear.Id != Guid.Empty)
+                if (seasonIdToClear != Guid.Empty)
                 {
                     if (Configuration?.EnableDebugLogging ?? false)
-                        _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for season '{seasonToClear.Name}' ({seasonToClear.Id}).");
-                    enhancer.ClearSeriesAggregationCache(seasonToClear.Id);
+                        _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for season ID {seasonIdToClear}.");
+                    enhancer.ClearSeriesAggregationCache(seasonIdToClear);
                 }
 
-                if (seriesToClear != null && seriesToClear.Id != Guid.Empty)
+                if (seriesIdToClear != Guid.Empty)
                 {
                     if (Configuration?.EnableDebugLogging ?? false)
-                        _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for parent series '{seriesToClear.Name}' ({seriesToClear.Id}).");
-                    enhancer.ClearSeriesAggregationCache(seriesToClear.Id);
+                        _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for series ID {seriesIdToClear}.");
+                    enhancer.ClearSeriesAggregationCache(seriesIdToClear);
                 }
             }
             catch (Exception ex)
@@ -638,6 +653,12 @@ namespace EmbyIcons
             catch (Exception ex) 
             { 
                 _logger?.Debug($"[EmbyIcons] Error disposing pruning timer: {ex.Message}");
+            }
+            
+            try { _libraryInvalidationDebounceTimer?.Dispose(); }
+            catch (Exception ex)
+            {
+                _logger?.Debug($"[EmbyIcons] Error disposing debounce timer: {ex.Message}");
             }
             
             if (_enhancerLazy.IsValueCreated)
