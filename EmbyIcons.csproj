@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.54.0</Version>
-		<AssemblyVersion>5.54.0.0</AssemblyVersion>
-		<FileVersion>5.54.0.0</FileVersion>
+		<Version>5.54.3</Version>
+		<AssemblyVersion>5.54.3.0</AssemblyVersion>
+		<FileVersion>5.54.3.0</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 
@@ -16,81 +16,6 @@
 		<Compile Remove="Settings\**" />
 		<EmbeddedResource Remove="Settings\**" />
 		<None Remove="Settings\**" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Remove="EmbeddedIcons\ac.aac.png" />
-		<None Remove="EmbeddedIcons\ac.ac3.png" />
-		<None Remove="EmbeddedIcons\ac.dts-hdma.png" />
-		<None Remove="EmbeddedIcons\ac.dts.png" />
-		<None Remove="EmbeddedIcons\ac.eac3.png" />
-		<None Remove="EmbeddedIcons\ac.flac.png" />
-		<None Remove="EmbeddedIcons\ac.mp3.png" />
-		<None Remove="EmbeddedIcons\ac.truehd.png" />
-		<None Remove="EmbeddedIcons\ac_dts-hdma.png" />
-		<None Remove="EmbeddedIcons\ar..4x3.png" />
-		<None Remove="EmbeddedIcons\ch.5.1.png" />
-		<None Remove="EmbeddedIcons\ch.7.1.png" />
-		<None Remove="EmbeddedIcons\ch.Mono.png" />
-		<None Remove="EmbeddedIcons\ch.stereo.png" />
-		<None Remove="EmbeddedIcons\ch.5.1.jpg" />
-		<None Remove="EmbeddedIcons\ch.7.1.jpg" />
-		<None Remove="EmbeddedIcons\ch.Mono.jpg" />
-		<None Remove="EmbeddedIcons\ch.stereo.jpg" />
-		<None Remove="EmbeddedIcons\fps_23.976.png" />
-		<None Remove="EmbeddedIcons\fps_24.png" />
-		<None Remove="EmbeddedIcons\fps_25.jpg" />
-		<None Remove="EmbeddedIcons\fps_25.png" />
-		<None Remove="EmbeddedIcons\fps_30.png" />
-		<None Remove="EmbeddedIcons\fps_60.jpg" />
-		<None Remove="EmbeddedIcons\fps_60.png" />
-		<None Remove="EmbeddedIcons\hdr.dv.png" />
-		<None Remove="EmbeddedIcons\hdr.hdr.png" />
-		<None Remove="EmbeddedIcons\hdr.hdr10plus.png" />
-		<None Remove="EmbeddedIcons\res.1080p.png" />
-		<None Remove="EmbeddedIcons\res.480p.png" />
-		<None Remove="EmbeddedIcons\res.4k.png" />
-		<None Remove="EmbeddedIcons\res.576p.png" />
-		<None Remove="EmbeddedIcons\res.720p.png" />
-		<None Remove="EmbeddedIcons\vc.av1.png" />
-		<None Remove="EmbeddedIcons\vc.avc.png" />
-		<None Remove="EmbeddedIcons\vc.h264.png" />
-		<None Remove="EmbeddedIcons\vc.hevc.png" />
-		<None Remove="EmbeddedIcons\vc.mp4.png" />
-		<None Remove="EmbeddedIcons\vc.mpeg4.png" />
-		<None Remove="EmbeddedIcons\vc.vc1.png" />
-		<None Remove="EmbeddedIcons\vc.vp9.png" />
-		<None Remove="EmbeddedIcons\heart.png" />
-		<None Remove="EmbeddedIcons\lang.chinese.jpg" />
-		<None Remove="EmbeddedIcons\lang.danish.jpg" />
-		<None Remove="EmbeddedIcons\lang.english.jpg" />
-		<None Remove="EmbeddedIcons\lang.german.jpg" />
-		<None Remove="EmbeddedIcons\lang.indian.jpg" />
-		<None Remove="EmbeddedIcons\lang.japanese.jpg" />
-		<None Remove="EmbeddedIcons\lang_norwegian.png" />
-		<None Remove="EmbeddedIcons\pr_g.png" />
-		<None Remove="EmbeddedIcons\pr_nc-17.png" />
-		<None Remove="EmbeddedIcons\pr_pg-13.png" />
-		<None Remove="EmbeddedIcons\pr_pg.png" />
-		<None Remove="EmbeddedIcons\pr_r.png" />
-		<None Remove="EmbeddedIcons\pr_tv-14.png" />
-		<None Remove="EmbeddedIcons\pr_tv-ma.png" />
-		<None Remove="EmbeddedIcons\pr_tv-pg.png" />
-		<None Remove="EmbeddedIcons\r_mal.png" />
-		<None Remove="EmbeddedIcons\sub.chinese.jpg" />
-		<None Remove="EmbeddedIcons\sub.danish.jpg" />
-		<None Remove="EmbeddedIcons\sub.english.jpg" />
-		<None Remove="EmbeddedIcons\sub.german.jpg" />
-		<None Remove="EmbeddedIcons\sub.indian.jpg" />
-		<None Remove="EmbeddedIcons\sub.japanese.jpg" />
-		<None Remove="EmbeddedIcons\sub_norwegian.png" />
-		<None Remove="EmbeddedIcons\t.spilledpopcorn.png" />
-		<None Remove="EmbeddedIcons\tag.bob.jpg" />
-		<None Remove="EmbeddedIcons\t_fresh.png" />
-		<None Remove="EmbeddedIcons\t_popcorn.png" />
-		<None Remove="Images\preview.png" />
-		<None Remove="Images\tag.png" />
-		<None Remove="plugin.js" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -396,7 +396,10 @@ namespace EmbyIcons
                 (options.ExcludeSpecialsFromSeriesAggregation ? 1 : 0) |
                 (options.SnapAspectRatioToCommon ? 2 : 0) |
                 (options.SnapFrameRateToCommon ? 4 : 0) |
-                (globalOptions.EnableCollectionProfileLookup ? 8 : 0);
+                (globalOptions.EnableCollectionProfileLookup ? 8 : 0) |
+                (options.NormalizePosterAspectRatio ? 16 : 0) |
+                (options.NormalizeThumbAspectRatio ? 32 : 0) |
+                (options.NormalizeBannerAspectRatio ? 64 : 0);
 
             sb.Append('_').Append((int)options.AudioIconAlignment).Append('.').Append(options.AudioIconPriority)
               .Append('.').Append((int)options.SubtitleIconAlignment).Append('.').Append(options.SubtitleIconPriority)
@@ -521,13 +524,19 @@ namespace EmbyIcons
                     return;
                 }
 
+                using var normalizedBitmap = (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? TryNormalizeTo2x3(sourceBitmap)
+                    : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? TryNormalizeToThumb(sourceBitmap)
+                    : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? TryNormalizeToBanner(sourceBitmap)
+                    : null;
+                var bitmapToProcess = normalizedBitmap ?? sourceBitmap;
+
                 string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
                     await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                     {
                         await _imageOverlayService.ApplyOverlaysToStreamAsync(
-                            sourceBitmap, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
+                            bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
                     }
 
                     try
@@ -603,6 +612,39 @@ namespace EmbyIcons
             (Plugin.Instance?.IsLibraryAllowed(item) ?? false) ? new() { RequiresTransparency = false } : null;
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
+
+        private static SKBitmap? TryNormalizeToAspectRatio(SKBitmap source, float targetWidth, float targetHeight)
+        {
+            float targetAspect = targetWidth / targetHeight;
+            float sourceAspect = (float)source.Width / source.Height;
+
+            if (Math.Abs(sourceAspect - targetAspect) <= 0.01f)
+                return null;
+
+            int cropWidth, cropHeight;
+            if (sourceAspect > targetAspect)
+            {
+                cropHeight = source.Height;
+                cropWidth = (int)Math.Round(source.Height * targetAspect);
+            }
+            else
+            {
+                cropWidth = source.Width;
+                cropHeight = (int)Math.Round(source.Width / targetAspect);
+            }
+
+            int x = (source.Width - cropWidth) / 2;
+            int y = (source.Height - cropHeight) / 2;
+
+            var result = new SKBitmap(cropWidth, cropHeight);
+            using var canvas = new SKCanvas(result);
+            canvas.DrawBitmap(source, SKRect.Create(x, y, cropWidth, cropHeight), SKRect.Create(0, 0, cropWidth, cropHeight));
+            return result;
+        }
+
+        private static SKBitmap? TryNormalizeTo2x3(SKBitmap source) => TryNormalizeToAspectRatio(source, 2f, 3f);
+        private static SKBitmap? TryNormalizeToThumb(SKBitmap source) => TryNormalizeToAspectRatio(source, 16f, 9f);
+        private static SKBitmap? TryNormalizeToBanner(SKBitmap source) => TryNormalizeToAspectRatio(source, 1000f, 185f);
 
         internal static void CleanupStaticResources(ILogger? logger)
         {

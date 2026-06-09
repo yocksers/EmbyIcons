@@ -169,6 +169,9 @@ namespace EmbyIcons.Configuration
         public bool EnableForPosters { get; set; } = true;
         public bool EnableForThumbs { get; set; } = false;
         public bool EnableForBanners { get; set; } = false;
+        public bool NormalizePosterAspectRatio { get; set; } = false;
+        public bool NormalizeThumbAspectRatio { get; set; } = false;
+        public bool NormalizeBannerAspectRatio { get; set; } = false;
 
         public bool ShowOverlaysForEpisodes { get; set; } = true;
         public bool ShowOverlaysForSeasons { get; set; } = false;
