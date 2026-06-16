@@ -171,10 +171,10 @@ namespace EmbyIcons.Services
                 streamCache[ep.InternalId] = ep.GetMediaStreams() ?? new List<MediaStream>();
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.AudioLanguage))
-                report.Checks.Add(CheckProperty(baseItems, "Audio Language", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(x.DisplayLanguage)).Select(x => LanguageHelper.NormalizeLangCode(x.DisplayLanguage)).ToList(); }));
+                report.Checks.Add(CheckProperty(baseItems, "Audio Language", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Audio && (!string.IsNullOrEmpty(x.DisplayLanguage) || !string.IsNullOrEmpty(x.Language))).Select(x => LanguageHelper.NormalizeLangCode(!string.IsNullOrEmpty(x.DisplayLanguage) ? x.DisplayLanguage : x.Language)).ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.Subtitles))
-                report.Checks.Add(CheckProperty(baseItems, "Subtitles", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(x.DisplayLanguage)).Select(x => LanguageHelper.NormalizeLangCode(x.DisplayLanguage)).ToList(); }));
+                report.Checks.Add(CheckProperty(baseItems, "Subtitles", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Subtitle && (!string.IsNullOrEmpty(x.DisplayLanguage) || !string.IsNullOrEmpty(x.Language))).Select(x => LanguageHelper.NormalizeLangCode(!string.IsNullOrEmpty(x.DisplayLanguage) ? x.DisplayLanguage : x.Language)).ToList(); }));
 
             if (runAllChecks || requestedChecks.Contains(CheckNames.AudioCodec))
                 report.Checks.Add(CheckProperty(baseItems, "Audio Codec", ep => { var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>(); return s.Where(x => x.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(c => c != null).Select(c => c!).Distinct().ToList(); }));

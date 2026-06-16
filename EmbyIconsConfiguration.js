@@ -304,6 +304,43 @@ define([
             }
         }
 
+        async searchForMovie() {
+            return scansModule.searchForMovie(this);
+        }
+
+        onMovieSearchResultClick(e) {
+            return scansModule.onMovieSearchResultClick(this, e);
+        }
+
+        async runMovieScan() {
+            return scansModule.runMovieScan(this);
+        }
+
+        async runFullMovieScan() {
+            return scansModule.runFullMovieScan(this);
+        }
+
+        renderMovieReport(response) {
+            return scansModule.renderMovieReport(this, response);
+        }
+
+        onMovieReportHeaderClick(e) {
+            const header = e.target.closest('.collapsible-header');
+            if (!header) return;
+
+            const content = header.nextElementSibling;
+            const indicator = header.querySelector('.collapsible-indicator');
+
+            if (content && content.classList.contains('collapsible-content')) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+
+                if (indicator) {
+                    indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+                }
+            }
+        }
+
         pollScanProgress(scanType, button, container) {
             return scansModule.pollScanProgress(this, scanType, button, container);
         }

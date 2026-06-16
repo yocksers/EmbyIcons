@@ -210,9 +210,10 @@ namespace EmbyIcons.Services
                             case MediaStreamType.Audio:
                                 if (!isLikelyImage)
                                 {
-                                    if (!string.IsNullOrEmpty(stream.DisplayLanguage))
+                                    var audioLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                                    if (!string.IsNullOrEmpty(audioLangCode))
                                     {
-                                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                                        var lang = LanguageHelper.NormalizeLangCode(audioLangCode);
                                         localReport.Languages.Add(lang);
                                         if (localReport.PrimaryLanguage == null) localReport.PrimaryLanguage = lang;
                                     }
@@ -225,11 +226,15 @@ namespace EmbyIcons.Services
                                 }
                                 break;
                             case MediaStreamType.Subtitle:
-                                if (!isLikelyImage && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                                if (!isLikelyImage)
                                 {
-                                    var subLang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
-                                    localReport.Subtitles.Add(subLang);
-                                    if (localReport.PrimarySubtitle == null) localReport.PrimarySubtitle = subLang;
+                                    var subLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                                    if (!string.IsNullOrEmpty(subLangCode))
+                                    {
+                                        var subLang = LanguageHelper.NormalizeLangCode(subLangCode);
+                                        localReport.Subtitles.Add(subLang);
+                                        if (localReport.PrimarySubtitle == null) localReport.PrimarySubtitle = subLang;
+                                    }
                                 }
                                 break;
                             case MediaStreamType.Video:
@@ -399,9 +404,10 @@ namespace EmbyIcons.Services
                     var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
                     if (primaryAudio != null)
                     {
-                        if (!string.IsNullOrEmpty(primaryAudio.DisplayLanguage))
+                        var primaryLangCode = !string.IsNullOrEmpty(primaryAudio.DisplayLanguage) ? primaryAudio.DisplayLanguage : primaryAudio.Language;
+                        if (!string.IsNullOrEmpty(primaryLangCode))
                         {
-                            var lang = LanguageHelper.NormalizeLangCode(primaryAudio.DisplayLanguage);
+                            var lang = LanguageHelper.NormalizeLangCode(primaryLangCode);
                             languageCounts.AddOrUpdate(lang, 1, (k, v) => v + 1);
                         }
 
@@ -412,10 +418,11 @@ namespace EmbyIcons.Services
                         if (ac != null) audioCodecCounts.AddOrUpdate(ac, 1, (k, v) => v + 1);
                     }
 
-                    var firstSubtitle = streams.FirstOrDefault(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage));
+                    var firstSubtitle = streams.FirstOrDefault(s => s.Type == MediaStreamType.Subtitle && (!string.IsNullOrEmpty(s.DisplayLanguage) || !string.IsNullOrEmpty(s.Language)));
                     if (firstSubtitle != null)
                     {
-                        var subLang = LanguageHelper.NormalizeLangCode(firstSubtitle.DisplayLanguage);
+                        var firstSubLangCode = !string.IsNullOrEmpty(firstSubtitle.DisplayLanguage) ? firstSubtitle.DisplayLanguage : firstSubtitle.Language;
+                        var subLang = LanguageHelper.NormalizeLangCode(firstSubLangCode!);
                         subtitleCounts.AddOrUpdate(subLang, 1, (k, v) => v + 1);
                     }
                 }

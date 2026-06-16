@@ -928,16 +928,21 @@ namespace EmbyIcons.Services
                 {
                     if (stream.Type == MediaStreamType.Audio)
                     {
-                        if (profileOptions.AudioIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                        if (profileOptions.AudioIconAlignment != IconAlignment.Disabled)
+                        {
+                            var langCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                            if (!string.IsNullOrEmpty(langCode)) data.AudioLanguages.Add(LanguageHelper.NormalizeLangCode(langCode));
+                        }
                         if (profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled)
                         {
                             var codecIcon = MediaStreamHelper.GetAudioCodecIconName(stream);
                             if (codecIcon != null) data.AudioCodecs.Add(codecIcon);
                         }
                     }
-                    else if (stream.Type == MediaStreamType.Subtitle && profileOptions.SubtitleIconAlignment != IconAlignment.Disabled && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                    else if (stream.Type == MediaStreamType.Subtitle && profileOptions.SubtitleIconAlignment != IconAlignment.Disabled)
                     {
-                        data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(stream.DisplayLanguage));
+                        var langCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                        if (!string.IsNullOrEmpty(langCode)) data.SubtitleLanguages.Add(LanguageHelper.NormalizeLangCode(langCode));
                     }
                     else if (stream.Type == MediaStreamType.Video && profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled)
                     {

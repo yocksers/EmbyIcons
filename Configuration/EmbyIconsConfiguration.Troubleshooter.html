@@ -39,11 +39,11 @@
         </div>
     </div>
 
-    <div class="paper-card" style="padding: 1.5em; margin-top: 2em; position: relative;">
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
         <h3 style="margin-top:0;">Scan a Specific TV Show</h3>
-        <div class="inputContainer">
+        <div class="inputContainer" style="position: relative;">
             <input is="emby-input" type="text" id="txtSeriesSearch" label="Search for a TV Show:" autocomplete="off" />
-            <div id="seriesSearchResults" class="raised paper-card" style="position: absolute; width: calc(100% - 3em); z-index: 10; max-height: 250px; overflow-y: auto; display: none;"></div>
+            <div id="seriesSearchResults" style="position: absolute; top: 100%; left: 0; width: 100%; z-index: 1000; max-height: 250px; overflow-y: auto; display: none; background-color: #2d2d2d; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></div>
         </div>
         <div style="margin-top: 1.5em;">
             <button is="emby-button" type="button" class="raised button-submit" id="btnRunSeriesScan">
@@ -65,6 +65,55 @@
     </div>
 
     <div id="seriesReportContainer" style="margin-top: 2em;">
+    </div>
+
+    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Movie Troubleshooter</h1>
+    <p class="fieldDescription">
+        Scans your movie library and reports which icon files are missing for properties found in your movies. This helps you identify which icons to add so that your movie posters display correctly.
+    </p>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Checks to Perform</h3>
+        <p class="fieldDescription" style="margin-top:0;">Uncheck properties you don't care about to speed up scans and reduce report noise.</p>
+        <div id="movieTroubleshooterChecksContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1em; margin-top: 1.5em;">
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="AudioLanguage" checked /><span>Audio Language</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="Subtitles" checked /><span>Subtitles</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="AudioCodec" checked /><span>Audio Codec</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="VideoCodec" checked /><span>Video Codec</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="AudioChannels" checked /><span>Audio Channels</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="Resolution" checked /><span>Resolution</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="AspectRatio" checked /><span>Aspect Ratio</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="VideoFormat" checked /><span>Video Format (HDR)</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-movie-check-name="FrameRate" checked /><span>Frame Rate (FPS)</span></label></div>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Scan a Specific Movie</h3>
+        <div class="inputContainer" style="position: relative;">
+            <input is="emby-input" type="text" id="txtMovieSearch" label="Search for a Movie:" autocomplete="off" />
+            <div id="movieSearchResults" style="position: absolute; top: 100%; left: 0; width: 100%; z-index: 1000; max-height: 250px; overflow-y: auto; display: none; background-color: #2d2d2d; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></div>
+        </div>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised button-submit" id="btnRunMovieScan">
+                <span>Scan Selected Movie</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Scan All Movies</h3>
+        <p class="fieldDescription" style="margin-top:0;">
+            Scan your entire movie library to find all icon values that are missing icon files. This may take several minutes on a large library.
+        </p>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised" id="btnRunFullMovieScan">
+                <span>Scan All Movies for Missing Icons</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="movieReportContainer" style="margin-top: 2em;">
     </div>
 
     <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>

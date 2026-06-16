@@ -62,6 +62,12 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         if (dom.btnRunFullSeriesScan) dom.btnRunFullSeriesScan.addEventListener('click', instance.runFullSeriesScan.bind(instance));
         if (dom.seriesReportContainer) dom.seriesReportContainer.addEventListener('click', instance.onSeriesReportHeaderClick.bind(instance));
 
+        if (dom.txtMovieSearch) dom.txtMovieSearch.addEventListener('input', utils.debounce(instance.searchForMovie.bind(instance), 300));
+        if (dom.movieSearchResults) dom.movieSearchResults.addEventListener('click', instance.onMovieSearchResultClick.bind(instance));
+        if (dom.btnRunMovieScan) dom.btnRunMovieScan.addEventListener('click', instance.runMovieScan.bind(instance));
+        if (dom.btnRunFullMovieScan) dom.btnRunFullMovieScan.addEventListener('click', instance.runFullMovieScan.bind(instance));
+        if (dom.movieReportContainer) dom.movieReportContainer.addEventListener('click', instance.onMovieReportHeaderClick.bind(instance));
+
         if (dom.btnRefreshMemoryUsage) dom.btnRefreshMemoryUsage.addEventListener('click', instance.refreshMemoryUsage.bind(instance));
 
         if (dom.btnCalculateAspectRatio) dom.btnCalculateAspectRatio.addEventListener('click', instance.calculateAspectRatio.bind(instance));
@@ -75,6 +81,9 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         instance.documentClickHandler = (e) => {
             if (dom.seriesSearchResults && dom.txtSeriesSearch && !dom.seriesSearchResults.contains(e.target) && !dom.txtSeriesSearch.contains(e.target)) {
                 dom.seriesSearchResults.style.display = 'none';
+            }
+            if (dom.movieSearchResults && dom.txtMovieSearch && !dom.movieSearchResults.contains(e.target) && !dom.txtMovieSearch.contains(e.target)) {
+                dom.movieSearchResults.style.display = 'none';
             }
         };
         document.addEventListener('click', instance.documentClickHandler);

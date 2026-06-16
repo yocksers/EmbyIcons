@@ -345,7 +345,8 @@ define(['loading', 'toast'], function (loading, toast) {
             const results = await ApiClient.getItems(instance.currentUser.Id, { IncludeItemTypes: 'Series', Recursive: true, SearchTerm: searchTerm, Limit: 10, Fields: 'Path' });
 
             if (results.Items.length) {
-                resultsContainer.innerHTML = results.Items.map(item => `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.75em 1em; cursor: pointer;">${item.Name} <span style="color:#aaa; font-size:0.9em;">(${item.Path || 'Unknown'})</span></div>`).join('');
+                resultsContainer.innerHTML = `<style>.searchResultItem:hover { background-color: rgba(255,255,255,0.08); }</style>` +
+                    results.Items.map(item => `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.6em 1em; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.4;"><div style="font-weight:500; color:#fff;">${item.Name}</div><div style="color:#aaa; font-size:0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.Path || ''}</div></div>`).join('');
                 resultsContainer.style.display = 'block';
             } else {
                 resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
@@ -422,7 +423,15 @@ define(['loading', 'toast'], function (loading, toast) {
             if (mismatchChecks.length === 0) return '';
 
             const checksHtml = mismatchChecks.map(check => {
-                const episodesHtml = check.MismatchedEpisodes.map(ep => `<li><code>${ep.EpisodeName || `Item ID: ${ep.EpisodeId}`}</code><br><span style="font-size: 0.9em;">Expected: <code class="report-code report-code-ok">${check.DominantValues.join(', ') || 'N/A'}</code>, Found: <code class="report-code report-code-warn">${ep.Actual.join(', ') || 'Nothing'}</code></span></li>`).join('');
+                const dominantDisplay = check.DominantValues.length
+                    ? check.DominantValues.map(v => iconFilename(check.CheckName, v)).join(', ')
+                    : 'N/A';
+                const episodesHtml = check.MismatchedEpisodes.map(ep => {
+                    const actualDisplay = ep.Actual.length
+                        ? ep.Actual.map(v => iconFilename(check.CheckName, v)).join(', ')
+                        : 'Nothing';
+                    return `<li><code>${ep.EpisodeName || `Item ID: ${ep.EpisodeId}`}</code><br><span style="font-size: 0.9em;">Expected: <code class="report-code report-code-ok">${dominantDisplay}</code>, Found: <code class="report-code report-code-warn">${actualDisplay}</code></span></li>`;
+                }).join('');
                 return `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;"><h4 style="margin:0; color: #ffc107;">${check.CheckName}</h4><p class="fieldDescription" style="margin: 0.5em 0;">${check.Message}</p><ul style="margin: 1em 0 0.5em; padding-left: 1.5em; list-style-type: disc;">${episodesHtml}</ul></div>`;
             }).join('');
 
@@ -431,6 +440,212 @@ define(['loading', 'toast'], function (loading, toast) {
 
         container.innerHTML = (html.trim() === '') ? '<h2>Scan Complete</h2><p>No inconsistencies found in any TV show for the selected criteria.</p>' : html;
         container.insertAdjacentHTML('beforeend', `<style>.report-code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; } .report-code-ok { color: #4CAF50; } .report-code-warn { color: #ffc107; }</style>`);
+    }
+
+    async function searchForMovie(instance) {
+        const searchTerm = instance.dom.txtMovieSearch.value;
+        const resultsContainer = instance.dom.movieSearchResults;
+
+        if (searchTerm.length < 2) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const results = await ApiClient.getItems(instance.currentUser.Id, { IncludeItemTypes: 'Movie', Recursive: true, SearchTerm: searchTerm, Limit: 10, Fields: 'Path' });
+
+            if (results.Items.length) {
+                resultsContainer.innerHTML = `<style>.searchResultItem:hover { background-color: rgba(255,255,255,0.08); }</style>` +
+                    results.Items.map(item => `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.6em 1em; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.4;"><div style="font-weight:500; color:#fff;">${item.Name}</div><div style="color:#aaa; font-size:0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.Path || ''}</div></div>`).join('');
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
+                resultsContainer.style.display = 'block';
+            }
+        } catch (err) {
+            console.error('Error searching for movie', err);
+            resultsContainer.style.display = 'none';
+        }
+    }
+
+    function onMovieSearchResultClick(instance, e) {
+        const target = e.target.closest('.searchResultItem');
+        if (target) {
+            instance.selectedMovieId = target.getAttribute('data-id');
+            instance.dom.txtMovieSearch.value = target.getAttribute('data-name');
+            instance.dom.movieSearchResults.style.display = 'none';
+            instance.dom.movieSearchResults.innerHTML = '';
+        }
+    }
+
+    async function runMovieScan(instance) {
+        if (!instance.selectedMovieId) { toast({ type: 'error', text: 'Please search for and select a movie first.' }); return; }
+        const checksToRun = Array.from(instance.dom.movieTroubleshooterChecks).filter(cb => cb.checked).map(cb => cb.getAttribute('data-movie-check-name')).join(',');
+        if (!checksToRun) { toast({ type: 'error', text: 'Please select at least one property to check.' }); return; }
+
+        loading.show();
+        instance.dom.btnRunMovieScan.disabled = true;
+        const container = instance.dom.movieReportContainer;
+        container.innerHTML = '<p>Scanning movie... This might take a moment.</p>';
+
+        try {
+            const response = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(instance.apiRoutes.MovieTroubleshooter, { MovieId: instance.selectedMovieId, ChecksToRun: checksToRun }), dataType: "json" });
+            renderMovieReport(instance, response);
+        } catch (error) {
+            console.error('Error getting movie troubleshooter report', error);
+            container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+        } finally {
+            loading.hide();
+            instance.dom.btnRunMovieScan.disabled = false;
+        }
+    }
+
+    async function runFullMovieScan(instance) {
+        const checksToRun = Array.from(instance.dom.movieTroubleshooterChecks).filter(cb => cb.checked).map(cb => cb.getAttribute('data-movie-check-name')).join(',');
+        if (!checksToRun) { toast({ type: 'error', text: 'Please select at least one property to check.' }); return; }
+
+        loading.show();
+        instance.dom.btnRunFullMovieScan.disabled = true;
+        const container = instance.dom.movieReportContainer;
+        container.innerHTML = '<p>Scanning all movies in your library... This can take several minutes.</p>';
+
+        pollScanProgress(instance, "FullMovieScan", instance.dom.btnRunFullMovieScan, container);
+
+        try {
+            const response = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(instance.apiRoutes.MovieTroubleshooter, { ChecksToRun: checksToRun }), dataType: "json" });
+            renderMovieReport(instance, response);
+        } catch (error) {
+            console.error('Error getting full movie troubleshooter report', error);
+            container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+        } finally {
+            loading.hide();
+            clearInterval(instance.progressPollInterval);
+            instance.dom.btnRunFullMovieScan.disabled = false;
+        }
+    }
+
+    function renderMovieReport(instance, response) {
+        const container = instance.dom.movieReportContainer;
+
+        if (response.IsSingleMovieScan) {
+            renderSingleMovieReport(container, response);
+        } else {
+            renderLibraryMovieReport(container, response);
+        }
+    }
+
+    const iconCheckPrefixMap = {
+        'Audio Language':     'lang.',
+        'Subtitles':          'sub.',
+        'Audio Codec':        'ac.',
+        'Video Codec':        'vc.',
+        'Audio Channels':     'ch.',
+        'Resolution':         'res.',
+        'Aspect Ratio':       'ar.',
+        'Video Format (HDR)': 'hdr.',
+        'Frame Rate (FPS)':   'fps.'
+    };
+
+    function iconFilename(checkName, value) {
+        const prefix = iconCheckPrefixMap[checkName] || '';
+        return `${prefix}${value}.png`;
+    }
+
+    function renderSingleMovieReport(container, response) {
+        const missingChecks = response.Checks.filter(c => c.Status === 'MissingIcon');
+        const okChecks = response.Checks.filter(c => c.Status === 'OK');
+
+        if (missingChecks.length === 0) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>All icons for <strong>${response.MovieName}</strong> are present. No missing icons found.</p>`;
+            return;
+        }
+
+        const missingHtml = missingChecks.map(c =>
+            `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                <h4 style="margin:0; color: #ffc107;">${c.CheckName}</h4>
+                <p class="fieldDescription" style="margin: 0.5em 0;">
+                    Missing icon file: <code class="report-code report-code-warn">${iconFilename(c.CheckName, c.Value)}</code>
+                </p>
+            </div>`
+        ).join('');
+
+        const okHtml = okChecks.length > 0
+            ? `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                <h4 style="margin:0; color: #4CAF50;">Icons Present</h4>
+                <div style="margin-top: 0.5em; display: flex; flex-wrap: wrap; gap: 0.5em;">
+                    ${okChecks.map(c => `<span style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); padding: 0.2em 0.6em; border-radius: 4px; font-size: 0.9em;">${c.CheckName}: <code>${iconFilename(c.CheckName, c.Value)}</code></span>`).join('')}
+                </div>
+               </div>`
+            : '';
+
+        container.innerHTML = `
+            <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+                <h2 style="margin: 0;">${response.MovieName} <span class="fieldDescription" style="font-weight:normal;">(${missingChecks.length} missing icon${missingChecks.length !== 1 ? 's' : ''})</span></h2>
+                <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
+            </div>
+            <div class="collapsible-content" style="display: none; padding-top: 0.5em;">
+                ${missingHtml}
+                ${okHtml}
+            </div>
+            <style>.report-code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; } .report-code-warn { color: #ffc107; }</style>`;
+    }
+
+    function renderLibraryMovieReport(container, response) {
+        if (!response.LibraryGroups || response.LibraryGroups.length === 0) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>No missing icons found across ${response.TotalMoviesScanned.toLocaleString()} movies for the selected criteria.</p>`;
+            return;
+        }
+
+        const anyMissing = response.LibraryGroups.some(g => g.Missing && g.Missing.length > 0);
+        if (!anyMissing) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>All icons are present for all ${response.TotalMoviesScanned.toLocaleString()} movies scanned.</p>`;
+            return;
+        }
+
+        const groupsHtml = response.LibraryGroups
+            .filter(g => g.Missing && g.Missing.length > 0)
+            .map(group => {
+                const missingHtml = group.Missing.map(entry => {
+                    const sampleList = entry.SampleMovies && entry.SampleMovies.length > 0
+                        ? `<ul style="margin: 0.5em 0 0; padding-left: 1.5em; list-style-type: disc; font-size: 0.9em; color: #aaa;">
+                               ${entry.SampleMovies.map(m => `<li>${m.Name}</li>`).join('')}
+                               ${entry.MovieCount > entry.SampleMovies.length ? `<li style="font-style:italic;">…and ${entry.MovieCount - entry.SampleMovies.length} more</li>` : ''}
+                           </ul>`
+                        : '';
+                    return `<div style="padding: 0.75em 0; border-bottom: 1px solid rgba(128,128,128,0.15);">
+                                <span style="color: #ffc107; font-weight: 500;"><code>${iconFilename(group.CheckName, entry.Value)}</code></span>
+                                <span class="fieldDescription" style="margin-left: 0.5em;">${entry.MovieCount.toLocaleString()} movie${entry.MovieCount !== 1 ? 's' : ''} affected</span>
+                                ${sampleList}
+                            </div>`;
+                }).join('');
+
+                const coveredHtml = group.Covered && group.Covered.length > 0
+                    ? `<div style="margin-top: 1em;">
+                           <h4 style="margin: 0 0 0.5em; color: #4CAF50;">Covered (${group.Covered.length})</h4>
+                           <div style="display: flex; flex-wrap: wrap; gap: 0.4em;">
+                               ${group.Covered.map(v => `<code style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); padding: 0.2em 0.5em; border-radius: 3px;">${iconFilename(group.CheckName, v)}</code>`).join('')}
+                           </div>
+                       </div>`
+                    : '';
+
+                return `<div class="report-group collapsible" style="margin-bottom: 1em;">
+                            <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                <h3 style="margin: 0;">${group.CheckName} <span class="fieldDescription" style="font-weight:normal;">(${group.Missing.length} missing value${group.Missing.length !== 1 ? 's' : ''})</span></h3>
+                                <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
+                            </div>
+                            <div class="collapsible-content" style="display: none; padding: 0.5em 1.5em 1em;">
+                                <h4 style="margin: 0.5em 0; color: #ffc107;">Missing Icons (${group.Missing.length})</h4>
+                                <p class="fieldDescription" style="margin-top: 0;">These values appear in your movies but have no corresponding icon file.</p>
+                                ${missingHtml}
+                                ${coveredHtml}
+                            </div>
+                        </div>`;
+            }).join('');
+
+        container.innerHTML = `
+            <p class="fieldDescription">Scanned ${response.TotalMoviesScanned.toLocaleString()} movies. The following icon files are missing:</p>
+            ${groupsHtml}`;
     }
 
     return {
@@ -446,6 +661,11 @@ define(['loading', 'toast'], function (loading, toast) {
         runFullSeriesScan,
         renderSeriesReport,
         showItemsByIcon,
-        showItemsInline
+        showItemsInline,
+        searchForMovie,
+        onMovieSearchResultClick,
+        runMovieScan,
+        runFullMovieScan,
+        renderMovieReport
     };
 });
