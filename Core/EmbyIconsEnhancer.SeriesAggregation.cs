@@ -424,7 +424,7 @@ namespace EmbyIcons
                         {
                             bool shouldApply = false;
 
-                            if (parent is Series && mapping.ApplyToSeries && checkParentPath && !string.IsNullOrEmpty(parent.Path) && path == parent.Path.ToLowerInvariant())
+                            if (parent is Series && mapping.ApplyToSeries)
                             {
                                 shouldApply = true;
                             }
@@ -432,7 +432,7 @@ namespace EmbyIcons
                             {
                                 shouldApply = true;
                             }
-                            else if (parent is Season && mapping.ApplyToSeasons && checkParentPath && !string.IsNullOrEmpty(parent.Path) && path == parent.Path.ToLowerInvariant())
+                            else if (parent is Season && mapping.ApplyToSeasons)
                             {
                                 shouldApply = true;
                             }

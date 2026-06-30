@@ -16,7 +16,8 @@ define([
     'configurationpage?name=EmbyIconsConfigurationProfile',
     'configurationpage?name=EmbyIconsConfigurationProfileUI',
     'configurationpage?name=EmbyIconsConfigurationScans',
-    'configurationpage?name=EmbyIconsConfigurationApi'
+    'configurationpage?name=EmbyIconsConfigurationApi',
+    'configurationpage?name=EmbyIconsConfigurationSafeZones'
 ], function (
     BaseView,
     loading,
@@ -35,7 +36,8 @@ define([
     profileModule,
     profileUI,
     scansModule,
-    apiModule
+    apiModule,
+    safeZonesModule
 ) {
     'use strict';
 
@@ -71,6 +73,11 @@ define([
                 this.dom = domCache.getDomElements(this.view);
                 eventsModule.bindEvents(this);
 
+                this.safeZonesModule = safeZonesModule;
+                safeZonesModule.init(this.view, () => {
+                    this.saveCurrentProfileSettings();
+                });
+
                 await this.fetchApiRoutes();
                 await this.loadData();
             } catch (error) {
@@ -83,6 +90,8 @@ define([
 
         onPause() {
             super.onPause();
+
+            safeZonesModule.destroy();
             
             if (this.previewUpdateTimer) {
                 clearTimeout(this.previewUpdateTimer);
@@ -226,6 +235,14 @@ define([
             return profileModule.saveFilenameMappings(this, profile);
         }
 
+        loadTagMappings(profile) {
+            return profileModule.loadTagMappings(this, profile);
+        }
+
+        saveTagMappings(profile) {
+            return profileModule.saveTagMappings(this, profile);
+        }
+
         addFilenameMappingRow(mapping) {
             const keyword = mapping ? mapping.Keyword : '';
             const iconName = mapping ? mapping.IconName : '';
@@ -240,10 +257,31 @@ define([
             this.dom.filenameMappingsContainer.appendChild(newRow);
         }
 
+        addTagMappingRow(mapping) {
+            const tagName = mapping ? mapping.TagName : '';
+            const applyToMovies = mapping ? mapping.ApplyToMovies : true;
+            const applyToSeries = mapping ? mapping.ApplyToSeries : true;
+            const applyToSeasons = mapping ? mapping.ApplyToSeasons : true;
+            const applyToEpisodes = mapping ? mapping.ApplyToEpisodes : true;
+            const iconAlignment = mapping ? mapping.IconAlignment : 'BottomLeft';
+            const priority = mapping ? mapping.Priority : 6;
+            const horizontalLayout = mapping ? mapping.HorizontalLayout : false;
+            const newRow = domHelpers.createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout);
+            this.dom.tagMappingsContainer.appendChild(newRow);
+        }
+
         onFilenameMappingButtonClick(e) {
             const deleteButton = e.target.closest('.btnDeleteFilenameMapping');
             if (deleteButton) {
                 deleteButton.closest('.filenameMappingRow').remove();
+                uiHandlers.onFormChange(this, { target: deleteButton });
+            }
+        }
+
+        onTagMappingButtonClick(e) {
+            const deleteButton = e.target.closest('.btnDeleteTagMapping');
+            if (deleteButton) {
+                deleteButton.closest('.tagMappingRow').remove();
                 uiHandlers.onFormChange(this, { target: deleteButton });
             }
         }

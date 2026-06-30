@@ -27,6 +27,51 @@ define(['loading', 'toast'], function (loading, toast) {
                 settings[key] = el.value;
             }
         });
+
+        const filenameMappings = [];
+        if (instance.dom.filenameMappingsContainer) {
+            instance.dom.filenameMappingsContainer.querySelectorAll('.filenameMappingRow').forEach(row => {
+                const keyword = row.querySelector('.txtFilenameKeyword').value.trim();
+                const iconName = row.querySelector('.txtFilenameIconName').value.trim();
+                if (keyword && iconName) {
+                    filenameMappings.push({
+                        Keyword: keyword,
+                        IconName: iconName,
+                        ApplyToMovies: row.querySelector('.chkApplyToMovies').checked,
+                        ApplyToSeries: row.querySelector('.chkApplyToSeries').checked,
+                        ApplyToSeasons: row.querySelector('.chkApplyToSeasons').checked,
+                        ApplyToEpisodes: row.querySelector('.chkApplyToEpisodes').checked,
+                        IconAlignment: row.querySelector('.selFilenameIconAlignment').value,
+                        Priority: parseInt(row.querySelector('.selFilenamePriority').value, 10),
+                        HorizontalLayout: row.querySelector('.chkFilenameHorizontalLayout').checked
+                    });
+                }
+            });
+        }
+        settings.FilenameBasedIcons = filenameMappings;
+
+        const tagMappings = [];
+        if (instance.dom.tagMappingsContainer) {
+            instance.dom.tagMappingsContainer.querySelectorAll('.tagMappingRow').forEach(row => {
+                const tagName = row.querySelector('.txtTagName').value.trim();
+                if (tagName) {
+                    tagMappings.push({
+                        TagName: tagName,
+                        ApplyToMovies: row.querySelector('.chkTagApplyToMovies').checked,
+                        ApplyToSeries: row.querySelector('.chkTagApplyToSeries').checked,
+                        ApplyToSeasons: row.querySelector('.chkTagApplyToSeasons').checked,
+                        ApplyToEpisodes: row.querySelector('.chkTagApplyToEpisodes').checked,
+                        IconAlignment: row.querySelector('.selTagIconAlignment').value,
+                        Priority: parseInt(row.querySelector('.selTagPriority').value, 10),
+                        HorizontalLayout: row.querySelector('.chkTagHorizontalLayout').checked
+                    });
+                }
+            });
+        }
+        settings.TagBasedIcons = tagMappings;
+
+        settings.SafeZones = instance.safeZonesModule ? instance.safeZonesModule.getSafeZones() : [];
+
         return settings;
     }
 
@@ -34,9 +79,14 @@ define(['loading', 'toast'], function (loading, toast) {
         const profile = instance.pluginConfiguration.Profiles.find(p => p.Id === instance.currentProfileId);
         if (!profile) return;
 
-        Object.assign(profile.Settings, getCurrentProfileSettingsFromForm(instance));
-        
+        const settings = getCurrentProfileSettingsFromForm(instance);
+        Object.assign(profile.Settings, settings);
+        if (instance.safeZonesModule) {
+            profile.Settings.SafeZones = instance.safeZonesModule.getSafeZones();
+        }
+
         saveFilenameMappings(instance, profile);
+        saveTagMappings(instance, profile);
 
         instance.pluginConfiguration.LibraryProfileMappings = instance.pluginConfiguration.LibraryProfileMappings.filter(m => m.ProfileId !== instance.currentProfileId);
         instance.dom.librarySelectionContainer.querySelectorAll('input:checked:not(:disabled)').forEach(checkbox => {
@@ -284,6 +334,39 @@ define(['loading', 'toast'], function (loading, toast) {
         input.click();
     }
 
+    function loadTagMappings(instance, profile) {
+        instance.dom.tagMappingsContainer.innerHTML = '';
+        const mappings = (profile && profile.Settings && profile.Settings.TagBasedIcons) || [];
+        mappings.forEach(mapping => instance.addTagMappingRow(mapping));
+    }
+
+    function saveTagMappings(instance, profile) {
+        const mappings = [];
+        instance.dom.tagMappingsContainer.querySelectorAll('.tagMappingRow').forEach(row => {
+            const tagName = row.querySelector('.txtTagName').value.trim();
+            const applyToMovies = row.querySelector('.chkTagApplyToMovies').checked;
+            const applyToSeries = row.querySelector('.chkTagApplyToSeries').checked;
+            const applyToSeasons = row.querySelector('.chkTagApplyToSeasons').checked;
+            const applyToEpisodes = row.querySelector('.chkTagApplyToEpisodes').checked;
+            const iconAlignment = row.querySelector('.selTagIconAlignment').value;
+            const priority = parseInt(row.querySelector('.selTagPriority').value, 10);
+            const horizontalLayout = row.querySelector('.chkTagHorizontalLayout').checked;
+            if (tagName) {
+                mappings.push({
+                    TagName: tagName,
+                    ApplyToMovies: applyToMovies,
+                    ApplyToSeries: applyToSeries,
+                    ApplyToSeasons: applyToSeasons,
+                    ApplyToEpisodes: applyToEpisodes,
+                    IconAlignment: iconAlignment,
+                    Priority: priority,
+                    HorizontalLayout: horizontalLayout
+                });
+            }
+        });
+        profile.Settings.TagBasedIcons = mappings;
+    }
+
     return {
         populateProfileSelector,
         getCurrentProfileSettingsFromForm,
@@ -293,6 +376,8 @@ define(['loading', 'toast'], function (loading, toast) {
         deleteProfile,
         loadFilenameMappings,
         saveFilenameMappings,
+        loadTagMappings,
+        saveTagMappings,
         exportCurrentProfile,
         exportAllProfiles,
         importProfiles,

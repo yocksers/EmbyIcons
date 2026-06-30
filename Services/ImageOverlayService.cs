@@ -73,6 +73,10 @@ namespace EmbyIcons.Services
                 return true;
             if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
                 return true;
+            if (profileOptions.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled))
+                return true;
+            if (profileOptions.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled))
+                return true;
 
             return false;
         }
@@ -121,12 +125,48 @@ namespace EmbyIcons.Services
             
             try
             {
+                var iconGroupsTask = CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
+                var ratingInfoTask = CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var rottenInfoTask = CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var popcornInfoTask = CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var malInfoTask = CreateMyAnimeListRatingInfo(data, profileOptions, globalOptions, cancellationToken);
+                var favoriteInfoTask = CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken);
+
+                await Task.WhenAll(iconGroupsTask, ratingInfoTask, rottenInfoTask, popcornInfoTask, malInfoTask, favoriteInfoTask).ConfigureAwait(false);
+
+                iconGroups = iconGroupsTask.Result;
+                ratingInfo = ratingInfoTask.Result;
+                rottenInfo = rottenInfoTask.Result;
+                popcornInfo = popcornInfoTask.Result;
+                malInfo = malInfoTask.Result;
+                favoriteInfo = favoriteInfoTask.Result;
+
+                static bool IsTop(IconAlignment a) => a == IconAlignment.TopLeft || a == IconAlignment.TopRight;
+                static bool IsBottom(IconAlignment a) => a == IconAlignment.BottomLeft || a == IconAlignment.BottomRight;
+
+                bool hasTopIcons = (iconGroups?.Any(g => IsTop(g.Alignment)) == true)
+                    || (ratingInfo != null && IsTop(ratingInfo.Alignment))
+                    || (rottenInfo != null && IsTop(rottenInfo.Alignment))
+                    || (popcornInfo != null && IsTop(popcornInfo.Alignment))
+                    || (malInfo != null && IsTop(malInfo.Alignment))
+                    || (favoriteInfo != null && IsTop(favoriteInfo.Alignment));
+
+                bool hasBottomIcons = (iconGroups?.Any(g => IsBottom(g.Alignment)) == true)
+                    || (ratingInfo != null && IsBottom(ratingInfo.Alignment))
+                    || (rottenInfo != null && IsBottom(rottenInfo.Alignment))
+                    || (popcornInfo != null && IsBottom(popcornInfo.Alignment))
+                    || (malInfo != null && IsBottom(malInfo.Alignment))
+                    || (favoriteInfo != null && IsBottom(favoriteInfo.Alignment));
+
+                bool effectiveTopBar = profileOptions.EnableTopIconBar && (!profileOptions.OnlyDrawBarsWhenIconsPresent || hasTopIcons);
+                bool effectiveBottomBar = profileOptions.EnableBottomIconBar && (!profileOptions.OnlyDrawBarsWhenIconsPresent || hasBottomIcons);
+
                 int barRefDimension = Math.Max(sourceBitmap.Width, sourceBitmap.Height);
-                int topBarHeight = profileOptions.EnableTopIconBar ? Math.Clamp((barRefDimension * profileOptions.TopIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
-                int bottomBarHeight = profileOptions.EnableBottomIconBar ? Math.Clamp((barRefDimension * profileOptions.BottomIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                int topBarHeight = effectiveTopBar ? Math.Clamp((barRefDimension * profileOptions.TopIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
+                int bottomBarHeight = effectiveBottomBar ? Math.Clamp((barRefDimension * profileOptions.BottomIconBarHeight) / 100, 0, sourceBitmap.Height / 3) : 0;
                 
-                bool topBarScalesImage = profileOptions.EnableTopIconBar && !profileOptions.TopIconBarOverlay;
-                bool bottomBarScalesImage = profileOptions.EnableBottomIconBar && !profileOptions.BottomIconBarOverlay;
+                bool topBarScalesImage = effectiveTopBar && !profileOptions.TopIconBarOverlay;
+                bool bottomBarScalesImage = effectiveBottomBar && !profileOptions.BottomIconBarOverlay;
                 
                 int topBarSpace = topBarScalesImage ? topBarHeight : 0;
                 int bottomBarSpace = bottomBarScalesImage ? bottomBarHeight : 0;
@@ -157,7 +197,7 @@ namespace EmbyIcons.Services
                     canvas.DrawRect(0, posterYOffset + sourceBitmap.Height, finalWidth, bottomBarHeight, barPaint);
                 }
 
-                if (profileOptions.EnableTopIconBar && profileOptions.TopIconBarOverlay && topBarHeight > 0)
+                if (effectiveTopBar && profileOptions.TopIconBarOverlay && topBarHeight > 0)
                 {
                     using var barPaint = new SKPaint();
                     var topColor = SKColor.Parse(profileOptions.TopIconBarColor);
@@ -165,7 +205,7 @@ namespace EmbyIcons.Services
                     canvas.DrawRect(0, posterYOffset, finalWidth, topBarHeight, barPaint);
                 }
 
-                if (profileOptions.EnableBottomIconBar && profileOptions.BottomIconBarOverlay && bottomBarHeight > 0)
+                if (effectiveBottomBar && profileOptions.BottomIconBarOverlay && bottomBarHeight > 0)
                 {
                     using var barPaint = new SKPaint();
                     var bottomColor = SKColor.Parse(profileOptions.BottomIconBarColor);
@@ -198,24 +238,8 @@ namespace EmbyIcons.Services
 
                 var drawingContext = new DrawingContext(canvas, paint, textPaint, profileOptions, iconSize, topLeftIconSize, topRightIconSize, bottomLeftIconSize, bottomRightIconSize, edgePaddingHorizontal, edgePaddingVertical, topLeftHPadding, topLeftVPadding, topRightHPadding, topRightVPadding, bottomLeftHPadding, bottomLeftVPadding, bottomRightHPadding, bottomRightVPadding, interIconPadding, finalWidth, finalHeight, profileOptions.RatingFontSizeMultiplier, profileOptions.RatingPercentageSuffix ?? "%", profileOptions.RatingTextVerticalOffset, posterYOffset, topBarHeight, bottomBarHeight);
 
-                var iconGroupsTask = CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
-                var ratingInfoTask = CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
-                var rottenInfoTask = CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken);
-                var popcornInfoTask = CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken);
-                var malInfoTask = CreateMyAnimeListRatingInfo(data, profileOptions, globalOptions, cancellationToken);
-                var favoriteInfoTask = CreateFavoriteCountInfo(data, profileOptions, globalOptions, cancellationToken);
-
-                await Task.WhenAll(iconGroupsTask, ratingInfoTask, rottenInfoTask, popcornInfoTask, malInfoTask, favoriteInfoTask).ConfigureAwait(false);
-
-                iconGroups = iconGroupsTask.Result;
-                ratingInfo = ratingInfoTask.Result;
-                rottenInfo = rottenInfoTask.Result;
-                popcornInfo = popcornInfoTask.Result;
-                malInfo = malInfoTask.Result;
-                favoriteInfo = favoriteInfoTask.Result;
-
                 var overlaysByCorner = new Dictionary<IconAlignment, List<IOverlayInfo>>();
-                foreach (var group in iconGroups)
+                foreach (var group in iconGroups ?? Enumerable.Empty<OverlayGroupInfo>())
                 {
                     if (!overlaysByCorner.ContainsKey(group.Alignment)) overlaysByCorner[group.Alignment] = new List<IOverlayInfo>();
                     overlaysByCorner[group.Alignment].Add(group);
@@ -244,6 +268,15 @@ namespace EmbyIcons.Services
                 {
                     if (!overlaysByCorner.ContainsKey(favoriteInfo.Alignment)) overlaysByCorner[favoriteInfo.Alignment] = new List<IOverlayInfo>();
                     overlaysByCorner[favoriteInfo.Alignment].Add(favoriteInfo);
+                }
+
+                if (profileOptions.SafeZones?.Count > 0)
+                {
+                    var activeSafeZones = profileOptions.SafeZones
+                        .Where(sz => string.IsNullOrEmpty(sz.Tag) || data.Tags.Contains(sz.Tag))
+                        .ToList();
+                    if (activeSafeZones.Count > 0)
+                        overlaysByCorner = ApplySafeZoneRemapping(overlaysByCorner, activeSafeZones, drawingContext);
                 }
 
                 foreach (var corner in overlaysByCorner.Keys)
@@ -835,6 +868,14 @@ namespace EmbyIcons.Services
                 }
             }
 
+            foreach (var tagIcon in data.TagBasedIcons)
+            {
+                if (tagIcon.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(tagIcon.IconName))
+                {
+                    await AddGroup(groups, new[] { tagIcon.IconName }, IconCacheManager.IconType.Tag, tagIcon.Alignment, tagIcon.Priority, tagIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons);
+                }
+            }
+
             return groups;
         }
 
@@ -901,6 +942,110 @@ namespace EmbyIcons.Services
                 profileOptions.CommunityScoreBackgroundShape,
                 profileOptions.CommunityScoreBackgroundColor,
                 profileOptions.CommunityScoreBackgroundOpacity);
+        }
+
+        private static readonly Dictionary<IconAlignment, IconAlignment[]> _safeZoneFallbackOrder = new Dictionary<IconAlignment, IconAlignment[]>
+        {
+            [IconAlignment.TopLeft]     = new[] { IconAlignment.TopLeft,     IconAlignment.TopRight,   IconAlignment.BottomLeft,  IconAlignment.BottomRight },
+            [IconAlignment.TopRight]    = new[] { IconAlignment.TopRight,    IconAlignment.TopLeft,    IconAlignment.BottomRight, IconAlignment.BottomLeft  },
+            [IconAlignment.BottomLeft]  = new[] { IconAlignment.BottomLeft,  IconAlignment.BottomRight, IconAlignment.TopLeft,    IconAlignment.TopRight    },
+            [IconAlignment.BottomRight] = new[] { IconAlignment.BottomRight, IconAlignment.BottomLeft,  IconAlignment.TopRight,   IconAlignment.TopLeft     },
+        };
+
+        private Dictionary<IconAlignment, List<IOverlayInfo>> ApplySafeZoneRemapping(
+            Dictionary<IconAlignment, List<IOverlayInfo>> overlaysByCorner,
+            List<SafeZone> safeZones,
+            DrawingContext context)
+        {
+            var result = new Dictionary<IconAlignment, List<IOverlayInfo>>();
+            foreach (var kvp in overlaysByCorner)
+            {
+                var bestCorner = FindBestCornerForSafeZones(kvp.Key, kvp.Value, safeZones, context);
+                if (!result.ContainsKey(bestCorner))
+                    result[bestCorner] = new List<IOverlayInfo>();
+                result[bestCorner].AddRange(kvp.Value);
+            }
+            return result;
+        }
+
+        private IconAlignment FindBestCornerForSafeZones(
+            IconAlignment preferred,
+            List<IOverlayInfo> overlays,
+            List<SafeZone> safeZones,
+            DrawingContext context)
+        {
+            if (!_safeZoneFallbackOrder.TryGetValue(preferred, out var candidates))
+                return preferred;
+
+            foreach (var candidate in candidates)
+            {
+                var bounds = EstimateCornerBounds(candidate, overlays, context);
+                if (!OverlapsAnySafeZone(bounds, safeZones, context.CanvasWidth, context.CanvasHeight))
+                    return candidate;
+            }
+
+            return preferred;
+        }
+
+        private SKRect EstimateCornerBounds(IconAlignment alignment, List<IOverlayInfo> overlays, DrawingContext context)
+        {
+            var cornerIconSize = GetIconSizeForCorner(alignment, context);
+            var hPadding = GetHorizontalPaddingForCorner(alignment, context);
+            var vPadding = GetVerticalPaddingForCorner(alignment, context);
+
+            int horizontalIconCount = 0;
+            int verticalGroupCount = 0;
+
+            foreach (var o in overlays)
+            {
+                if (o.HorizontalLayout)
+                {
+                    if (o is OverlayGroupInfo og)
+                        horizontalIconCount += og.Icons.Count;
+                    else
+                        horizontalIconCount++;
+                }
+                else
+                {
+                    verticalGroupCount++;
+                }
+            }
+
+            int rowWidthLimit = Math.Max(1, context.CanvasWidth - hPadding * 2);
+            int iconsPerRow = Math.Max(1, rowWidthLimit / Math.Max(1, cornerIconSize + context.InterIconPadding));
+            int rows = horizontalIconCount > 0 ? (int)Math.Ceiling((double)horizontalIconCount / iconsPerRow) : 0;
+
+            int estimatedW = Math.Min(
+                horizontalIconCount * (cornerIconSize + context.InterIconPadding),
+                rowWidthLimit);
+            if (verticalGroupCount > 0)
+                estimatedW = Math.Max(estimatedW, cornerIconSize);
+
+            int estimatedH = (rows + verticalGroupCount) * (cornerIconSize + context.InterIconPadding);
+            if (estimatedH <= 0) estimatedH = cornerIconSize;
+
+            bool isRight  = alignment == IconAlignment.TopRight  || alignment == IconAlignment.BottomRight;
+            bool isBottom = alignment == IconAlignment.BottomLeft || alignment == IconAlignment.BottomRight;
+
+            float x = isRight  ? context.CanvasWidth  - hPadding - estimatedW : hPadding;
+            float y = isBottom ? context.CanvasHeight  - vPadding - estimatedH : context.PosterYOffset + vPadding;
+
+            return SKRect.Create(x, y, estimatedW, estimatedH);
+        }
+
+        private static bool OverlapsAnySafeZone(SKRect bounds, List<SafeZone> safeZones, int canvasWidth, int canvasHeight)
+        {
+            foreach (var sz in safeZones)
+            {
+                float szX = sz.X * canvasWidth / 100f;
+                float szY = sz.Y * canvasHeight / 100f;
+                float szW = sz.Width * canvasWidth / 100f;
+                float szH = sz.Height * canvasHeight / 100f;
+                var szRect = SKRect.Create(szX, szY, szW, szH);
+                if (bounds.IntersectsWithInclusive(szRect))
+                    return true;
+            }
+            return false;
         }
     }
 }

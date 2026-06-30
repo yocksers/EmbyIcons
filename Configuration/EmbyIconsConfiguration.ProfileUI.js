@@ -28,6 +28,10 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
         renderProfileSettings(instance, profile.Settings);
         populateLibraryAssignments(instance, profileId);
         profileModule.loadFilenameMappings(instance, profile);
+        profileModule.loadTagMappings(instance, profile);
+        if (instance.safeZonesModule) {
+            instance.safeZonesModule.load(profile.Settings.SafeZones || []);
+        }
         require(['configurationpage?name=EmbyIconsConfigurationUIHandlers'], (uiHandlers) => {
             uiHandlers.triggerPreviewUpdate(instance);
             uiHandlers.updateAllPriorityGroups(instance);

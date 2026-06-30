@@ -6,6 +6,7 @@ using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
@@ -393,6 +394,11 @@ namespace EmbyIcons
                 {
                     Name = "EmbyIconsConfigurationRenameProfileTemplate",
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.EmbyIconsConfiguration.RenameProfileTemplate.html"
+                },
+                new PluginPageInfo
+                {
+                    Name = "EmbyIconsConfigurationSafeZones",
+                    EmbeddedResourcePath = GetType().Namespace + ".Configuration.EmbyIconsConfiguration.SafeZones.js"
                 }
             };
         }
@@ -521,6 +527,10 @@ namespace EmbyIcons
                 else if (e.Item is Series)
                 {
                     seriesIdToClear = e.Item.Id;
+                }
+                else if (e.Item is Movie)
+                {
+                    enhancer.InvalidateMovieProviderPathCache(e.Item);
                 }
 
                 if (seasonIdToClear != Guid.Empty)

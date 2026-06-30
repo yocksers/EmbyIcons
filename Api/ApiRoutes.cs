@@ -20,5 +20,6 @@
         public const string TemplateCacheStats = "/EmbyIcons/TemplateCacheStats";
         public const string ClearTemplateCache = "/EmbyIcons/ClearTemplateCache";
         public const string ItemsByIcon = "/EmbyIcons/ItemsByIcon";
+        public const string StaticImage = "/EmbyIcons/StaticImage/{Name}";
     }
 }

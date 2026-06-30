@@ -106,7 +106,6 @@ namespace EmbyIcons
                 SubtitleLanguages = new HashSet<string> { GetRandom(IconCacheManager.IconType.Subtitle, "english") },
                 AudioCodecs = new HashSet<string> { GetRandom(IconCacheManager.IconType.AudioCodec, "dts"), GetRandom(IconCacheManager.IconType.AudioCodec, "aac") },
                 VideoCodecs = new HashSet<string> { GetRandom(IconCacheManager.IconType.VideoCodec, "h264") },
-                Tags = new HashSet<string> { "placeholder_for_preview" },
                 ChannelIconName = GetRandom(IconCacheManager.IconType.Channel, "5.1"),
                 VideoFormatIconName = GetRandom(IconCacheManager.IconType.VideoFormat, "hdr"),
                 ResolutionIconName = GetRandom(IconCacheManager.IconType.Resolution, "1080p"),
@@ -120,7 +119,17 @@ namespace EmbyIcons
                 ParentalRatingIconName = GetRandom(IconCacheManager.IconType.ParentalRating, "pg-13"),
                 FrameRateIconName = GetRandom(IconCacheManager.IconType.FrameRate, "23.976"),
                 OriginalLanguageIconName = GetRandom(IconCacheManager.IconType.OriginalLanguage, "english"),
-                SeriesStatusIconName = GetRandom(IconCacheManager.IconType.SeriesStatus, "running")
+                SeriesStatusIconName = GetRandom(IconCacheManager.IconType.SeriesStatus, "running"),
+                TagBasedIcons = profileSettings.TagBasedIcons
+                    .Where(m => m.IconAlignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(m.TagName))
+                    .Select(m => new FilenameBasedIconData
+                    {
+                        IconName = m.TagName.ToLowerInvariant(),
+                        Alignment = m.IconAlignment,
+                        Priority = m.Priority,
+                        HorizontalLayout = m.HorizontalLayout
+                    })
+                    .ToList()
             };
 
             var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();

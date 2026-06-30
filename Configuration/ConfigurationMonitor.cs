@@ -140,6 +140,30 @@ namespace EmbyIcons.Configuration
             if (oldS.ShowSeriesIconsIfAllEpisodesHaveLanguage != newS.ShowSeriesIconsIfAllEpisodesHaveLanguage) return true;
             if (oldS.ExcludeSpecialsFromSeriesAggregation != newS.ExcludeSpecialsFromSeriesAggregation) return true;
 
+            if (oldS.FilenameBasedIcons.Count != newS.FilenameBasedIcons.Count) return true;
+            for (int i = 0; i < oldS.FilenameBasedIcons.Count; i++)
+            {
+                var o = oldS.FilenameBasedIcons[i];
+                var n = newS.FilenameBasedIcons[i];
+                if (o.Keyword != n.Keyword || o.IconName != n.IconName || o.IconAlignment != n.IconAlignment ||
+                    o.Priority != n.Priority || o.HorizontalLayout != n.HorizontalLayout ||
+                    o.ApplyToMovies != n.ApplyToMovies || o.ApplyToSeries != n.ApplyToSeries ||
+                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes)
+                    return true;
+            }
+
+            if (oldS.TagBasedIcons.Count != newS.TagBasedIcons.Count) return true;
+            for (int i = 0; i < oldS.TagBasedIcons.Count; i++)
+            {
+                var o = oldS.TagBasedIcons[i];
+                var n = newS.TagBasedIcons[i];
+                if (o.TagName != n.TagName || o.IconAlignment != n.IconAlignment ||
+                    o.Priority != n.Priority || o.HorizontalLayout != n.HorizontalLayout ||
+                    o.ApplyToMovies != n.ApplyToMovies || o.ApplyToSeries != n.ApplyToSeries ||
+                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes)
+                    return true;
+            }
+
             return false;
         }
 
@@ -158,7 +182,9 @@ namespace EmbyIcons.Configuration
                    s.FrameRateIconAlignment != IconAlignment.Disabled || s.OriginalLanguageIconAlignment != IconAlignment.Disabled ||
                    s.SeriesStatusIconAlignment != IconAlignment.Disabled ||
                    s.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled || s.PopcornScoreIconAlignment != IconAlignment.Disabled ||
-                   s.MyAnimeListScoreIconAlignment != IconAlignment.Disabled;
+                   s.MyAnimeListScoreIconAlignment != IconAlignment.Disabled ||
+                   s.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled) ||
+                   s.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled);
         }
 
         private List<BaseItem> GetItemsForLibraries(List<string> libraryIds)

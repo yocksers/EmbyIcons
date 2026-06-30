@@ -76,7 +76,79 @@
         return newRow;
     }
 
+    function createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout) {
+        const newRow = document.createElement('div');
+        newRow.classList.add('tagMappingRow');
+        newRow.style.display = 'flex';
+        newRow.style.gap = '1em';
+        newRow.style.alignItems = 'flex-start';
+        newRow.style.marginBottom = '1.5em';
+        newRow.style.padding = '1em';
+        newRow.style.backgroundColor = 'rgba(255,255,255,0.02)';
+        newRow.style.borderRadius = '8px';
+
+        const moviesChecked = (applyToMovies !== false) ? 'checked' : '';
+        const seriesChecked = (applyToSeries !== false) ? 'checked' : '';
+        const seasonsChecked = (applyToSeasons !== false) ? 'checked' : '';
+        const episodesChecked = (applyToEpisodes !== false) ? 'checked' : '';
+        const horizontalChecked = (horizontalLayout === true) ? 'checked' : '';
+
+        const alignment = iconAlignment || 'BottomLeft';
+        const priorityVal = priority || 6;
+
+        newRow.innerHTML = `
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1em;">
+                <div style="display: flex; gap: 1em;">
+                    <div class="inputContainer" style="flex-grow: 1; margin: 0;">
+                        <input is="emby-input" type="text" label="Tag Name:" value="${tagName || ''}" class="txtTagName" />
+                        <div class="fieldDescription">Exact tag name (case-insensitive). Uses <code>tag.tagname.png</code>.</div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1em;">
+                    <select is="emby-select" label="Corner" class="selTagIconAlignment">
+                        <option value="Disabled" ${alignment === 'Disabled' ? 'selected' : ''}>Disabled</option>
+                        <option value="TopLeft" ${alignment === 'TopLeft' ? 'selected' : ''}>Top Left</option>
+                        <option value="TopRight" ${alignment === 'TopRight' ? 'selected' : ''}>Top Right</option>
+                        <option value="BottomLeft" ${alignment === 'BottomLeft' ? 'selected' : ''}>Bottom Left</option>
+                        <option value="BottomRight" ${alignment === 'BottomRight' ? 'selected' : ''}>Bottom Right</option>
+                    </select>
+                    <select is="emby-select" label="Priority" class="selTagPriority">
+                        ${Array.from({length: 20}, (_, i) => i + 1).map(i =>
+                            `<option value="${i}" ${i === priorityVal ? 'selected' : ''}>${i}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1.5em; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToMovies" ${moviesChecked} />
+                        <span>Movies</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToSeries" ${seriesChecked} />
+                        <span>TV Shows</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToSeasons" ${seasonsChecked} />
+                        <span>Seasons</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToEpisodes" ${episodesChecked} />
+                        <span>Episodes</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagHorizontalLayout" ${horizontalChecked} />
+                        <span>Layout Horizontally</span>
+                    </label>
+                </div>
+            </div>
+            <button is="emby-button" type="button" class="raised button-cancel btnDeleteTagMapping" title="Delete Mapping" style="flex-shrink: 0;"><span></span></button>
+        `;
+
+        return newRow;
+    }
+
     return {
-        createFilenameMappingRow: createFilenameMappingRow
+        createFilenameMappingRow: createFilenameMappingRow,
+        createTagMappingRow: createTagMappingRow
     };
 });

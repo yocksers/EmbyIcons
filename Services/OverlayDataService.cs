@@ -83,6 +83,70 @@ namespace EmbyIcons.Services
             }
         }
 
+        private string[] QueryAndCacheMoviePaths(string providerIdKey, string providerIdValue, string cacheKey)
+        {
+            string[] paths;
+            var query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { "Movie" },
+                Recursive = true,
+                AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
+                Limit = 50
+            };
+            try
+            {
+                paths = _libraryManager.GetItemList(query)
+                    .OfType<Movie>()
+                    .Where(v => !string.IsNullOrEmpty(v.Path))
+                    .Select(v => v.Path!.ToLowerInvariant())
+                    .Distinct()
+                    .Take(50)
+                    .ToArray();
+            }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
+                paths = Array.Empty<string>();
+            }
+
+            var cacheEntryOptions = new MemoryCacheEntryOptions()
+                .SetSize(1)
+                .SetSlidingExpiration(TimeSpan.FromHours(6))
+                .RegisterPostEvictionCallback((key, value, reason, state) =>
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Provider path cache entry evicted: {key} Reason: {reason}");
+                });
+
+            _providerPathCache.Set(cacheKey, paths, cacheEntryOptions);
+            return paths;
+        }
+
+        public void InvalidateProviderPathCacheForItem(BaseItem item)
+        {
+            if (item is not Movie movieItem) return;
+            try
+            {
+                foreach (var key in movieItem.ProviderIds.Keys)
+                {
+                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) ||
+                        key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (movieItem.ProviderIds.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
+                        {
+                            var cacheKey = $"{key}:{value}";
+                            _providerPathCache.Remove(cacheKey);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    _enhancer.Logger.Debug($"[EmbyIcons] Error invalidating provider path cache for '{item.Name}': {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             var logger = _enhancer?.Logger;
@@ -467,12 +531,47 @@ namespace EmbyIcons.Services
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item, ProfileSettings profileOptions)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var tagBasedIcons = new List<FilenameBasedIconData>();
+
             if (item.Tags != null && item.Tags.Length > 0)
             {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isSeries = item is Series;
+                bool isSeason = item is Season;
+
                 foreach (var tag in item.Tags)
                 {
                     var nt = NormalizeTag(tag);
-                    if (!string.IsNullOrEmpty(nt)) tags.Add(nt);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isSeries ? mapping.ApplyToSeries
+                                             : isSeason ? mapping.ApplyToSeasons
+                                             : mapping.ApplyToMovies || mapping.ApplyToSeries;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName = nt,
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                    {
+                        tags.Add(nt);
+                    }
                 }
             }
 
@@ -509,6 +608,7 @@ namespace EmbyIcons.Services
                 Tags = tags,
                 SourceIcons = aggResult.SourceIcons,
                 FilenameBasedIcons = aggResult.FilenameBasedIcons,
+                TagBasedIcons = tagBasedIcons,
                 AspectRatioIconName = aggResult.AspectRatios.FirstOrDefault(),
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
@@ -635,13 +735,56 @@ namespace EmbyIcons.Services
                     }
                 }
                 
+                var cachedTagBasedIcons = new List<FilenameBasedIconData>();
+                var cachedGlobalTags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+                if (cachedInfo.Tags.Count > 0)
+                {
+                    bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                    bool isMovie = item is Movie;
+                    bool isEpisode = item is Episode;
+
+                    foreach (var tag in cachedInfo.Tags)
+                    {
+                        bool mappedAtLeastOnce = false;
+                        if (hasTagMappings)
+                        {
+                            foreach (var mapping in profileOptions.TagBasedIcons)
+                            {
+                                if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                    continue;
+                                bool shouldApply = isMovie ? mapping.ApplyToMovies
+                                                 : isEpisode ? mapping.ApplyToEpisodes
+                                                 : true;
+                                if (shouldApply && string.Equals(mapping.TagName, tag, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    cachedTagBasedIcons.Add(new FilenameBasedIconData
+                                    {
+                                        IconName = tag,
+                                        Alignment = mapping.IconAlignment,
+                                        Priority = mapping.Priority,
+                                        HorizontalLayout = mapping.HorizontalLayout
+                                    });
+                                    mappedAtLeastOnce = true;
+                                }
+                            }
+                        }
+
+                        if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                        {
+                            cachedGlobalTags.Add(tag);
+                        }
+                    }
+                }
+
                 var cachedOverlayData = new OverlayData
                 {
                     AudioLanguages = cachedInfo.AudioLangs,
                     SubtitleLanguages = cachedInfo.SubtitleLangs,
                     AudioCodecs = cachedInfo.AudioCodecs,
                     VideoCodecs = cachedInfo.VideoCodecs,
-                    Tags = cachedInfo.Tags,
+                    Tags = cachedGlobalTags,
+                    TagBasedIcons = cachedTagBasedIcons,
                     SourceIcons = cachedInfo.SourceIcons,
                     ChannelIconName = cachedInfo.ChannelIconName,
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
@@ -808,41 +951,16 @@ namespace EmbyIcons.Services
                     var cacheKey = $"{providerIdKey}:{providerIdValue}";
                     if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
                     {
-                        var query = new InternalItemsQuery
+                        cachedPaths = QueryAndCacheMoviePaths(providerIdKey, providerIdValue, cacheKey);
+                    }
+                    else if (!string.IsNullOrEmpty(movieItem.Path))
+                    {
+                        var currentPathLower = movieItem.Path.ToLowerInvariant();
+                        if (!cachedPaths.Contains(currentPathLower))
                         {
-                            IncludeItemTypes = new[] { "Movie" },
-                            Recursive = true,
-                            AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
-                            Limit = 50
-                        };
-                        try
-                        {
-                            cachedPaths = _libraryManager.GetItemList(query)
-                                .OfType<Movie>()
-                                .Where(v => !string.IsNullOrEmpty(v.Path))
-                                .Select(v => v.Path!.ToLowerInvariant())
-                                .Distinct()
-                                .Take(50)
-                                .ToArray();
+                            _providerPathCache.Remove(cacheKey);
+                            cachedPaths = QueryAndCacheMoviePaths(providerIdKey, providerIdValue, cacheKey);
                         }
-                        catch (Exception ex)
-                        {
-                            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
-                            cachedPaths = Array.Empty<string>();
-                        }
-
-                        var cacheEntryOptions = new MemoryCacheEntryOptions()
-                            .SetSize(1)
-                            .SetSlidingExpiration(TimeSpan.FromHours(6))
-                            .RegisterPostEvictionCallback((key, value, reason, state) =>
-                            {
-                                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                                {
-                                    _enhancer.Logger.Debug($"[EmbyIcons] Provider path cache entry evicted: {key} Reason: {reason}");
-                                }
-                            });
-
-                        _providerPathCache.Set(cacheKey, cachedPaths ?? Array.Empty<string>(), cacheEntryOptions);
                     }
 
                     allPaths = cachedPaths ?? Array.Empty<string>();
@@ -899,12 +1017,45 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (profileOptions.TagIconAlignment != IconAlignment.Disabled && item.Tags != null && item.Tags.Length > 0)
+            if (item.Tags != null && item.Tags.Length > 0)
             {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isMovie = item is Movie;
+                bool isEpisode = item is Episode;
+
                 foreach (var tag in item.Tags)
                 {
                     var nt = NormalizeTag(tag);
-                    if (!string.IsNullOrEmpty(nt)) data.Tags.Add(nt);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isMovie ? mapping.ApplyToMovies
+                                             : isEpisode ? mapping.ApplyToEpisodes
+                                             : true;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                data.TagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName = nt,
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                    {
+                        data.Tags.Add(nt);
+                    }
                 }
             }
 

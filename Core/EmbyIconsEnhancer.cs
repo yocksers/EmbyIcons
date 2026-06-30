@@ -199,6 +199,11 @@ namespace EmbyIcons
             _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
         }
 
+        public void InvalidateMovieProviderPathCache(BaseItem item)
+        {
+            _overlayDataService.InvalidateProviderPathCacheForItem(item);
+        }
+
         public void ForceSeriesRefresh(Guid seriesId)
         {
             ClearSeriesAggregationCache(seriesId);
@@ -325,7 +330,9 @@ namespace EmbyIcons
                    options.SeriesStatusIconAlignment != IconAlignment.Disabled ||
                    options.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled ||
                    options.PopcornScoreIconAlignment != IconAlignment.Disabled ||
-                   options.MyAnimeListScoreIconAlignment != IconAlignment.Disabled;
+                   options.MyAnimeListScoreIconAlignment != IconAlignment.Disabled ||
+                   options.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled) ||
+                   options.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled);
         }
 
         private static string SanitizeTagForKey(string tag)
@@ -436,7 +443,8 @@ namespace EmbyIcons
               .Append('.').Append(options.BottomIconBarHeight)
               .Append('.').Append(Uri.EscapeDataString(options.BottomIconBarColor ?? string.Empty))
               .Append('.').Append(options.BottomIconBarOpacity)
-              .Append('.').Append(options.BottomIconBarOverlay ? 1 : 0);
+              .Append('.').Append(options.BottomIconBarOverlay ? 1 : 0)
+              .Append('.').Append(options.OnlyDrawBarsWhenIconsPresent ? 1 : 0);
 
             if (item is Series series)
             {

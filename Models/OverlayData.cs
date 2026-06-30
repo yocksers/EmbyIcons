@@ -12,6 +12,7 @@ namespace EmbyIcons.Models
         public HashSet<string> Tags { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public HashSet<string> SourceIcons { get; set; } = new(System.StringComparer.OrdinalIgnoreCase);
         public List<FilenameBasedIconData> FilenameBasedIcons { get; set; } = new();
+        public List<FilenameBasedIconData> TagBasedIcons { get; set; } = new();
         public string? ChannelIconName { get; set; }
         public string? VideoFormatIconName { get; set; }
         public string? ResolutionIconName { get; set; }

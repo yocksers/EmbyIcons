@@ -75,6 +75,9 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         if (dom.btnAddFilenameMapping) dom.btnAddFilenameMapping.addEventListener('click', instance.addFilenameMappingRow.bind(instance, null));
         if (dom.filenameMappingsContainer) dom.filenameMappingsContainer.addEventListener('click', instance.onFilenameMappingButtonClick.bind(instance));
 
+        if (dom.btnAddTagMapping) dom.btnAddTagMapping.addEventListener('click', instance.addTagMappingRow.bind(instance, null));
+        if (dom.tagMappingsContainer) dom.tagMappingsContainer.addEventListener('click', instance.onTagMappingButtonClick.bind(instance));
+
         if (dom.btnExpandAll) dom.btnExpandAll.addEventListener('click', () => utils.expandAllSections(instance.view));
         if (dom.btnCollapseAll) dom.btnCollapseAll.addEventListener('click', () => utils.collapseAllSections(instance.view));
 

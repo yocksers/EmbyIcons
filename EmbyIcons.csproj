@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.54.5</Version>
-		<AssemblyVersion>5.54.5.0</AssemblyVersion>
-		<FileVersion>5.54.5.0</FileVersion>
+		<Version>5.55.3</Version>
+		<AssemblyVersion>5.55.3.0</AssemblyVersion>
+		<FileVersion>5.55.3.0</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 
@@ -20,14 +20,6 @@
 
 	<ItemGroup>
 		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.aac.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.ac3.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.dts-hdma.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.dts.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.eac3.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.flac.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.mp3.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ac.truehd.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_aac.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_ac3.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_dts-hdma.png" />
@@ -36,15 +28,11 @@
 		<EmbeddedResource Include="EmbeddedIcons\ac_flac.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_mp3.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_truehd.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ar..4x3.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_160x67.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_16x9.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_2.40x1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_40x17.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ch.5.1.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ch.7.1.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ch.Mono.png" />
-		<EmbeddedResource Include="EmbeddedIcons\ch.stereo.png" />
+		<EmbeddedResource Include="EmbeddedIcons\ar_4x3.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_5.1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_7.1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_Mono.png" />
@@ -56,9 +44,6 @@
 		<EmbeddedResource Include="EmbeddedIcons\fps_30.png" />
 		<EmbeddedResource Include="EmbeddedIcons\fps_60.jpg" />
 		<EmbeddedResource Include="EmbeddedIcons\fps_60.png" />
-		<EmbeddedResource Include="EmbeddedIcons\hdr.dv.png" />
-		<EmbeddedResource Include="EmbeddedIcons\hdr.hdr.png" />
-		<EmbeddedResource Include="EmbeddedIcons\hdr.hdr10plus.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_dv.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr10plus.png" />
@@ -84,16 +69,6 @@
 		<EmbeddedResource Include="EmbeddedIcons\pr_tv-pg.png" />
 		<EmbeddedResource Include="EmbeddedIcons\rating_imdb.png" />
 		<EmbeddedResource Include="EmbeddedIcons\r_mal.png" />
-		<EmbeddedResource Include="EmbeddedIcons\t.spilledpopcorn.png" />
-		<EmbeddedResource Include="EmbeddedIcons\t_fresh.png" />
-		<EmbeddedResource Include="EmbeddedIcons\t_popcorn.png" />
-		<EmbeddedResource Include="EmbeddedIcons\t_splat.png" />
-		<EmbeddedResource Include="EmbeddedIcons\t_tomato.png" />
-		<EmbeddedResource Include="EmbeddedIcons\res.1080p.png" />
-		<EmbeddedResource Include="EmbeddedIcons\res.480p.png" />
-		<EmbeddedResource Include="EmbeddedIcons\res.4k.png" />
-		<EmbeddedResource Include="EmbeddedIcons\res.576p.png" />
-		<EmbeddedResource Include="EmbeddedIcons\res.720p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_1080p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_480p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\res_4k.png" />
@@ -110,12 +85,11 @@
 		<EmbeddedResource Include="EmbeddedIcons\sub_japanese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_norwegian.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_swedish.png" />
-		<EmbeddedResource Include="EmbeddedIcons\tag_bob.png" />
-		<EmbeddedResource Include="EmbeddedIcons\vc.av1.png" />
-		<EmbeddedResource Include="EmbeddedIcons\vc.avc.png" />
-		<EmbeddedResource Include="EmbeddedIcons\vc.h264.png" />
-		<EmbeddedResource Include="EmbeddedIcons\vc.hevc.png" />
-		<EmbeddedResource Include="EmbeddedIcons\vc.mp4.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t.spilledpopcorn.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_fresh.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_popcorn.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_splat.png" />
+		<EmbeddedResource Include="EmbeddedIcons\t_tomato.png" />
 		<EmbeddedResource Include="EmbeddedIcons\vc.mpeg4.png" />
 		<EmbeddedResource Include="EmbeddedIcons\vc.vc1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\vc.vp9.png" />
@@ -139,6 +113,7 @@
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Profile.js" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Scans.js" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Api.js" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.SafeZones.js" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Settings.html" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Advanced.html" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconManager.html" />
