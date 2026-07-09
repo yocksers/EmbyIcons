@@ -27,15 +27,13 @@ namespace EmbyIcons.Helpers
                     try { File.Replace(tempOutput, outputFile, null); }
                     catch (System.IO.IOException)
                     {
-                        try
+                        if (File.Exists(outputFile)) File.Copy(tempOutput, outputFile, overwrite: true);
+                        else File.Move(tempOutput, outputFile);
+
+                        try { File.Delete(tempOutput); }
+                        catch (Exception cleanupEx)
                         {
-                            if (File.Exists(outputFile)) File.Copy(tempOutput, outputFile, overwrite: true);
-                            else File.Move(tempOutput, outputFile);
-                            if (File.Exists(tempOutput)) File.Delete(tempOutput);
-                        }
-                        catch
-                        {
-                            throw;
+                            Plugin.Instance?.Logger?.Warn($"[EmbyIcons] Failed to delete temp file '{tempOutput}': {cleanupEx.Message}");
                         }
                     }
                 }

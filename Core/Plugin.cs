@@ -248,6 +248,7 @@ namespace EmbyIcons
 #pragma warning restore CS0612
 
                     _logger.Info($"[EmbyIcons] Background migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
+                    cancellationToken.ThrowIfCancellationRequested();
                     SaveConfiguration();
 
                     lock (_migrationLock)

@@ -206,6 +206,29 @@
         <div class="collapsible-section" style="margin-top: 1.5em;">
             <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
                 <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
+                <span>Music Settings</span>
+            </h3>
+            <div class="collapsible-content" style="display: none; margin-top: 1em;">
+                <div class="paper-card" style="padding: 1.5em;">
+        <div class="checkboxContainer checkboxContainer-withDescription">
+            <label><input is="emby-checkbox" type="checkbox" data-profile-key="EnableMusicAlbumAggregation" /><span>Show icons on album and artist images</span></label>
+            <div class="fieldDescription checkboxFieldDescription">Aggregates audio properties from child tracks. Codec, channel, sample rate, bitrate, and bit depth icons appear when they are common across all tracks in the album.</div>
+        </div>
+        <div class="checkboxContainer checkboxContainer-withDescription">
+            <label><input is="emby-checkbox" type="checkbox" data-profile-key="UseMusicAlbumLiteMode" /><span>Use Lite Mode for music album scans</span></label>
+            <div class="fieldDescription checkboxFieldDescription">Faster, but less accurate. Only checks the first track to determine icons for the entire album or artist.</div>
+        </div>
+        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 0.5em;">
+            <label><input is="emby-checkbox" type="checkbox" data-profile-key="NormalizeMusicPosterAspectRatio" /><span>Normalize music posters to 1:1 before applying overlays</span></label>
+            <div class="fieldDescription checkboxFieldDescription">Center-crops music album and artist images to a square ratio before drawing icons, matching the standard square format used by music artwork.</div>
+        </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="collapsible-section" style="margin-top: 1.5em;">
+            <h3 class="collapsible-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5em; background-color: #52B54B; color: white; padding: 0.6em 1em; border-radius: 16px;">
+                <i class="md-icon collapse-icon" style="transition: transform 0.2s;">expand_more</i>
                 <span>Alignment & Layout</span>
             </h3>
             <div class="collapsible-content" style="display: none; margin-top: 1em;">
@@ -304,6 +327,111 @@
                         </div>
                         <div class="checkboxContainer" style="margin-top: 1.5em;">
                             <label><input is="emby-checkbox" type="checkbox" data-profile-key="AudioCodecOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                            <select is="emby-select" label="Sample Rate Icons (e.g., 44.1k, 48k, 96k)" data-profile-key="SampleRateIconAlignment" data-corner-group="TopLeft">
+                                <option value="Disabled">Disabled</option>
+                                <option value="TopLeft">Top Left</option>
+                                <option value="TopRight">Top Right</option>
+                                <option value="BottomLeft">Bottom Left</option>
+                                <option value="BottomRight">Bottom Right</option>
+                            </select>
+                            <select is="emby-select" label="Priority" data-profile-key="SampleRateIconPriority" data-corner-group="TopLeft">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                                <option value="17">17</option>
+                                <option value="18">18</option>
+                            </select>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="SampleRateOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                            <select is="emby-select" label="Audio Bitrate Icons (e.g., 128, 320, lossless)" data-profile-key="AudioBitRateIconAlignment" data-corner-group="TopLeft">
+                                <option value="Disabled">Disabled</option>
+                                <option value="TopLeft">Top Left</option>
+                                <option value="TopRight">Top Right</option>
+                                <option value="BottomLeft">Bottom Left</option>
+                                <option value="BottomRight">Bottom Right</option>
+                            </select>
+                            <select is="emby-select" label="Priority" data-profile-key="AudioBitRateIconPriority" data-corner-group="TopLeft">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                                <option value="17">17</option>
+                                <option value="18">18</option>
+                                <option value="19">19</option>
+                            </select>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="AudioBitRateOverlayHorizontal" /><span>Layout Horizontally</span></label>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0 1em;">
+                            <select is="emby-select" label="Bit Depth Icons (e.g., 16, 24, 32)" data-profile-key="BitDepthIconAlignment" data-corner-group="TopLeft">
+                                <option value="Disabled">Disabled</option>
+                                <option value="TopLeft">Top Left</option>
+                                <option value="TopRight">Top Right</option>
+                                <option value="BottomLeft">Bottom Left</option>
+                                <option value="BottomRight">Bottom Right</option>
+                            </select>
+                            <select is="emby-select" label="Priority" data-profile-key="BitDepthIconPriority" data-corner-group="TopLeft">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                                <option value="17">17</option>
+                                <option value="18">18</option>
+                                <option value="19">19</option>
+                                <option value="20">20</option>
+                            </select>
+                        </div>
+                        <div class="checkboxContainer" style="margin-top: 1.5em;">
+                            <label><input is="emby-checkbox" type="checkbox" data-profile-key="BitDepthOverlayHorizontal" /><span>Layout Horizontally</span></label>
                         </div>
                     </div>
                 </div>

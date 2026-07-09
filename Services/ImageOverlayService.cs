@@ -46,7 +46,10 @@ namespace EmbyIcons.Services
             new(p => p.SourceIconAlignment, p => p.SourceIconPriority, p => p.SourceOverlayHorizontal, IconCacheManager.IconType.Source, d => d.SourceIcons),
             new(p => p.FrameRateIconAlignment, p => p.FrameRateIconPriority, p => p.FrameRateOverlayHorizontal, IconCacheManager.IconType.FrameRate, d => d.FrameRateIconName != null ? new[] { d.FrameRateIconName } : null),
             new(p => p.OriginalLanguageIconAlignment, p => p.OriginalLanguageIconPriority, p => p.OriginalLanguageOverlayHorizontal, IconCacheManager.IconType.OriginalLanguage, d => d.OriginalLanguageIconName != null ? new[] { d.OriginalLanguageIconName } : null),
-            new(p => p.SeriesStatusIconAlignment, p => p.SeriesStatusIconPriority, p => p.SeriesStatusOverlayHorizontal, IconCacheManager.IconType.SeriesStatus, d => d.SeriesStatusIconName != null ? new[] { d.SeriesStatusIconName } : null)
+            new(p => p.SeriesStatusIconAlignment, p => p.SeriesStatusIconPriority, p => p.SeriesStatusOverlayHorizontal, IconCacheManager.IconType.SeriesStatus, d => d.SeriesStatusIconName != null ? new[] { d.SeriesStatusIconName } : null),
+            new(p => p.SampleRateIconAlignment, p => p.SampleRateIconPriority, p => p.SampleRateOverlayHorizontal, IconCacheManager.IconType.SampleRate, d => d.SampleRateIconName != null ? new[] { d.SampleRateIconName } : null),
+            new(p => p.AudioBitRateIconAlignment, p => p.AudioBitRateIconPriority, p => p.AudioBitRateOverlayHorizontal, IconCacheManager.IconType.AudioBitRate, d => d.AudioBitRateIconName != null ? new[] { d.AudioBitRateIconName } : null),
+            new(p => p.BitDepthIconAlignment, p => p.BitDepthIconPriority, p => p.BitDepthOverlayHorizontal, IconCacheManager.IconType.BitDepth, d => d.BitDepthIconName != null ? new[] { d.BitDepthIconName } : null)
         }.AsReadOnly();
 
         public ImageOverlayService(ILogger logger, IconCacheManager iconCache)
@@ -527,7 +530,7 @@ namespace EmbyIcons.Services
             float maxHeightOfCurrentRow = 0;
             int rowCount = 1;
             const int maxRows = 2;
-            var rowWidthLimit = context.CanvasWidth - (cornerHPadding * 2);
+            var rowWidthLimit = Math.Max(1, context.CanvasWidth - (cornerHPadding * 2));
 
             foreach (var item in horizontalDrawableItems)
             {

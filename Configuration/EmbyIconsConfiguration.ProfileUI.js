@@ -57,7 +57,7 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
         const container = instance.dom.librarySelectionContainer;
         if (!instance.allLibraries) {
             const virtualFolders = await ApiClient.getVirtualFolders();
-            const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
+            const ignoredLibraryTypes = ['collections', 'playlists', 'boxsets'];
             instance.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
         }
 

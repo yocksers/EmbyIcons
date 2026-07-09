@@ -107,6 +107,9 @@ namespace EmbyIcons.Configuration
             if (oldS.ParentalRatingIconAlignment != newS.ParentalRatingIconAlignment) return true;
             if (oldS.SourceIconAlignment != newS.SourceIconAlignment) return true;
             if (oldS.RottenTomatoesScoreIconAlignment != newS.RottenTomatoesScoreIconAlignment) return true;
+            if (oldS.SampleRateIconAlignment != newS.SampleRateIconAlignment) return true;
+            if (oldS.AudioBitRateIconAlignment != newS.AudioBitRateIconAlignment) return true;
+            if (oldS.BitDepthIconAlignment != newS.BitDepthIconAlignment) return true;
 
             if (oldS.AudioOverlayHorizontal != newS.AudioOverlayHorizontal) return true;
             if (oldS.SubtitleOverlayHorizontal != newS.SubtitleOverlayHorizontal) return true;
@@ -119,6 +122,9 @@ namespace EmbyIcons.Configuration
             if (oldS.AspectRatioOverlayHorizontal != newS.AspectRatioOverlayHorizontal) return true;
             if (oldS.ParentalRatingOverlayHorizontal != newS.ParentalRatingOverlayHorizontal) return true;
             if (oldS.SourceOverlayHorizontal != newS.SourceOverlayHorizontal) return true;
+            if (oldS.SampleRateOverlayHorizontal != newS.SampleRateOverlayHorizontal) return true;
+            if (oldS.AudioBitRateOverlayHorizontal != newS.AudioBitRateOverlayHorizontal) return true;
+            if (oldS.BitDepthOverlayHorizontal != newS.BitDepthOverlayHorizontal) return true;
             if (oldS.IconSize != newS.IconSize) return true;
 
             if (oldS.AudioIconPriority != newS.AudioIconPriority) return true;
@@ -134,11 +140,18 @@ namespace EmbyIcons.Configuration
             if (oldS.ParentalRatingIconPriority != newS.ParentalRatingIconPriority) return true;
             if (oldS.SourceIconPriority != newS.SourceIconPriority) return true;
             if (oldS.RottenTomatoesScoreIconPriority != newS.RottenTomatoesScoreIconPriority) return true;
+            if (oldS.SampleRateIconPriority != newS.SampleRateIconPriority) return true;
+            if (oldS.AudioBitRateIconPriority != newS.AudioBitRateIconPriority) return true;
+            if (oldS.BitDepthIconPriority != newS.BitDepthIconPriority) return true;
 
             if (oldS.ShowOverlaysForEpisodes != newS.ShowOverlaysForEpisodes) return true;
             if (oldS.ShowOverlaysForSeasons != newS.ShowOverlaysForSeasons) return true;
             if (oldS.ShowSeriesIconsIfAllEpisodesHaveLanguage != newS.ShowSeriesIconsIfAllEpisodesHaveLanguage) return true;
             if (oldS.ExcludeSpecialsFromSeriesAggregation != newS.ExcludeSpecialsFromSeriesAggregation) return true;
+
+            if (oldS.EnableMusicAlbumAggregation != newS.EnableMusicAlbumAggregation) return true;
+            if (oldS.UseMusicAlbumLiteMode != newS.UseMusicAlbumLiteMode) return true;
+            if (oldS.NormalizeMusicPosterAspectRatio != newS.NormalizeMusicPosterAspectRatio) return true;
 
             if (oldS.FilenameBasedIcons.Count != newS.FilenameBasedIcons.Count) return true;
             for (int i = 0; i < oldS.FilenameBasedIcons.Count; i++)
@@ -148,7 +161,9 @@ namespace EmbyIcons.Configuration
                 if (o.Keyword != n.Keyword || o.IconName != n.IconName || o.IconAlignment != n.IconAlignment ||
                     o.Priority != n.Priority || o.HorizontalLayout != n.HorizontalLayout ||
                     o.ApplyToMovies != n.ApplyToMovies || o.ApplyToSeries != n.ApplyToSeries ||
-                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes)
+                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes ||
+                    o.ApplyToTracks != n.ApplyToTracks || o.ApplyToAlbums != n.ApplyToAlbums ||
+                    o.ApplyToArtists != n.ApplyToArtists)
                     return true;
             }
 
@@ -160,7 +175,9 @@ namespace EmbyIcons.Configuration
                 if (o.TagName != n.TagName || o.IconAlignment != n.IconAlignment ||
                     o.Priority != n.Priority || o.HorizontalLayout != n.HorizontalLayout ||
                     o.ApplyToMovies != n.ApplyToMovies || o.ApplyToSeries != n.ApplyToSeries ||
-                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes)
+                    o.ApplyToSeasons != n.ApplyToSeasons || o.ApplyToEpisodes != n.ApplyToEpisodes ||
+                    o.ApplyToTracks != n.ApplyToTracks || o.ApplyToAlbums != n.ApplyToAlbums ||
+                    o.ApplyToArtists != n.ApplyToArtists)
                     return true;
             }
 
@@ -183,6 +200,9 @@ namespace EmbyIcons.Configuration
                    s.SeriesStatusIconAlignment != IconAlignment.Disabled ||
                    s.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled || s.PopcornScoreIconAlignment != IconAlignment.Disabled ||
                    s.MyAnimeListScoreIconAlignment != IconAlignment.Disabled ||
+                   s.SampleRateIconAlignment != IconAlignment.Disabled ||
+                   s.AudioBitRateIconAlignment != IconAlignment.Disabled ||
+                   s.BitDepthIconAlignment != IconAlignment.Disabled ||
                    s.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled) ||
                    s.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled);
         }

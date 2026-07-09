@@ -402,8 +402,101 @@ namespace EmbyIcons.Helpers
             return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
         }
 
-        public static string? GetSeriesStatusIconName(MediaBrowser.Controller.Entities.TV.Series? series)
+        public static string? GetSampleRateIconName(MediaStream? audioStream)
         {
+            try
+            {
+                if (audioStream == null) return null;
+                var sampleRate = audioStream.SampleRate ?? 0;
+                if (sampleRate <= 0) return null;
+
+                return sampleRate switch
+                {
+                    8000   => "8k",
+                    11025  => "11.025k",
+                    12000  => "12k",
+                    16000  => "16k",
+                    22050  => "22.05k",
+                    24000  => "24k",
+                    32000  => "32k",
+                    44100  => "44.1k",
+                    48000  => "48k",
+                    64000  => "64k",
+                    88200  => "88.2k",
+                    96000  => "96k",
+                    176400 => "176.4k",
+                    192000 => "192k",
+                    352800 => "352.8k",
+                    384000 => "384k",
+                    705600 => "705.6k",
+                    768000 => "768k",
+                    _ => sampleRate.ToString(CultureInfo.InvariantCulture)
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static readonly (int UpperKbps, string Name)[] _bitRateTiers =
+        {
+            (12,           "8"),
+            (20,           "16"),
+            (28,           "24"),
+            (36,           "32"),
+            (44,           "40"),
+            (52,           "48"),
+            (60,           "56"),
+            (72,           "64"),
+            (88,           "80"),
+            (104,          "96"),
+            (120,          "112"),
+            (144,          "128"),
+            (176,          "160"),
+            (208,          "192"),
+            (240,          "224"),
+            (288,          "256"),
+            (400,          "320"),
+            (int.MaxValue,  "lossless"),
+        };
+
+        public static string? GetAudioBitRateIconName(MediaStream? audioStream)
+        {
+            try
+            {
+                if (audioStream == null) return null;
+                var bitRate = audioStream.BitRate ?? 0;
+                if (bitRate <= 0) return null;
+                var kbps = bitRate / 1000;
+                foreach (var (upperKbps, name) in _bitRateTiers)
+                {
+                    if (kbps <= upperKbps) return name;
+                }
+                return "lossless";
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static string? GetBitDepthIconName(MediaStream? audioStream)
+        {
+            try
+            {
+                if (audioStream == null) return null;
+                var bitDepth = audioStream.BitDepth ?? 0;
+                if (bitDepth <= 0) return null;
+                return bitDepth.ToString(CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static string? GetSeriesStatusIconName(MediaBrowser.Controller.Entities.TV.Series? series)        {
             if (series == null) return null;
 
             try

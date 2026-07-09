@@ -27,7 +27,10 @@ namespace EmbyIcons.Configuration
             { IconCacheManager.IconType.Source, "source" },
             { IconCacheManager.IconType.FrameRate, "fps" },
             { IconCacheManager.IconType.OriginalLanguage, "og" },
-            { IconCacheManager.IconType.SeriesStatus, "series" }
+            { IconCacheManager.IconType.SeriesStatus, "series" },
+            { IconCacheManager.IconType.SampleRate, "sr" },
+            { IconCacheManager.IconType.AudioBitRate, "abr" },
+            { IconCacheManager.IconType.BitDepth, "bd" }
         };
     }
 }

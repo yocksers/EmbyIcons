@@ -47,6 +47,9 @@ namespace EmbyIcons
             public string? FrameRateIconName { get; init; }
             public string? OriginalLanguageIconName { get; init; }
             public float? RottenTomatoesRating { get; init; }
+            public string? SampleRateIconName { get; init; }
+            public string? AudioBitRateIconName { get; init; }
+            public string? BitDepthIconName { get; init; }
             public long DateModifiedTicks { get; init; }
         }
 

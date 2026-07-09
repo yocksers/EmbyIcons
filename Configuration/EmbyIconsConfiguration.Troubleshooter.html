@@ -116,6 +116,52 @@
     <div id="movieReportContainer" style="margin-top: 2em;">
     </div>
 
+    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Music Troubleshooter</h1>
+    <p class="fieldDescription">
+        Scans your music library and reports which icon files are missing for properties found in your tracks. Useful for verifying sample rate, bitrate, codec, and channel icons are in place.
+    </p>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Checks to Perform</h3>
+        <p class="fieldDescription" style="margin-top:0;">Uncheck properties you don't care about to speed up scans and reduce report noise.</p>
+        <div id="musicTroubleshooterChecksContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1em; margin-top: 1.5em;">
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="AudioLanguage" checked /><span>Audio Language</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="AudioCodec" checked /><span>Audio Codec</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="AudioChannels" checked /><span>Audio Channels</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="SampleRate" checked /><span>Sample Rate</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="AudioBitRate" checked /><span>Audio Bitrate</span></label></div>
+            <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" data-music-check-name="BitDepth" checked /><span>Bit Depth</span></label></div>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Scan a Specific Album</h3>
+        <div class="inputContainer" style="position: relative;">
+            <input is="emby-input" type="text" id="txtAlbumSearch" label="Search for an Album:" autocomplete="off" />
+            <div id="albumSearchResults" style="position: absolute; top: 100%; left: 0; width: 100%; z-index: 1000; max-height: 250px; overflow-y: auto; display: none; background-color: #2d2d2d; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></div>
+        </div>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised button-submit" id="btnRunMusicScan">
+                <span>Scan Selected Album</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top:0;">Scan All Music</h3>
+        <p class="fieldDescription" style="margin-top:0;">
+            Scan your entire music library to find all icon values that are missing icon files. This may take a moment on a large library.
+        </p>
+        <div style="margin-top: 1.5em;">
+            <button is="emby-button" type="button" class="raised" id="btnRunFullMusicScan">
+                <span>Scan All Music for Missing Icons</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="musicReportContainer" style="margin-top: 2em;">
+    </div>
+
     <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>
     <p class="fieldDescription">
         Enter your video's resolution to find the correct icon name for its aspect ratio.

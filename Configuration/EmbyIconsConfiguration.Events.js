@@ -68,6 +68,12 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         if (dom.btnRunFullMovieScan) dom.btnRunFullMovieScan.addEventListener('click', instance.runFullMovieScan.bind(instance));
         if (dom.movieReportContainer) dom.movieReportContainer.addEventListener('click', instance.onMovieReportHeaderClick.bind(instance));
 
+        if (dom.txtAlbumSearch) dom.txtAlbumSearch.addEventListener('input', utils.debounce(instance.searchForAlbum.bind(instance), 300));
+        if (dom.albumSearchResults) dom.albumSearchResults.addEventListener('click', instance.onAlbumSearchResultClick.bind(instance));
+        if (dom.btnRunMusicScan) dom.btnRunMusicScan.addEventListener('click', instance.runMusicScan.bind(instance));
+        if (dom.btnRunFullMusicScan) dom.btnRunFullMusicScan.addEventListener('click', instance.runFullMusicScan.bind(instance));
+        if (dom.musicReportContainer) dom.musicReportContainer.addEventListener('click', instance.onMusicReportHeaderClick.bind(instance));
+
         if (dom.btnRefreshMemoryUsage) dom.btnRefreshMemoryUsage.addEventListener('click', instance.refreshMemoryUsage.bind(instance));
 
         if (dom.btnCalculateAspectRatio) dom.btnCalculateAspectRatio.addEventListener('click', instance.calculateAspectRatio.bind(instance));
@@ -87,6 +93,9 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
             }
             if (dom.movieSearchResults && dom.txtMovieSearch && !dom.movieSearchResults.contains(e.target) && !dom.txtMovieSearch.contains(e.target)) {
                 dom.movieSearchResults.style.display = 'none';
+            }
+            if (dom.albumSearchResults && dom.txtAlbumSearch && !dom.albumSearchResults.contains(e.target) && !dom.txtAlbumSearch.contains(e.target)) {
+                dom.albumSearchResults.style.display = 'none';
             }
         };
         document.addEventListener('click', instance.documentClickHandler);

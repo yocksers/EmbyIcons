@@ -41,6 +41,9 @@ define(['loading', 'toast'], function (loading, toast) {
                         ApplyToSeries: row.querySelector('.chkApplyToSeries').checked,
                         ApplyToSeasons: row.querySelector('.chkApplyToSeasons').checked,
                         ApplyToEpisodes: row.querySelector('.chkApplyToEpisodes').checked,
+                        ApplyToTracks: row.querySelector('.chkApplyToTracks').checked,
+                        ApplyToAlbums: row.querySelector('.chkApplyToAlbums').checked,
+                        ApplyToArtists: row.querySelector('.chkApplyToArtists').checked,
                         IconAlignment: row.querySelector('.selFilenameIconAlignment').value,
                         Priority: parseInt(row.querySelector('.selFilenamePriority').value, 10),
                         HorizontalLayout: row.querySelector('.chkFilenameHorizontalLayout').checked
@@ -61,6 +64,9 @@ define(['loading', 'toast'], function (loading, toast) {
                         ApplyToSeries: row.querySelector('.chkTagApplyToSeries').checked,
                         ApplyToSeasons: row.querySelector('.chkTagApplyToSeasons').checked,
                         ApplyToEpisodes: row.querySelector('.chkTagApplyToEpisodes').checked,
+                        ApplyToTracks: row.querySelector('.chkTagApplyToTracks').checked,
+                        ApplyToAlbums: row.querySelector('.chkTagApplyToAlbums').checked,
+                        ApplyToArtists: row.querySelector('.chkTagApplyToArtists').checked,
                         IconAlignment: row.querySelector('.selTagIconAlignment').value,
                         Priority: parseInt(row.querySelector('.selTagPriority').value, 10),
                         HorizontalLayout: row.querySelector('.chkTagHorizontalLayout').checked
@@ -203,6 +209,9 @@ define(['loading', 'toast'], function (loading, toast) {
             const applyToSeries = row.querySelector('.chkApplyToSeries').checked;
             const applyToSeasons = row.querySelector('.chkApplyToSeasons').checked;
             const applyToEpisodes = row.querySelector('.chkApplyToEpisodes').checked;
+            const applyToTracks = row.querySelector('.chkApplyToTracks').checked;
+            const applyToAlbums = row.querySelector('.chkApplyToAlbums').checked;
+            const applyToArtists = row.querySelector('.chkApplyToArtists').checked;
             const iconAlignment = row.querySelector('.selFilenameIconAlignment').value;
             const priority = parseInt(row.querySelector('.selFilenamePriority').value, 10);
             const horizontalLayout = row.querySelector('.chkFilenameHorizontalLayout').checked;
@@ -214,6 +223,9 @@ define(['loading', 'toast'], function (loading, toast) {
                     ApplyToSeries: applyToSeries,
                     ApplyToSeasons: applyToSeasons,
                     ApplyToEpisodes: applyToEpisodes,
+                    ApplyToTracks: applyToTracks,
+                    ApplyToAlbums: applyToAlbums,
+                    ApplyToArtists: applyToArtists,
                     IconAlignment: iconAlignment,
                     Priority: priority,
                     HorizontalLayout: horizontalLayout
@@ -348,6 +360,9 @@ define(['loading', 'toast'], function (loading, toast) {
             const applyToSeries = row.querySelector('.chkTagApplyToSeries').checked;
             const applyToSeasons = row.querySelector('.chkTagApplyToSeasons').checked;
             const applyToEpisodes = row.querySelector('.chkTagApplyToEpisodes').checked;
+            const applyToTracks = row.querySelector('.chkTagApplyToTracks').checked;
+            const applyToAlbums = row.querySelector('.chkTagApplyToAlbums').checked;
+            const applyToArtists = row.querySelector('.chkTagApplyToArtists').checked;
             const iconAlignment = row.querySelector('.selTagIconAlignment').value;
             const priority = parseInt(row.querySelector('.selTagPriority').value, 10);
             const horizontalLayout = row.querySelector('.chkTagHorizontalLayout').checked;
@@ -358,6 +373,9 @@ define(['loading', 'toast'], function (loading, toast) {
                     ApplyToSeries: applyToSeries,
                     ApplyToSeasons: applyToSeasons,
                     ApplyToEpisodes: applyToEpisodes,
+                    ApplyToTracks: applyToTracks,
+                    ApplyToAlbums: applyToAlbums,
+                    ApplyToArtists: applyToArtists,
                     IconAlignment: iconAlignment,
                     Priority: priority,
                     HorizontalLayout: horizontalLayout

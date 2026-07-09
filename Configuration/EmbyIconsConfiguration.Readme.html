@@ -2,7 +2,7 @@
     <h1 style="margin-bottom: 1em;">EmbyIcons Plugin Guide</h1>
 
     <h3>Introduction</h3>
-    <p>This plugin overlays icons for language, audio channels, video format, resolution, aspect ratio, parental rating, and community ratings onto your media posters. Provide your own icon images in a designated folder and name them according to the conventions below.</p>
+    <p>This plugin overlays icons for language, audio channels, video format, resolution, aspect ratio, parental rating, community ratings, sample rate, audio bitrate, and more onto your media posters. Music libraries are fully supported — assign a profile to a music library to show audio codec, channel, sample rate, and bitrate icons on track artwork. Album and artist images can also show aggregated icons: when all tracks in an album share the same codec, sample rate, bitrate, bit depth, or channel layout, that icon appears on the album poster too. Enable this under <strong>Music Settings</strong> in the profile. Provide your own icon images in a designated folder and name them according to the conventions below.</p>
     <p>Supported image formats for icons are <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.bmp</code>, and <code>.gif</code>.</p>
 
     <h3 style="margin-top: 2em;">System Requirements &amp; Performance</h3>
@@ -60,6 +60,64 @@
         <strong>Audio Channels (prefix: ch):</strong> <code>ch.{layout_name}.png</code><br />
         <em>{layout_name}</em> should match the audio layout reported by Emby (e.g., <code>5.1</code>, <code>7.1</code>, <code>stereo</code>).<br />
         <em>Example:</em> <code>ch.5.1.png</code>, <code>ch.7.1.png</code>, <code>ch.stereo.png</code>
+    </p>
+
+    <p>
+        <strong>Sample Rate (prefix: sr):</strong> <code>sr.{rate}.png</code><br />
+        Displays the sample rate of the primary audio stream. Common values are mapped to friendly names automatically:
+        <ul style="margin-top: .5em;">
+            <li>8000 Hz → <code>sr.8k.png</code></li>
+            <li>11025 Hz → <code>sr.11.025k.png</code></li>
+            <li>12000 Hz → <code>sr.12k.png</code></li>
+            <li>16000 Hz → <code>sr.16k.png</code></li>
+            <li>22050 Hz → <code>sr.22.05k.png</code></li>
+            <li>24000 Hz → <code>sr.24k.png</code></li>
+            <li>32000 Hz → <code>sr.32k.png</code></li>
+            <li>44100 Hz → <code>sr.44.1k.png</code></li>
+            <li>48000 Hz → <code>sr.48k.png</code></li>
+            <li>64000 Hz → <code>sr.64k.png</code></li>
+            <li>88200 Hz → <code>sr.88.2k.png</code></li>
+            <li>96000 Hz → <code>sr.96k.png</code></li>
+            <li>176400 Hz → <code>sr.176.4k.png</code></li>
+            <li>192000 Hz → <code>sr.192k.png</code></li>
+            <li>352800 Hz → <code>sr.352.8k.png</code></li>
+            <li>384000 Hz → <code>sr.384k.png</code></li>
+            <li>705600 Hz → <code>sr.705.6k.png</code></li>
+            <li>768000 Hz → <code>sr.768k.png</code></li>
+        </ul>
+        Any other sample rate value will use the raw Hz number as the icon name. This icon is particularly useful for music libraries.
+    </p>
+
+    <p>
+        <strong>Audio Bitrate (prefix: abr):</strong> <code>abr.{tier}.png</code><br />
+        Displays the bitrate of the primary audio stream, snapped to the nearest common tier. The tiers are:
+        <ul style="margin-top: .5em;">
+            <li>&le; 12 kbps &rarr; <code>abr.8.png</code></li>
+            <li>13&ndash;20 kbps &rarr; <code>abr.16.png</code></li>
+            <li>21&ndash;28 kbps &rarr; <code>abr.24.png</code></li>
+            <li>29&ndash;36 kbps &rarr; <code>abr.32.png</code></li>
+            <li>37&ndash;44 kbps &rarr; <code>abr.40.png</code></li>
+            <li>45&ndash;52 kbps &rarr; <code>abr.48.png</code></li>
+            <li>53&ndash;60 kbps &rarr; <code>abr.56.png</code></li>
+            <li>61&ndash;72 kbps &rarr; <code>abr.64.png</code></li>
+            <li>73&ndash;88 kbps &rarr; <code>abr.80.png</code></li>
+            <li>89&ndash;104 kbps &rarr; <code>abr.96.png</code></li>
+            <li>105&ndash;120 kbps &rarr; <code>abr.112.png</code></li>
+            <li>121&ndash;144 kbps &rarr; <code>abr.128.png</code></li>
+            <li>145&ndash;176 kbps &rarr; <code>abr.160.png</code></li>
+            <li>177&ndash;208 kbps &rarr; <code>abr.192.png</code></li>
+            <li>209&ndash;240 kbps &rarr; <code>abr.224.png</code></li>
+            <li>241&ndash;288 kbps &rarr; <code>abr.256.png</code></li>
+            <li>289&ndash;400 kbps &rarr; <code>abr.320.png</code></li>
+            <li>&gt; 400 kbps &rarr; <code>abr.lossless.png</code> (FLAC, ALAC, WAV, etc.)</li>
+        </ul>
+        This is particularly useful for music libraries to distinguish lossless from compressed audio files.
+    </p>
+
+    <p>
+        <strong>Bit Depth (prefix: bd):</strong> <code>bd.{bits}.png</code><br />
+        Displays the bit depth of the primary audio stream. Common values are 16-bit (CD quality) and 24-bit (hi-res audio).<br />
+        <em>Example:</em> <code>bd.16.png</code>, <code>bd.24.png</code>, <code>bd.32.png</code>
     </p>
 
     <p>

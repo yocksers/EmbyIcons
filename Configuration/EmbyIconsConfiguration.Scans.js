@@ -648,6 +648,211 @@ define(['loading', 'toast'], function (loading, toast) {
             ${groupsHtml}`;
     }
 
+    async function searchForAlbum(instance) {
+        const searchTerm = instance.dom.txtAlbumSearch.value;
+        const resultsContainer = instance.dom.albumSearchResults;
+
+        if (searchTerm.length < 2) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const results = await ApiClient.getItems(instance.currentUser.Id, { IncludeItemTypes: 'MusicAlbum', Recursive: true, SearchTerm: searchTerm, Limit: 10, Fields: 'Path,AlbumArtist' });
+
+            if (results.Items.length) {
+                resultsContainer.innerHTML = `<style>.searchResultItem:hover { background-color: rgba(255,255,255,0.08); }</style>` +
+                    results.Items.map(item => `<div class="searchResultItem" data-id="${item.Id}" data-name="${item.Name}" style="padding: 0.6em 1em; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06); line-height: 1.4;"><div style="font-weight:500; color:#fff;">${item.Name}</div><div style="color:#aaa; font-size:0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.AlbumArtist || item.Path || ''}</div></div>`).join('');
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.innerHTML = '<div style="padding: 0.75em 1em; color: #aaa;">No results found</div>';
+                resultsContainer.style.display = 'block';
+            }
+        } catch (err) {
+            console.error('Error searching for album', err);
+            resultsContainer.style.display = 'none';
+        }
+    }
+
+    function onAlbumSearchResultClick(instance, e) {
+        const target = e.target.closest('.searchResultItem');
+        if (target) {
+            instance.selectedAlbumId = target.getAttribute('data-id');
+            instance.dom.txtAlbumSearch.value = target.getAttribute('data-name');
+            instance.dom.albumSearchResults.style.display = 'none';
+            instance.dom.albumSearchResults.innerHTML = '';
+        }
+    }
+
+    async function runMusicScan(instance) {
+        if (!instance.selectedAlbumId) { toast({ type: 'error', text: 'Please search for and select an album first.' }); return; }
+        const checksToRun = Array.from(instance.dom.musicTroubleshooterChecks).filter(cb => cb.checked).map(cb => cb.getAttribute('data-music-check-name')).join(',');
+        if (!checksToRun) { toast({ type: 'error', text: 'Please select at least one property to check.' }); return; }
+
+        loading.show();
+        instance.dom.btnRunMusicScan.disabled = true;
+        const container = instance.dom.musicReportContainer;
+        container.innerHTML = '<p>Scanning album... This might take a moment.</p>';
+
+        try {
+            const response = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(instance.apiRoutes.MusicTroubleshooter, { AlbumId: instance.selectedAlbumId, ChecksToRun: checksToRun }), dataType: "json" });
+            renderMusicReport(instance, response);
+        } catch (error) {
+            console.error('Error getting music troubleshooter report', error);
+            container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+        } finally {
+            loading.hide();
+            instance.dom.btnRunMusicScan.disabled = false;
+        }
+    }
+
+    async function runFullMusicScan(instance) {
+        const checksToRun = Array.from(instance.dom.musicTroubleshooterChecks).filter(cb => cb.checked).map(cb => cb.getAttribute('data-music-check-name')).join(',');
+        if (!checksToRun) { toast({ type: 'error', text: 'Please select at least one property to check.' }); return; }
+
+        loading.show();
+        instance.dom.btnRunFullMusicScan.disabled = true;
+        const container = instance.dom.musicReportContainer;
+        container.innerHTML = '<p>Scanning all music in your library... This can take a moment.</p>';
+
+        try {
+            const response = await ApiClient.ajax({ type: "GET", url: ApiClient.getUrl(instance.apiRoutes.MusicTroubleshooter, { ChecksToRun: checksToRun }), dataType: "json" });
+            renderMusicReport(instance, response);
+        } catch (error) {
+            console.error('Error getting full music troubleshooter report', error);
+            container.innerHTML = '<p style="color: #ff4444;">An error occurred while generating the report. Please check the server logs.</p>';
+        } finally {
+            loading.hide();
+            instance.dom.btnRunFullMusicScan.disabled = false;
+        }
+    }
+
+    const musicIconCheckPrefixMap = {
+        'Audio Language':  'lang.',
+        'Audio Codec':     'ac.',
+        'Audio Channels':  'ch.',
+        'Sample Rate':     'sr.',
+        'Audio Bitrate':   'abr.',
+        'Bit Depth':       'bd.'
+    };
+
+    function musicIconFilename(checkName, value) {
+        const prefix = musicIconCheckPrefixMap[checkName] || '';
+        return `${prefix}${value}.png`;
+    }
+
+    function renderMusicReport(instance, response) {
+        const container = instance.dom.musicReportContainer;
+
+        if (response.IsSingleAlbumScan) {
+            renderSingleAlbumReport(container, response);
+        } else {
+            renderLibraryMusicReport(container, response);
+        }
+    }
+
+    function renderSingleAlbumReport(container, response) {
+        if (!response.Checks || response.Checks.length === 0) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>No tracks found in <strong>${response.AlbumName}</strong>.</p>`;
+            return;
+        }
+
+        const missingChecks = response.Checks.filter(c => c.Status === 'MissingIcon');
+        const okChecks = response.Checks.filter(c => c.Status === 'OK');
+
+        if (missingChecks.length === 0) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>All icons for <strong>${response.AlbumName}</strong> are present. No missing icons found (${response.TotalTracksScanned} track${response.TotalTracksScanned !== 1 ? 's' : ''} scanned).</p>`;
+            return;
+        }
+
+        const missingHtml = missingChecks.map(c =>
+            `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                <h4 style="margin:0; color: #ffc107;">${c.CheckName}</h4>
+                <p class="fieldDescription" style="margin: 0.5em 0;">
+                    Missing icon file: <code class="report-code report-code-warn">${musicIconFilename(c.CheckName, c.Value)}</code>
+                </p>
+            </div>`
+        ).join('');
+
+        const okHtml = okChecks.length > 0
+            ? `<div class="paper-card" style="padding: 1em 1.5em; margin-top: 1em;">
+                <h4 style="margin:0; color: #4CAF50;">Icons Present</h4>
+                <div style="margin-top: 0.5em; display: flex; flex-wrap: wrap; gap: 0.5em;">
+                    ${okChecks.map(c => `<span style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); padding: 0.2em 0.6em; border-radius: 4px; font-size: 0.9em;">${c.CheckName}: <code>${musicIconFilename(c.CheckName, c.Value)}</code></span>`).join('')}
+                </div>
+               </div>`
+            : '';
+
+        container.innerHTML = `
+            <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+                <h2 style="margin: 0;">${response.AlbumName} <span class="fieldDescription" style="font-weight:normal;">(${response.TotalTracksScanned} track${response.TotalTracksScanned !== 1 ? 's' : ''} — ${missingChecks.length} missing icon${missingChecks.length !== 1 ? 's' : ''})</span></h2>
+                <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
+            </div>
+            <div class="collapsible-content" style="display: none; padding-top: 0.5em;">
+                ${missingHtml}
+                ${okHtml}
+            </div>
+            <style>.report-code { background-color: rgba(128,128,128,0.2); padding: 0.2em 0.4em; border-radius: 3px; } .report-code-warn { color: #ffc107; }</style>`;
+    }
+
+    function renderLibraryMusicReport(container, response) {
+        if (!response.LibraryGroups || response.LibraryGroups.length === 0) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>No missing icons found across ${response.TotalTracksScanned.toLocaleString()} tracks for the selected criteria.</p>`;
+            return;
+        }
+
+        const anyMissing = response.LibraryGroups.some(g => g.Missing && g.Missing.length > 0);
+        if (!anyMissing) {
+            container.innerHTML = `<h2>Scan Complete</h2><p>All icons are present for all ${response.TotalTracksScanned.toLocaleString()} tracks scanned.</p>`;
+            return;
+        }
+
+        const groupsHtml = response.LibraryGroups
+            .filter(g => g.Missing && g.Missing.length > 0)
+            .map(group => {
+                const missingHtml = group.Missing.map(entry => {
+                    const sampleList = entry.SampleTracks && entry.SampleTracks.length > 0
+                        ? `<ul style="margin: 0.5em 0 0; padding-left: 1.5em; list-style-type: disc; font-size: 0.9em; color: #aaa;">
+                               ${entry.SampleTracks.map(t => `<li>${t.Name}${t.AlbumName ? ` — ${t.AlbumName}` : ''}</li>`).join('')}
+                               ${entry.TrackCount > entry.SampleTracks.length ? `<li style="font-style:italic;">…and ${entry.TrackCount - entry.SampleTracks.length} more</li>` : ''}
+                           </ul>`
+                        : '';
+                    return `<div style="padding: 0.75em 0; border-bottom: 1px solid rgba(128,128,128,0.15);">
+                                <span style="color: #ffc107; font-weight: 500;"><code>${musicIconFilename(group.CheckName, entry.Value)}</code></span>
+                                <span class="fieldDescription" style="margin-left: 0.5em;">${entry.TrackCount.toLocaleString()} track${entry.TrackCount !== 1 ? 's' : ''} affected</span>
+                                ${sampleList}
+                            </div>`;
+                }).join('');
+
+                const coveredHtml = group.Covered && group.Covered.length > 0
+                    ? `<div style="margin-top: 1em;">
+                           <h4 style="margin: 0 0 0.5em; color: #4CAF50;">Covered (${group.Covered.length})</h4>
+                           <div style="display: flex; flex-wrap: wrap; gap: 0.4em;">
+                               ${group.Covered.map(v => `<code style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); padding: 0.2em 0.5em; border-radius: 3px;">${musicIconFilename(group.CheckName, v)}</code>`).join('')}
+                           </div>
+                       </div>`
+                    : '';
+
+                return `<div class="report-group collapsible" style="margin-bottom: 1em;">
+                            <div class="collapsible-header paper-card" style="padding: 1em 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                <h3 style="margin: 0;">${group.CheckName} <span class="fieldDescription" style="font-weight:normal;">(${group.Missing.length} missing value${group.Missing.length !== 1 ? 's' : ''})</span></h3>
+                                <i class="md-icon collapsible-indicator" style="transition: transform 0.2s ease;">keyboard_arrow_down</i>
+                            </div>
+                            <div class="collapsible-content" style="display: none; padding: 0.5em 1.5em 1em;">
+                                <h4 style="margin: 0.5em 0; color: #ffc107;">Missing Icons (${group.Missing.length})</h4>
+                                <p class="fieldDescription" style="margin-top: 0;">These values appear in your music library but have no corresponding icon file.</p>
+                                ${missingHtml}
+                                ${coveredHtml}
+                            </div>
+                        </div>`;
+            }).join('');
+
+        container.innerHTML = `
+            <p class="fieldDescription">Scanned ${response.TotalTracksScanned.toLocaleString()} tracks. The following icon files are missing:</p>
+            ${groupsHtml}`;
+    }
+
     return {
         pollScanProgress,
         runIconScan,
@@ -666,6 +871,11 @@ define(['loading', 'toast'], function (loading, toast) {
         onMovieSearchResultClick,
         runMovieScan,
         runFullMovieScan,
-        renderMovieReport
+        renderMovieReport,
+        searchForAlbum,
+        onAlbumSearchResultClick,
+        runMusicScan,
+        runFullMusicScan,
+        renderMusicReport
     };
 });

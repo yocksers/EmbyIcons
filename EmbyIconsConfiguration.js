@@ -250,10 +250,13 @@ define([
             const applyToSeries = mapping ? mapping.ApplyToSeries : true;
             const applyToSeasons = mapping ? mapping.ApplyToSeasons : true;
             const applyToEpisodes = mapping ? mapping.ApplyToEpisodes : true;
+            const applyToTracks = mapping ? mapping.ApplyToTracks : true;
+            const applyToAlbums = mapping ? mapping.ApplyToAlbums : true;
+            const applyToArtists = mapping ? mapping.ApplyToArtists : true;
             const iconAlignment = mapping ? mapping.IconAlignment : 'BottomRight';
             const priority = mapping ? mapping.Priority : 13;
             const horizontalLayout = mapping ? mapping.HorizontalLayout : true;
-            const newRow = domHelpers.createFilenameMappingRow(keyword, iconName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout);
+            const newRow = domHelpers.createFilenameMappingRow(keyword, iconName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, applyToTracks, applyToAlbums, applyToArtists, iconAlignment, priority, horizontalLayout);
             this.dom.filenameMappingsContainer.appendChild(newRow);
         }
 
@@ -263,10 +266,13 @@ define([
             const applyToSeries = mapping ? mapping.ApplyToSeries : true;
             const applyToSeasons = mapping ? mapping.ApplyToSeasons : true;
             const applyToEpisodes = mapping ? mapping.ApplyToEpisodes : true;
+            const applyToTracks = mapping ? mapping.ApplyToTracks : true;
+            const applyToAlbums = mapping ? mapping.ApplyToAlbums : true;
+            const applyToArtists = mapping ? mapping.ApplyToArtists : true;
             const iconAlignment = mapping ? mapping.IconAlignment : 'BottomLeft';
             const priority = mapping ? mapping.Priority : 6;
             const horizontalLayout = mapping ? mapping.HorizontalLayout : false;
-            const newRow = domHelpers.createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout);
+            const newRow = domHelpers.createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, applyToTracks, applyToAlbums, applyToArtists, iconAlignment, priority, horizontalLayout);
             this.dom.tagMappingsContainer.appendChild(newRow);
         }
 
@@ -363,6 +369,43 @@ define([
         }
 
         onMovieReportHeaderClick(e) {
+            const header = e.target.closest('.collapsible-header');
+            if (!header) return;
+
+            const content = header.nextElementSibling;
+            const indicator = header.querySelector('.collapsible-indicator');
+
+            if (content && content.classList.contains('collapsible-content')) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+
+                if (indicator) {
+                    indicator.style.transform = isVisible ? '' : 'rotate(-180deg)';
+                }
+            }
+        }
+
+        async searchForAlbum() {
+            return scansModule.searchForAlbum(this);
+        }
+
+        onAlbumSearchResultClick(e) {
+            return scansModule.onAlbumSearchResultClick(this, e);
+        }
+
+        async runMusicScan() {
+            return scansModule.runMusicScan(this);
+        }
+
+        async runFullMusicScan() {
+            return scansModule.runFullMusicScan(this);
+        }
+
+        renderMusicReport(response) {
+            return scansModule.renderMusicReport(this, response);
+        }
+
+        onMusicReportHeaderClick(e) {
             const header = e.target.closest('.collapsible-header');
             if (!header) return;
 

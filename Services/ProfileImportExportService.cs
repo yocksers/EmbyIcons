@@ -219,13 +219,15 @@ namespace EmbyIcons.Services
             }
         }
 
+        private const int MaxProfileNameSuffix = 1000;
+
         private IconProfile CreateProfileWithUniqueName(ExportedProfile exportedProfile)
         {
             var baseName = exportedProfile.Name;
             var suffix = 1;
             var newName = baseName;
 
-            while (_configuration.Profiles.Any(p => 
+            while (suffix <= MaxProfileNameSuffix && _configuration.Profiles.Any(p =>
                 p.Name.Equals(newName, StringComparison.OrdinalIgnoreCase)))
             {
                 newName = $"{baseName} ({suffix})";

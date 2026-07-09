@@ -42,7 +42,7 @@ define([], function () {
             instance.currentUser = user;
             loadGlobalSettings(instance, config);
 
-            const ignoredLibraryTypes = ['music', 'collections', 'playlists', 'boxsets'];
+            const ignoredLibraryTypes = ['collections', 'playlists', 'boxsets'];
             instance.allLibraries = virtualFolders.Items.filter(lib => !lib.CollectionType || !ignoredLibraryTypes.includes(lib.CollectionType.toLowerCase()));
             instance.libraryMap = new Map(instance.allLibraries.map(lib => [lib.Id, lib.Name]));
             instance.profileMap = new Map(instance.pluginConfiguration.Profiles.map(p => [p.Id, p.Name]));

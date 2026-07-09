@@ -4,6 +4,7 @@ using EmbyIcons.Helpers;
 using EmbyIcons.Services;
 using EmbyIcons.ImageProcessing;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -195,8 +196,9 @@ namespace EmbyIcons
         public void ClearAllItemDataCaches()
         {
             _seriesAggregationCache.Clear();
+            _albumAggregationCache.Clear();
             ClearAllEpisodeCaches();
-            _logger.Info("[EmbyIcons] Cleared all series and episode data caches.");
+            _logger.Info("[EmbyIcons] Cleared all series, album, and episode data caches.");
         }
 
         public void InvalidateMovieProviderPathCache(BaseItem item)
@@ -306,7 +308,7 @@ namespace EmbyIcons
 
             if (!isTypeSupported) return false;
 
-            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo || item is BoxSet;
+            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo || item is BoxSet || item is Audio || item is MusicAlbum || item is MusicArtist;
             if (!isSupportedType) return false;
 
             if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
@@ -331,6 +333,9 @@ namespace EmbyIcons
                    options.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled ||
                    options.PopcornScoreIconAlignment != IconAlignment.Disabled ||
                    options.MyAnimeListScoreIconAlignment != IconAlignment.Disabled ||
+                   options.SampleRateIconAlignment != IconAlignment.Disabled ||
+                   options.AudioBitRateIconAlignment != IconAlignment.Disabled ||
+                   options.BitDepthIconAlignment != IconAlignment.Disabled ||
                    options.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled) ||
                    options.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled);
         }
@@ -406,7 +411,8 @@ namespace EmbyIcons
                 (globalOptions.EnableCollectionProfileLookup ? 8 : 0) |
                 (options.NormalizePosterAspectRatio ? 16 : 0) |
                 (options.NormalizeThumbAspectRatio ? 32 : 0) |
-                (options.NormalizeBannerAspectRatio ? 64 : 0);
+                (options.NormalizeBannerAspectRatio ? 64 : 0) |
+                (options.NormalizeMusicPosterAspectRatio ? 128 : 0);
 
             sb.Append('_').Append((int)options.AudioIconAlignment).Append('.').Append(options.AudioIconPriority)
               .Append('.').Append((int)options.SubtitleIconAlignment).Append('.').Append(options.SubtitleIconPriority)
@@ -463,6 +469,18 @@ namespace EmbyIcons
                 var fullCollection = GetFullItem(collection) as BoxSet ?? collection;
                 var aggResult = GetOrBuildAggregatedDataForParent(fullCollection, options, globalOptions);
                 sb.Append("_c").Append(aggResult.CombinedEpisodesHashShort);
+            }
+            else if (item is MusicAlbum musicAlbum && options.EnableMusicAlbumAggregation)
+            {
+                var fullAlbum = GetFullItem(musicAlbum) as MusicAlbum ?? musicAlbum;
+                var aggResult = GetOrBuildAggregatedDataForAlbum(fullAlbum, options, globalOptions);
+                sb.Append("_c").Append(aggResult.CombinedTracksHashShort);
+            }
+            else if (item is MusicArtist musicArtist && options.EnableMusicAlbumAggregation)
+            {
+                var fullArtist = GetFullItem(musicArtist) as MusicArtist ?? musicArtist;
+                var aggResult = GetOrBuildAggregatedDataForAlbum(fullArtist, options, globalOptions);
+                sb.Append("_c").Append(aggResult.CombinedTracksHashShort);
             }
             else
             {
@@ -532,7 +550,10 @@ namespace EmbyIcons
                     return;
                 }
 
-                using var normalizedBitmap = (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? TryNormalizeTo2x3(sourceBitmap)
+                bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
+                using var normalizedBitmap = isMusicItem
+                    ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? TryNormalizeToSquare(sourceBitmap) : null)
+                    : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? TryNormalizeTo2x3(sourceBitmap)
                     : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? TryNormalizeToThumb(sourceBitmap)
                     : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? TryNormalizeToBanner(sourceBitmap)
                     : null;
@@ -653,6 +674,7 @@ namespace EmbyIcons
         private static SKBitmap? TryNormalizeTo2x3(SKBitmap source) => TryNormalizeToAspectRatio(source, 2f, 3f);
         private static SKBitmap? TryNormalizeToThumb(SKBitmap source) => TryNormalizeToAspectRatio(source, 16f, 9f);
         private static SKBitmap? TryNormalizeToBanner(SKBitmap source) => TryNormalizeToAspectRatio(source, 1000f, 185f);
+        private static SKBitmap? TryNormalizeToSquare(SKBitmap source) => TryNormalizeToAspectRatio(source, 1f, 1f);
 
         internal static void CleanupStaticResources(ILogger? logger)
         {
@@ -692,6 +714,15 @@ namespace EmbyIcons
             catch (Exception ex)
             {
                 logger?.Debug($"[EmbyIcons] Error clearing series aggregation cache: {ex.Message}");
+            }
+
+            try
+            {
+                _albumAggregationCache.Clear();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error clearing album aggregation cache: {ex.Message}");
             }
             
             if (_episodeIconCache != null)

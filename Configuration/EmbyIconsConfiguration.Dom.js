@@ -1,7 +1,7 @@
 ﻿define([], function () {
     'use strict';
 
-    function createFilenameMappingRow(keyword, iconName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout) {
+    function createFilenameMappingRow(keyword, iconName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, applyToTracks, applyToAlbums, applyToArtists, iconAlignment, priority, horizontalLayout) {
         const newRow = document.createElement('div');
         newRow.classList.add('filenameMappingRow');
         newRow.style.display = 'flex';
@@ -16,6 +16,9 @@
         const seriesChecked = (applyToSeries !== false) ? 'checked' : '';
         const seasonsChecked = (applyToSeasons !== false) ? 'checked' : '';
         const episodesChecked = (applyToEpisodes !== false) ? 'checked' : '';
+        const tracksChecked = (applyToTracks !== false) ? 'checked' : '';
+        const albumsChecked = (applyToAlbums !== false) ? 'checked' : '';
+        const artistsChecked = (applyToArtists !== false) ? 'checked' : '';
         const horizontalChecked = (horizontalLayout !== false) ? 'checked' : '';
         
         const alignment = iconAlignment || 'BottomRight';
@@ -65,6 +68,18 @@
                         <span>Episodes</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkApplyToTracks" ${tracksChecked} />
+                        <span>Tracks</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkApplyToAlbums" ${albumsChecked} />
+                        <span>Albums</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkApplyToArtists" ${artistsChecked} />
+                        <span>Artists</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
                         <input is="emby-checkbox" type="checkbox" class="chkFilenameHorizontalLayout" ${horizontalChecked} />
                         <span>Layout Horizontally</span>
                     </label>
@@ -76,7 +91,7 @@
         return newRow;
     }
 
-    function createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, iconAlignment, priority, horizontalLayout) {
+    function createTagMappingRow(tagName, applyToMovies, applyToSeries, applyToSeasons, applyToEpisodes, applyToTracks, applyToAlbums, applyToArtists, iconAlignment, priority, horizontalLayout) {
         const newRow = document.createElement('div');
         newRow.classList.add('tagMappingRow');
         newRow.style.display = 'flex';
@@ -91,6 +106,9 @@
         const seriesChecked = (applyToSeries !== false) ? 'checked' : '';
         const seasonsChecked = (applyToSeasons !== false) ? 'checked' : '';
         const episodesChecked = (applyToEpisodes !== false) ? 'checked' : '';
+        const tracksChecked = (applyToTracks !== false) ? 'checked' : '';
+        const albumsChecked = (applyToAlbums !== false) ? 'checked' : '';
+        const artistsChecked = (applyToArtists !== false) ? 'checked' : '';
         const horizontalChecked = (horizontalLayout === true) ? 'checked' : '';
 
         const alignment = iconAlignment || 'BottomLeft';
@@ -134,6 +152,18 @@
                     <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
                         <input is="emby-checkbox" type="checkbox" class="chkTagApplyToEpisodes" ${episodesChecked} />
                         <span>Episodes</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToTracks" ${tracksChecked} />
+                        <span>Tracks</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToAlbums" ${albumsChecked} />
+                        <span>Albums</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
+                        <input is="emby-checkbox" type="checkbox" class="chkTagApplyToArtists" ${artistsChecked} />
+                        <span>Artists</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5em; cursor: pointer;">
                         <input is="emby-checkbox" type="checkbox" class="chkTagHorizontalLayout" ${horizontalChecked} />

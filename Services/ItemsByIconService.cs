@@ -10,6 +10,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -19,7 +20,7 @@ namespace EmbyIcons.Services
     [Route(ApiRoutes.ItemsByIcon, "GET", Summary = "Gets media items that use a specific icon")]
     public class GetItemsByIcon : IReturn<ItemsByIconResponse>
     {
-        [ApiMember(Name = "IconType", Description = "The type of icon (Language, Subtitle, Channel, AudioCodec, VideoCodec, VideoFormat, Resolution, AspectRatio, Tag, ParentalRating, FrameRate, OriginalLanguage, SeriesStatus)", IsRequired = true)]
+        [ApiMember(Name = "IconType", Description = "The type of icon (Language, Subtitle, Channel, AudioCodec, VideoCodec, VideoFormat, Resolution, AspectRatio, Tag, ParentalRating, FrameRate, OriginalLanguage, SeriesStatus, SampleRate, AudioBitRate, BitDepth)", IsRequired = true)]
         public string IconType { get; set; } = string.Empty;
 
         [ApiMember(Name = "IconName", Description = "The name of the icon (e.g., 'en', '5.1', 'hevc')", IsRequired = true)]
@@ -68,7 +69,7 @@ namespace EmbyIcons.Services
 
             var includeTypes = iconType.Equals("SeriesStatus", StringComparison.OrdinalIgnoreCase)
                 ? new[] { "Series" }
-                : new[] { "Movie", Constants.Episode };
+                : new[] { "Movie", Constants.Episode, "Audio" };
 
             var query = new InternalItemsQuery
             {
@@ -203,6 +204,33 @@ namespace EmbyIcons.Services
                             matches = status != null && status.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         }
                         break;
+
+                    case "SAMPLERATE":
+                        var primaryAudioSR = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                        if (primaryAudioSR != null)
+                        {
+                            var sr = MediaStreamHelper.GetSampleRateIconName(primaryAudioSR);
+                            matches = sr != null && sr.Equals(iconName, StringComparison.OrdinalIgnoreCase);
+                        }
+                        break;
+
+                    case "AUDIOBITRATE":
+                        var primaryAudioBR = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                        if (primaryAudioBR != null)
+                        {
+                            var br = MediaStreamHelper.GetAudioBitRateIconName(primaryAudioBR);
+                            matches = br != null && br.Equals(iconName, StringComparison.OrdinalIgnoreCase);
+                        }
+                        break;
+
+                    case "BITDEPTH":
+                        var primaryAudioBD = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+                        if (primaryAudioBD != null)
+                        {
+                            var bd = MediaStreamHelper.GetBitDepthIconName(primaryAudioBD);
+                            matches = bd != null && bd.Equals(iconName, StringComparison.OrdinalIgnoreCase);
+                        }
+                        break;
                 }
 
                 if (matches)
@@ -233,6 +261,12 @@ namespace EmbyIcons.Services
             };
         }
 
+        private static readonly ConcurrentDictionary<(Type, string), System.Reflection.PropertyInfo?> _itemsPropCache
+            = new ConcurrentDictionary<(Type, string), System.Reflection.PropertyInfo?>();
+
+        private static System.Reflection.PropertyInfo? GetCachedItemProperty(Type type, string name)
+            => _itemsPropCache.GetOrAdd((type, name), k => k.Item1.GetProperty(k.Item2));
+
         private static string? GetOriginalLanguageFromItem(BaseItem item)
         {
             if (item == null) return null;
@@ -240,7 +274,7 @@ namespace EmbyIcons.Services
             try
             {
                 var itemType = item.GetType();
-                var originalLangProp = itemType.GetProperty("OriginalLanguage");
+                var originalLangProp = GetCachedItemProperty(itemType, "OriginalLanguage");
                 if (originalLangProp != null)
                 {
                     var value = originalLangProp.GetValue(item) as string;
@@ -250,7 +284,7 @@ namespace EmbyIcons.Services
                     }
                 }
 
-                var productionLocationsProp = itemType.GetProperty("ProductionLocations");
+                var productionLocationsProp = GetCachedItemProperty(itemType, "ProductionLocations");
                 if (productionLocationsProp != null)
                 {
                     var locations = productionLocationsProp.GetValue(item) as string[];
@@ -260,7 +294,11 @@ namespace EmbyIcons.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language for '{item?.Name}': {ex.Message}");
+            }
 
             return null;
         }

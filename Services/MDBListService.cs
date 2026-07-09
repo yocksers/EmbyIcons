@@ -190,6 +190,16 @@ namespace EmbyIcons.Services
                 await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
+                    if (_ratingsCache.Count >= MAX_CACHE_ENTRIES)
+                    {
+                        var oldestKey = _ratingsCache
+                            .OrderBy(kvp => kvp.Value.CachedAt)
+                            .Select(kvp => kvp.Key)
+                            .FirstOrDefault();
+                        if (oldestKey != null)
+                            _ratingsCache.Remove(oldestKey);
+                    }
+
                     _ratingsCache[cacheKey] = new CachedRatingData
                     {
                         Data = result,

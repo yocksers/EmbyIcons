@@ -27,6 +27,9 @@ namespace EmbyIcons.Models
         public string? FrameRateIconName { get; set; }
         public string? OriginalLanguageIconName { get; set; }
         public string? SeriesStatusIconName { get; set; }
+        public string? SampleRateIconName { get; set; }
+        public string? AudioBitRateIconName { get; set; }
+        public string? BitDepthIconName { get; set; }
     }
 
     internal class FilenameBasedIconData

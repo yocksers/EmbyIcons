@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.55.3</Version>
-		<AssemblyVersion>5.55.3.0</AssemblyVersion>
-		<FileVersion>5.55.3.0</FileVersion>
+		<Version>5.56.1</Version>
+		<AssemblyVersion>5.56.1.0</AssemblyVersion>
+		<FileVersion>5.56.1.0</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 
@@ -20,6 +20,16 @@
 
 	<ItemGroup>
 		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_128.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_192.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_256.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_32.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_320.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_40.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_48.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_56.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_98.png" />
+		<EmbeddedResource Include="EmbeddedIcons\abr_lossless.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_aac.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_ac3.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ac_dts-hdma.png" />
@@ -33,6 +43,9 @@
 		<EmbeddedResource Include="EmbeddedIcons\ar_2.40x1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_40x17.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ar_4x3.png" />
+		<EmbeddedResource Include="EmbeddedIcons\bd_16.png" />
+		<EmbeddedResource Include="EmbeddedIcons\bd_24.png" />
+		<EmbeddedResource Include="EmbeddedIcons\bd_32.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_5.1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_7.1.png" />
 		<EmbeddedResource Include="EmbeddedIcons\ch_Mono.png" />
@@ -76,6 +89,23 @@
 		<EmbeddedResource Include="EmbeddedIcons\res_720p.png" />
 		<EmbeddedResource Include="EmbeddedIcons\series_ended.png" />
 		<EmbeddedResource Include="EmbeddedIcons\series_running.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_11.025k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_12k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_16k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_176.4k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_22.05k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_24k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_32k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_352.8k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_384k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_44.1k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_48k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_705.6k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_768k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_88.2k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_8k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_96k.png" />
+		<EmbeddedResource Include="EmbeddedIcons\sr_98k.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_chinese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_danish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\sub_english.png" />

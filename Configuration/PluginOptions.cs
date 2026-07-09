@@ -36,6 +36,9 @@ namespace EmbyIcons.Configuration
         public bool ApplyToSeries { get; set; } = true;
         public bool ApplyToSeasons { get; set; } = true;
         public bool ApplyToEpisodes { get; set; } = true;
+        public bool ApplyToTracks { get; set; } = true;
+        public bool ApplyToAlbums { get; set; } = true;
+        public bool ApplyToArtists { get; set; } = true;
         public IconAlignment IconAlignment { get; set; } = IconAlignment.BottomRight;
         public int Priority { get; set; } = 13;
         public bool HorizontalLayout { get; set; } = true;
@@ -48,6 +51,9 @@ namespace EmbyIcons.Configuration
         public bool ApplyToSeries { get; set; } = true;
         public bool ApplyToSeasons { get; set; } = true;
         public bool ApplyToEpisodes { get; set; } = true;
+        public bool ApplyToTracks { get; set; } = true;
+        public bool ApplyToAlbums { get; set; } = true;
+        public bool ApplyToArtists { get; set; } = true;
         public IconAlignment IconAlignment { get; set; } = IconAlignment.BottomLeft;
         public int Priority { get; set; } = 6;
         public bool HorizontalLayout { get; set; } = false;
@@ -80,6 +86,7 @@ namespace EmbyIcons.Configuration
         #region Advanced Settings
         public int MaxEpisodeCacheSize { get; set; } = 10000;
         public int MaxSeriesCacheSize { get; set; } = 5000;
+        public int MaxAlbumCacheSize { get; set; } = 2000;
         public int MaxItemToProfileCacheSize { get; set; } = 20000;
         public int MaxCollectionToProfileCacheSize { get; set; } = 5000;
         public int EpisodeCacheSlidingExpirationHours { get; set; } = 6;
@@ -193,6 +200,7 @@ namespace EmbyIcons.Configuration
         public bool NormalizePosterAspectRatio { get; set; } = false;
         public bool NormalizeThumbAspectRatio { get; set; } = false;
         public bool NormalizeBannerAspectRatio { get; set; } = false;
+        public bool NormalizeMusicPosterAspectRatio { get; set; } = false;
 
         public bool ShowOverlaysForEpisodes { get; set; } = true;
         public bool ShowOverlaysForSeasons { get; set; } = false;
@@ -200,6 +208,9 @@ namespace EmbyIcons.Configuration
         public bool ExcludeSpecialsFromSeriesAggregation { get; set; } = false;
         public bool ShowCollectionIconsIfAllChildrenHaveLanguage { get; set; } = true;
         public bool UseCollectionLiteMode { get; set; } = true;
+
+        public bool EnableMusicAlbumAggregation { get; set; } = true;
+        public bool UseMusicAlbumLiteMode { get; set; } = true;
 
         public IconAlignment AudioIconAlignment { get; set; } = IconAlignment.TopLeft;
         public bool AudioOverlayHorizontal { get; set; } = true;
@@ -289,6 +300,18 @@ namespace EmbyIcons.Configuration
         public IconAlignment SeriesStatusIconAlignment { get; set; } = IconAlignment.Disabled;
         public bool SeriesStatusOverlayHorizontal { get; set; } = true;
         public int SeriesStatusIconPriority { get; set; } = 17;
+
+        public IconAlignment SampleRateIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool SampleRateOverlayHorizontal { get; set; } = true;
+        public int SampleRateIconPriority { get; set; } = 18;
+
+        public IconAlignment AudioBitRateIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool AudioBitRateOverlayHorizontal { get; set; } = true;
+        public int AudioBitRateIconPriority { get; set; } = 19;
+
+        public IconAlignment BitDepthIconAlignment { get; set; } = IconAlignment.Disabled;
+        public bool BitDepthOverlayHorizontal { get; set; } = true;
+        public int BitDepthIconPriority { get; set; } = 20;
 
         public ScoreBackgroundShape CommunityScoreBackgroundShape { get; set; } = ScoreBackgroundShape.None;
         public string CommunityScoreBackgroundColor { get; set; } = "#404040";

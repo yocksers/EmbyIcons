@@ -3,6 +3,7 @@ using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Models;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -626,6 +627,88 @@ namespace EmbyIcons.Services
             return data;
         }
 
+        private OverlayData CreateOverlayDataFromMusicAggregate(EmbyIconsEnhancer.AggregatedAlbumResult aggResult, BaseItem item, ProfileSettings profileOptions)
+        {
+            var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var tagBasedIcons = new List<FilenameBasedIconData>();
+
+            if (item.Tags != null && item.Tags.Length > 0)
+            {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isAlbum  = item is MusicAlbum;
+                bool isArtist = item is MusicArtist;
+
+                foreach (var tag in item.Tags)
+                {
+                    var nt = NormalizeTag(tag);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isAlbum  ? mapping.ApplyToAlbums
+                                             : isArtist ? mapping.ApplyToArtists
+                                             : false;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName         = nt,
+                                    Alignment        = mapping.IconAlignment,
+                                    Priority         = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                        tags.Add(nt);
+                }
+            }
+
+            float? communityRating = item.CommunityRating;
+            if (!communityRating.HasValue)
+            {
+                try
+                {
+                    var cr = ExtractCommunityRatingFromItem(item);
+                    if (cr.HasValue) communityRating = cr.Value;
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error extracting community rating from music aggregate: {ex.Message}");
+                }
+            }
+
+            var data = new OverlayData
+            {
+                AudioLanguages       = aggResult.AudioLangs,
+                AudioCodecs          = aggResult.AudioCodecs,
+                ChannelIconName      = aggResult.ChannelType,
+                SampleRateIconName   = aggResult.SampleRate,
+                AudioBitRateIconName = aggResult.AudioBitRate,
+                BitDepthIconName     = aggResult.BitDepth,
+                FilenameBasedIcons   = aggResult.FilenameBasedIcons,
+                TagBasedIcons        = tagBasedIcons,
+                Tags                 = tags,
+                CommunityRating      = communityRating,
+                RottenTomatoesRating = item.CriticRating,
+                ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
+            };
+
+            if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
+                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
+
+            return data;
+        }
+
         public async Task<OverlayData> GetOverlayDataAsync(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
             EnsureMaintenanceTimerInitialized();
@@ -655,6 +738,16 @@ namespace EmbyIcons.Services
 
                 var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
                 overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
+            }
+            else if (item is MusicAlbum albumItem && profileOptions.EnableMusicAlbumAggregation)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(albumItem, profileOptions, globalOptions);
+                overlayData = CreateOverlayDataFromMusicAggregate(aggResult, albumItem, profileOptions);
+            }
+            else if (item is MusicArtist artistItem && profileOptions.EnableMusicAlbumAggregation)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(artistItem, profileOptions, globalOptions);
+                overlayData = CreateOverlayDataFromMusicAggregate(aggResult, artistItem, profileOptions);
             }
             else
             {
@@ -743,6 +836,9 @@ namespace EmbyIcons.Services
                     bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                     bool isMovie = item is Movie;
                     bool isEpisode = item is Episode;
+                    bool isTrack = item is Audio;
+                    bool isMusicAlbum = item is MusicAlbum;
+                    bool isMusicArtist = item is MusicArtist;
 
                     foreach (var tag in cachedInfo.Tags)
                     {
@@ -755,6 +851,9 @@ namespace EmbyIcons.Services
                                     continue;
                                 bool shouldApply = isMovie ? mapping.ApplyToMovies
                                                  : isEpisode ? mapping.ApplyToEpisodes
+                                                 : isTrack ? mapping.ApplyToTracks
+                                                 : isMusicAlbum ? mapping.ApplyToAlbums
+                                                 : isMusicArtist ? mapping.ApplyToArtists
                                                  : true;
                                 if (shouldApply && string.Equals(mapping.TagName, tag, StringComparison.OrdinalIgnoreCase))
                                 {
@@ -794,7 +893,10 @@ namespace EmbyIcons.Services
                     AspectRatioIconName = cachedInfo.AspectRatioIconName,
                     ParentalRatingIconName = cachedInfo.ParentalRatingIconName,
                     FrameRateIconName = cachedInfo.FrameRateIconName,
-                    OriginalLanguageIconName = cachedInfo.OriginalLanguageIconName
+                    OriginalLanguageIconName = cachedInfo.OriginalLanguageIconName,
+                    SampleRateIconName = cachedInfo.SampleRateIconName,
+                    AudioBitRateIconName = cachedInfo.AudioBitRateIconName,
+                    BitDepthIconName = cachedInfo.BitDepthIconName
                 };
 
                 if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
@@ -843,7 +945,10 @@ namespace EmbyIcons.Services
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName,
                 FrameRateIconName = overlayData.FrameRateIconName,
-                OriginalLanguageIconName = overlayData.OriginalLanguageIconName
+                OriginalLanguageIconName = overlayData.OriginalLanguageIconName,
+                SampleRateIconName = overlayData.SampleRateIconName,
+                AudioBitRateIconName = overlayData.AudioBitRateIconName,
+                BitDepthIconName = overlayData.BitDepthIconName
             };
 
             var cacheEntryOptions = new MemoryCacheEntryOptions()
@@ -1017,11 +1122,49 @@ namespace EmbyIcons.Services
                 }
             }
 
+            if (profileOptions.FilenameBasedIcons.Any())
+            {
+                bool isTrackItem = item is Audio;
+                bool isAlbumItem = item is MusicAlbum;
+                bool isArtistItem = item is MusicArtist;
+                if (isTrackItem || isAlbumItem || isArtistItem)
+                {
+                    var itemPath = item.Path;
+                    if (!string.IsNullOrEmpty(itemPath))
+                    {
+                        var lowerPath = itemPath.ToLowerInvariant();
+                        foreach (var mapping in profileOptions.FilenameBasedIcons)
+                        {
+                            bool applyFlag = isTrackItem ? mapping.ApplyToTracks
+                                          : isAlbumItem ? mapping.ApplyToAlbums
+                                          : mapping.ApplyToArtists;
+                            if (!string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                                !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                                applyFlag &&
+                                mapping.IconAlignment != IconAlignment.Disabled &&
+                                lowerPath.Contains(mapping.Keyword.ToLowerInvariant()))
+                            {
+                                data.FilenameBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName = mapping.IconName.ToLowerInvariant(),
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             if (item.Tags != null && item.Tags.Length > 0)
             {
                 bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                 bool isMovie = item is Movie;
                 bool isEpisode = item is Episode;
+                bool isTrack = item is Audio;
+                bool isMusicAlbum = item is MusicAlbum;
+                bool isMusicArtist = item is MusicArtist;
 
                 foreach (var tag in item.Tags)
                 {
@@ -1037,6 +1180,9 @@ namespace EmbyIcons.Services
                                 continue;
                             bool shouldApply = isMovie ? mapping.ApplyToMovies
                                              : isEpisode ? mapping.ApplyToEpisodes
+                                             : isTrack ? mapping.ApplyToTracks
+                                             : isMusicAlbum ? mapping.ApplyToAlbums
+                                             : isMusicArtist ? mapping.ApplyToArtists
                                              : true;
                             if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
                             {
@@ -1138,6 +1284,21 @@ namespace EmbyIcons.Services
                 data.FrameRateIconName = MediaStreamHelper.GetFrameRateIconName(primaryVideoStream, profileOptions.SnapFrameRateToCommon);
             }
 
+            if (profileOptions.SampleRateIconAlignment != IconAlignment.Disabled && primaryAudioStream != null)
+            {
+                data.SampleRateIconName = MediaStreamHelper.GetSampleRateIconName(primaryAudioStream);
+            }
+
+            if (profileOptions.AudioBitRateIconAlignment != IconAlignment.Disabled && primaryAudioStream != null)
+            {
+                data.AudioBitRateIconName = MediaStreamHelper.GetAudioBitRateIconName(primaryAudioStream);
+            }
+
+            if (profileOptions.BitDepthIconAlignment != IconAlignment.Disabled && primaryAudioStream != null)
+            {
+                data.BitDepthIconName = MediaStreamHelper.GetBitDepthIconName(primaryAudioStream);
+            }
+
             if (profileOptions.OriginalLanguageIconAlignment != IconAlignment.Disabled)
             {
                 var originalLang = GetOriginalLanguage(item);
@@ -1157,7 +1318,7 @@ namespace EmbyIcons.Services
             try
             {
                 var itemType = item.GetType();
-                var originalLangProp = itemType.GetProperty("OriginalLanguage");
+                var originalLangProp = GetEntryProperty(itemType, "OriginalLanguage");
                 if (originalLangProp != null)
                 {
                     var value = originalLangProp.GetValue(item) as string;
@@ -1167,7 +1328,7 @@ namespace EmbyIcons.Services
                     }
                 }
 
-                var productionLocationsProp = itemType.GetProperty("ProductionLocations");
+                var productionLocationsProp = GetEntryProperty(itemType, "ProductionLocations");
                 if (productionLocationsProp != null)
                 {
                     var locations = productionLocationsProp.GetValue(item) as string[];
