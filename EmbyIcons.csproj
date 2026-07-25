@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.56.1</Version>
-		<AssemblyVersion>5.56.1.0</AssemblyVersion>
-		<FileVersion>5.56.1.0</FileVersion>
+		<Version>5.56.2</Version>
+		<AssemblyVersion>5.56.2.0</AssemblyVersion>
+		<FileVersion>5.56.2.0</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 
@@ -60,7 +60,7 @@
 		<EmbeddedResource Include="EmbeddedIcons\hdr_dv.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr.png" />
 		<EmbeddedResource Include="EmbeddedIcons\hdr_hdr10plus.png" />
-		<EmbeddedResource Include="EmbeddedIcons\heart.png" />
+		<EmbeddedResource Include="EmbeddedIcons\f_heart.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_chinese.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_danish.png" />
 		<EmbeddedResource Include="EmbeddedIcons\lang_english.png" />

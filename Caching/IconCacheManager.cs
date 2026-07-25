@@ -213,10 +213,15 @@ namespace EmbyIcons.Caching
             var lowerIconNameKey = iconNameKey.ToLowerInvariant();
 
             var customIconFileName = $"{prefix}.{lowerIconNameKey}";
-            var embeddedIconFileName = $"embedded_{prefix}_{lowerIconNameKey}";
+            var embeddedPrefix = prefix;
             var customIconsFolder = options.IconsFolder;
 
-            if (iconType == IconType.CommunityRating && lowerIconNameKey.StartsWith("t."))
+            if (iconType == IconType.CommunityRating && lowerIconNameKey == "heart")
+            {
+                customIconFileName = "f.heart";
+                embeddedPrefix = "f";
+            }
+            else if (iconType == IconType.CommunityRating && lowerIconNameKey.StartsWith("t."))
             {
                 customIconFileName = lowerIconNameKey;
             }
@@ -226,10 +231,10 @@ namespace EmbyIcons.Caching
                 case IconLoadingMode.CustomOnly:
                     return await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
                 case IconLoadingMode.BuiltInOnly:
-                    return await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
+                    return await TryLoadEmbeddedVariantsAsync(embeddedPrefix, lowerIconNameKey, cancellationToken, currentCache);
                 default: 
                     var customIcon = await LoadCustomIconAsync(customIconFileName, customIconsFolder, cancellationToken, currentCache);
-                    return customIcon ?? await TryLoadEmbeddedVariantsAsync(prefix, lowerIconNameKey, cancellationToken, currentCache);
+                    return customIcon ?? await TryLoadEmbeddedVariantsAsync(embeddedPrefix, lowerIconNameKey, cancellationToken, currentCache);
             }
         }
 
