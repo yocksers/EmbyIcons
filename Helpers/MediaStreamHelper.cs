@@ -193,17 +193,16 @@ namespace EmbyIcons.Helpers
 
         public static string? GetVideoFormatIconName(BaseItem item, IReadOnlyList<MediaStream> streams)
         {
-            var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
-
             bool hasDV = false;
             bool hasHDR10Plus = false;
             bool hasHDR = false;
 
-            if (videoStream?.VideoRange != null)
+            foreach (var videoStream in streams.Where(s => s.Type == MediaStreamType.Video))
             {
+                if (videoStream.VideoRange == null) continue;
                 var videoRange = videoStream.VideoRange;
-                
-                if (videoRange.Contains(StringConstants.DolbyShort, StringComparison.OrdinalIgnoreCase) || 
+
+                if (videoRange.Contains(StringConstants.DolbyShort, StringComparison.OrdinalIgnoreCase) ||
                     videoRange.Contains(StringConstants.DVShort, StringComparison.OrdinalIgnoreCase))
                 {
                     hasDV = true;
@@ -291,6 +290,7 @@ namespace EmbyIcons.Helpers
             var audioLangList = new List<string>();
             var subLangList = new List<string>();
             var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var videoCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             MediaStream? videoStream = null;
             MediaStream? topAudio = null;
 
@@ -311,7 +311,9 @@ namespace EmbyIcons.Helpers
                             subLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
                         break;
                     case MediaStreamType.Video:
-                        if (videoStream == null) videoStream = s;
+                        if (videoStream == null || s.IsDefault) videoStream = s;
+                        var vc = GetVideoCodecIconName(s);
+                        if (vc != null) videoCodecSet.Add(vc);
                         break;
                 }
             }
@@ -320,6 +322,8 @@ namespace EmbyIcons.Helpers
             subLangList.Sort(StringComparer.Ordinal);
             var audioCodecList = new List<string>(audioCodecSet);
             audioCodecList.Sort(StringComparer.Ordinal);
+            var videoCodecList = new List<string>(videoCodecSet);
+            videoCodecList.Sort(StringComparer.Ordinal);
 
             using var md5 = System.Security.Cryptography.MD5.Create();
             var encoding = System.Text.Encoding.UTF8;
@@ -335,7 +339,7 @@ namespace EmbyIcons.Helpers
             HashPart(string.Join(",", audioLangList));
             HashPart(string.Join(",", subLangList));
             HashPart(string.Join(",", audioCodecList));
-            HashPart(videoStream != null ? GetVideoCodecIconName(videoStream) ?? "none" : "none");
+            HashPart(string.Join(",", videoCodecList));
             HashPart(topAudio != null ? GetChannelIconName(topAudio) ?? "none" : "none");
             HashPart(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
             HashPart(item.DateModified.Ticks.ToString());
@@ -349,6 +353,7 @@ namespace EmbyIcons.Helpers
             var audioLangList = new List<string>();
             var subLangList = new List<string>();
             var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var videoCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             MediaStream? videoStream = null;
             MediaStream? topAudio = null;
 
@@ -369,7 +374,9 @@ namespace EmbyIcons.Helpers
                             subLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
                         break;
                     case MediaStreamType.Video:
-                        if (videoStream == null) videoStream = s;
+                        if (videoStream == null || s.IsDefault) videoStream = s;
+                        var vc = GetVideoCodecIconName(s);
+                        if (vc != null) videoCodecSet.Add(vc);
                         break;
                 }
             }
@@ -378,6 +385,8 @@ namespace EmbyIcons.Helpers
             subLangList.Sort(StringComparer.Ordinal);
             var audioCodecList = new List<string>(audioCodecSet);
             audioCodecList.Sort(StringComparer.Ordinal);
+            var videoCodecList = new List<string>(videoCodecSet);
+            videoCodecList.Sort(StringComparer.Ordinal);
 
             using var md5 = System.Security.Cryptography.MD5.Create();
             var encoding = System.Text.Encoding.UTF8;
@@ -393,7 +402,7 @@ namespace EmbyIcons.Helpers
             HashPart(string.Join(",", audioLangList));
             HashPart(string.Join(",", subLangList));
             HashPart(string.Join(",", audioCodecList));
-            HashPart(videoStream != null ? (GetVideoCodecIconName(videoStream) ?? "none") : "none");
+            HashPart(string.Join(",", videoCodecList));
             HashPart(topAudio != null ? (GetChannelIconName(topAudio) ?? "none") : "none");
             HashPart(videoStream != null ? (GetAspectRatioIconName(videoStream, true) ?? "none") : "none");
             HashPart(item.DateModified.Ticks.ToString());

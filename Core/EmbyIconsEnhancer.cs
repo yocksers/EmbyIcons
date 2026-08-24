@@ -246,7 +246,7 @@ namespace EmbyIcons
 
         private BaseItem GetFullItem(BaseItem item)
         {
-            if ((item is Series || item is BoxSet || item is Season) && item.Id == Guid.Empty && item.InternalId > 0)
+            if (item.Id == Guid.Empty && item.InternalId > 0)
             {
                 var fullItem = _libraryManager.GetItemById(item.InternalId);
                 return fullItem ?? item;
@@ -287,6 +287,8 @@ namespace EmbyIcons
         public bool Supports(BaseItem? item, ImageType imageType)
         {
             if (item == null) return false;
+
+            if (item.Id == Guid.Empty && item.InternalId == 0) return false;
 
             if (!ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger))
             {
@@ -371,17 +373,24 @@ namespace EmbyIcons
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
         {
             var plugin = Plugin.Instance;
-            if (plugin == null) return "";
+            if (plugin == null) return $"ei_np_{item.InternalId}";
 
             var profile = plugin.GetProfileForItem(item);
-            if (profile == null) return "";
+            if (profile == null) return $"ei_np_{item.InternalId}";
+
+            if (item.Id == Guid.Empty && item.InternalId > 0)
+                item = _libraryManager.GetItemById(item.InternalId) ?? item;
 
             var globalOptions = plugin.GetConfiguredOptions();
             var options = profile.Settings;
             var sb = new StringBuilder(512);
 
+            var itemIdSegment = item.Id != Guid.Empty
+                ? Convert.ToBase64String(item.Id.ToByteArray()).TrimEnd('=')
+                : $"iid_{item.InternalId}";
+
             sb.Append("ei8_")
-              .Append(Convert.ToBase64String(item.Id.ToByteArray()).TrimEnd('='))
+              .Append(itemIdSegment)
               .Append('_').Append((int)imageType)
               .Append('v').Append(plugin.ConfigurationVersion)
               .Append('p').Append(Convert.ToBase64String(profile.Id.ToByteArray()).TrimEnd('='));
@@ -531,7 +540,7 @@ namespace EmbyIcons
                 await GlobalConcurrencyLock.WaitAsync(cancellationToken);
                 globalLockAcquired = true;
 
-                var itemKey = item.Id.ToString("N");
+                var itemKey = item.Id != Guid.Empty ? item.Id.ToString("N") : $"iid_{item.InternalId}";
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
                 itemSemaphore = _locks.GetOrAdd(itemKey, _ => new SemaphoreSlim(1, 1));
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
@@ -637,8 +646,8 @@ namespace EmbyIcons
             }
         }
 
-        public EnhancedImageInfo? GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
-            (Plugin.Instance?.IsLibraryAllowed(item) ?? false) ? new() { RequiresTransparency = false } : null;
+        public EnhancedImageInfo GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
+            new() { RequiresTransparency = false };
 
         public ImageSize GetEnhancedImageSize(BaseItem item, ImageType imageType, int imageIndex, ImageSize originalSize) => originalSize;
 
