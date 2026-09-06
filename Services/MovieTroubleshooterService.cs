@@ -174,7 +174,7 @@ namespace EmbyIcons.Services
             };
 
             var streams      = movie.GetMediaStreams() ?? new List<MediaStream>();
-            var videoStream  = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+            var videoStream  = MediaStreamHelper.GetPrimaryVideoStream(streams);
             var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio)
                                       .OrderByDescending(s => s.Channels)
                                       .FirstOrDefault();
@@ -249,7 +249,7 @@ namespace EmbyIcons.Services
             foreach (var movie in movies)
             {
                 var streams      = movie.GetMediaStreams() ?? new List<MediaStream>();
-                var videoStream  = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                var videoStream  = MediaStreamHelper.GetPrimaryVideoStream(streams);
                 var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio)
                                           .OrderByDescending(s => s.Channels)
                                           .FirstOrDefault();

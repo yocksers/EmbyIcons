@@ -194,8 +194,7 @@ namespace EmbyIcons
 
                 var firstItem = itemList[0];
                 var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
-                var firstVideoStream = firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video && s.IsDefault)
-                    ?? firstStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                var firstVideoStream = MediaStreamHelper.GetPrimaryVideoStream(firstStreams);
 
                 var commonAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var allAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -306,8 +305,7 @@ namespace EmbyIcons
                     var item = itemList[i];
                     var streams = item.GetMediaStreams() ?? new List<MediaStream>();
                     processedStreams?.Add(streams);
-                    var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video && s.IsDefault)
-                        ?? streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
 
                     if (checkAudioLangs)
                     {

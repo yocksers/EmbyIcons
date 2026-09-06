@@ -174,7 +174,7 @@ namespace EmbyIcons.Services
 
                     if (!streams.Any()) return localReport;
 
-                    var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                    var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
                     var isLikelyImage = false;
                     if (videoStream != null)
                     {
@@ -373,7 +373,7 @@ namespace EmbyIcons.Services
                 var streams = item.GetMediaStreams() ?? new List<MediaStream>();
                 if (!streams.Any()) return;
 
-                var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
                 var isLikelyImage = false;
                 if (videoStream != null)
                 {

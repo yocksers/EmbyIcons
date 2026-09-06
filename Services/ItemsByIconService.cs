@@ -153,7 +153,7 @@ namespace EmbyIcons.Services
                         break;
 
                     case "RESOLUTION":
-                        var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                        var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
                         if (videoStream != null)
                         {
                             var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, item);
@@ -162,7 +162,7 @@ namespace EmbyIcons.Services
                         break;
 
                     case "ASPECTRATIO":
-                        var videoStreamAR = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                        var videoStreamAR = MediaStreamHelper.GetPrimaryVideoStream(streams);
                         if (videoStreamAR != null)
                         {
                             var ar = MediaStreamHelper.GetAspectRatioIconName(videoStreamAR, true);
@@ -171,7 +171,7 @@ namespace EmbyIcons.Services
                         break;
 
                     case "FRAMERATE":
-                        var videoStreamFPS = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                        var videoStreamFPS = MediaStreamHelper.GetPrimaryVideoStream(streams);
                         if (videoStreamFPS != null)
                         {
                             var fps = MediaStreamHelper.GetFrameRateIconName(videoStreamFPS, true);

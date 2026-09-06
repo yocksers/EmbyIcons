@@ -193,7 +193,7 @@ namespace EmbyIcons.Services
             if (runAllChecks || requestedChecks.Contains(CheckNames.Resolution))
                 report.Checks.Add(CheckProperty(baseItems, "Resolution", ep => {
                     var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
-                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
+                    var stream = MediaStreamHelper.GetPrimaryVideoStream(s);
                     var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, ep) : null;
                     return resName != null ? new List<string> { resName } : new List<string>();
                 }));
@@ -201,7 +201,7 @@ namespace EmbyIcons.Services
             if (runAllChecks || requestedChecks.Contains(CheckNames.AspectRatio))
                 report.Checks.Add(CheckProperty(baseItems, "Aspect Ratio", ep => {
                     var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
-                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
+                    var stream = MediaStreamHelper.GetPrimaryVideoStream(s);
                     var arName = stream != null ? MediaStreamHelper.GetAspectRatioIconName(stream, true) : null;
                     return arName != null ? new List<string> { arName } : new List<string>();
                 }));
@@ -216,7 +216,7 @@ namespace EmbyIcons.Services
             if (runAllChecks || requestedChecks.Contains(CheckNames.FrameRate))
                 report.Checks.Add(CheckProperty(baseItems, "Frame Rate (FPS)", ep => {
                     var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
-                    var stream = s.FirstOrDefault(x => x.Type == MediaStreamType.Video);
+                    var stream = MediaStreamHelper.GetPrimaryVideoStream(s);
                     var fpsName = stream != null ? MediaStreamHelper.GetFrameRateIconName(stream) : null;
                     return fpsName != null ? new List<string> { fpsName } : new List<string>();
                 }));

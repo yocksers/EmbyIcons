@@ -27,7 +27,6 @@ namespace EmbyIcons.Services
         private readonly EmbyIconsEnhancer _enhancer;
         private readonly ILibraryManager _libraryManager;
         private readonly MemoryCache _providerPathCache = new(new MemoryCacheOptions { SizeLimit = Constants.DefaultProviderPathCacheSize });
-        private readonly MemoryCache _providerResolutionCache = new(new MemoryCacheOptions { SizeLimit = Constants.DefaultProviderPathCacheSize });
         private volatile Timer? _cacheMaintenanceTimer;
         private readonly object _timerInitLock = new object();
         private static readonly Func<BaseItem, System.Collections.IDictionary?>? _getProviderIds = BuildProviderIdsDelegate();
@@ -124,76 +123,6 @@ namespace EmbyIcons.Services
             return paths;
         }
 
-        private MediaStream? QueryAndCacheHighestResolutionVideoStream(string providerIdKey, string providerIdValue, string cacheKey)
-        {
-            MediaStream? highest = null;
-            try
-            {
-                var query = new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { "Movie" },
-                    Recursive = true,
-                    AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
-                    Limit = 50
-                };
-
-                long bestArea = -1;
-                foreach (var version in _libraryManager.GetItemList(query).OfType<Movie>())
-                {
-                    foreach (var stream in version.GetMediaStreams() ?? new List<MediaStream>())
-                    {
-                        if (stream.Type != MediaStreamType.Video) continue;
-                        var area = (long)(stream.Width ?? 0) * (stream.Height ?? 0);
-                        if (area > bestArea)
-                        {
-                            bestArea = area;
-                            highest = stream;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for resolution aggregation, provider id {cacheKey}: {ex.Message}");
-                highest = null;
-            }
-
-            var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSize(1)
-                .SetSlidingExpiration(TimeSpan.FromHours(6))
-                .RegisterPostEvictionCallback((key, value, reason, state) =>
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Provider resolution cache entry evicted: {key} Reason: {reason}");
-                });
-
-            _providerResolutionCache.Set(cacheKey, highest, cacheEntryOptions);
-            return highest;
-        }
-
-        private MediaStream? GetHighestResolutionVideoStreamAcrossVersions(Movie movieItem)
-        {
-            string? providerIdKey = null;
-            foreach (var key in movieItem.ProviderIds.Keys)
-            {
-                if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) ||
-                    key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
-                {
-                    providerIdKey = key;
-                    break;
-                }
-            }
-
-            if (string.IsNullOrEmpty(providerIdKey) || !movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) || string.IsNullOrEmpty(providerIdValue))
-                return null;
-
-            var cacheKey = $"{providerIdKey}:{providerIdValue}";
-            if (_providerResolutionCache.TryGetValue(cacheKey, out MediaStream? cached))
-                return cached;
-
-            return QueryAndCacheHighestResolutionVideoStream(providerIdKey, providerIdValue, cacheKey);
-        }
-
         public void InvalidateProviderPathCacheForItem(BaseItem item)
         {
             if (item is not Movie movieItem) return;
@@ -208,7 +137,6 @@ namespace EmbyIcons.Services
                         {
                             var cacheKey = $"{key}:{value}";
                             _providerPathCache.Remove(cacheKey);
-                            _providerResolutionCache.Remove(cacheKey);
                         }
                     }
                 }
@@ -231,15 +159,6 @@ namespace EmbyIcons.Services
             catch (Exception ex)
             {
                 logger?.Debug($"[EmbyIcons] Error disposing provider path cache: {ex.Message}");
-            }
-
-            try
-            {
-                _providerResolutionCache?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                logger?.Debug($"[EmbyIcons] Error disposing provider resolution cache: {ex.Message}");
             }
             
             try { _cacheMaintenanceTimer?.Dispose(); } catch (Exception ex) { logger?.Debug($"[EmbyIcons] Error disposing cache maintenance timer: {ex.Message}"); }
@@ -1293,8 +1212,7 @@ namespace EmbyIcons.Services
                 return data;
             }
 
-            MediaStream? primaryVideoStream = mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video && s.IsDefault)
-                ?? mainItemStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+            MediaStream? primaryVideoStream = MediaStreamHelper.GetPrimaryVideoStream(mainItemStreams);
             MediaStream? primaryAudioStream = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
 
             var audioStreams = mainItemStreams.Where(s => s.Type == MediaStreamType.Audio).ToList();
@@ -1353,19 +1271,7 @@ namespace EmbyIcons.Services
                     IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
                     _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
                 };
-
-                var resolutionStream = primaryVideoStream;
-                if (item is Movie resolutionMovieItem)
-                {
-                    var highestVersionStream = GetHighestResolutionVideoStreamAcrossVersions(resolutionMovieItem);
-                    if (highestVersionStream != null &&
-                        (long)(highestVersionStream.Width ?? 0) * (highestVersionStream.Height ?? 0) > (long)(primaryVideoStream.Width ?? 0) * (primaryVideoStream.Height ?? 0))
-                    {
-                        resolutionStream = highestVersionStream;
-                    }
-                }
-
-                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(resolutionStream, knownResolutionKeys, item);
+                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys, item);
             }
 
             if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)

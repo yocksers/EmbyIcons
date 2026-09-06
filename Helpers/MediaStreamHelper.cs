@@ -151,6 +151,32 @@ namespace EmbyIcons.Helpers
             return bestDiff < 0.1 ? best.Name : null;
         }
 
+        public static MediaStream? GetPrimaryVideoStream(IEnumerable<MediaStream>? streams)
+        {
+            if (streams == null) return null;
+
+            MediaStream? best = null;
+            long bestArea = -1;
+            foreach (var s in streams)
+            {
+                if (s.Type != MediaStreamType.Video) continue;
+
+                var area = (long)(s.Width ?? 0) * (s.Height ?? 0);
+                var isBetter = best == null
+                    || area > bestArea
+                    || (area == bestArea && s.IsDefault && !best.IsDefault)
+                    || (area == bestArea && s.IsDefault == best.IsDefault && s.Index < best.Index);
+
+                if (isBetter)
+                {
+                    best = s;
+                    bestArea = area;
+                }
+            }
+
+            return best;
+        }
+
         public static string? GetAspectRatioIconName(MediaStream? videoStream, bool snapToCommon)
         {
             if (videoStream == null) return null;
@@ -311,12 +337,13 @@ namespace EmbyIcons.Helpers
                             subLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
                         break;
                     case MediaStreamType.Video:
-                        if (videoStream == null || s.IsDefault) videoStream = s;
                         var vc = GetVideoCodecIconName(s);
                         if (vc != null) videoCodecSet.Add(vc);
                         break;
                 }
             }
+
+            videoStream = GetPrimaryVideoStream(streams);
 
             audioLangList.Sort(StringComparer.Ordinal);
             subLangList.Sort(StringComparer.Ordinal);
@@ -342,6 +369,7 @@ namespace EmbyIcons.Helpers
             HashPart(string.Join(",", videoCodecList));
             HashPart(topAudio != null ? GetChannelIconName(topAudio) ?? "none" : "none");
             HashPart(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
+            HashPart(videoStream != null ? $"{videoStream.Width ?? 0}x{videoStream.Height ?? 0}" : "none");
             HashPart(item.DateModified.Ticks.ToString());
 
             md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
@@ -374,12 +402,13 @@ namespace EmbyIcons.Helpers
                             subLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
                         break;
                     case MediaStreamType.Video:
-                        if (videoStream == null || s.IsDefault) videoStream = s;
                         var vc = GetVideoCodecIconName(s);
                         if (vc != null) videoCodecSet.Add(vc);
                         break;
                 }
             }
+
+            videoStream = GetPrimaryVideoStream(streams);
 
             audioLangList.Sort(StringComparer.Ordinal);
             subLangList.Sort(StringComparer.Ordinal);
@@ -405,6 +434,7 @@ namespace EmbyIcons.Helpers
             HashPart(string.Join(",", videoCodecList));
             HashPart(topAudio != null ? (GetChannelIconName(topAudio) ?? "none") : "none");
             HashPart(videoStream != null ? (GetAspectRatioIconName(videoStream, true) ?? "none") : "none");
+            HashPart(videoStream != null ? $"{videoStream.Width ?? 0}x{videoStream.Height ?? 0}" : "none");
             HashPart(item.DateModified.Ticks.ToString());
 
             md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
