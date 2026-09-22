@@ -190,7 +190,7 @@ namespace EmbyIcons.Services
 
                     case "ORIGINALLANGUAGE":
                         var originalLang = GetOriginalLanguageFromItem(item);
-                        if (!string.IsNullOrEmpty(originalLang))
+                        if (originalLang != null && originalLang.Length > 0)
                         {
                             var normalizedOriginalLang = LanguageHelper.NormalizeLangCode(originalLang);
                             matches = normalizedOriginalLang.Equals(iconName, StringComparison.OrdinalIgnoreCase);

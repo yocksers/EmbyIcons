@@ -28,6 +28,12 @@ namespace EmbyIcons.Caching
         private long _cacheMisses = 0;
         private long _templatesGenerated = 0;
 
+        private static SKImage? DecodeIconImage(byte[] bytes)
+        {
+            using var bitmap = SKBitmap.Decode(bytes);
+            return bitmap != null ? SKImage.FromBitmap(bitmap) : null;
+        }
+
         public IconTemplateCache(ILogger logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -102,7 +108,7 @@ namespace EmbyIcons.Caching
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Template cache HIT for key: {cacheKey}");
 
-                        return SKImage.FromEncodedData(cachedBytes);
+                        return DecodeIconImage(cachedBytes);
                     }
                 }
                 catch (ObjectDisposedException)
@@ -135,7 +141,7 @@ namespace EmbyIcons.Caching
                 {
                     if (cache.TryGetValue(cacheKey, out byte[]? reCheckedBytes) && reCheckedBytes != null)
                     {
-                        return SKImage.FromEncodedData(reCheckedBytes);
+                        return DecodeIconImage(reCheckedBytes);
                     }
                 }
                 catch (ObjectDisposedException)

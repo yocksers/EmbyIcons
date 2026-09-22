@@ -368,6 +368,11 @@ namespace EmbyIcons
                 },
                 new PluginPageInfo
                 {
+                    Name = "EmbyIconsConfigurationIconLayout",
+                    EmbeddedResourcePath = GetType().Namespace + ".Configuration.EmbyIconsConfiguration.IconLayout.html"
+                },
+                new PluginPageInfo
+                {
                     Name = "EmbyIconsConfigurationAdvanced",
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.EmbyIconsConfiguration.Advanced.html"
                 },

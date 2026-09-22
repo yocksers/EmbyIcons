@@ -270,7 +270,7 @@ namespace EmbyIcons.Services
                     }
 
                     var originalLang = GetOriginalLanguageFromItem(item);
-                    if (!string.IsNullOrEmpty(originalLang))
+                    if (originalLang != null && originalLang.Length > 0)
                     {
                         var normalizedLang = LanguageHelper.NormalizeLangCode(originalLang);
                         localReport.OriginalLanguages.Add(normalizedLang);
@@ -428,7 +428,7 @@ namespace EmbyIcons.Services
                 }
 
                 var originalLang = GetOriginalLanguageFromItem(item);
-                if (!string.IsNullOrEmpty(originalLang))
+                if (originalLang != null && originalLang.Length > 0)
                 {
                     var normalizedOriginalLang = LanguageHelper.NormalizeLangCode(originalLang);
                     originalLanguageCounts.AddOrUpdate(normalizedOriginalLang, 1, (k, v) => v + 1);

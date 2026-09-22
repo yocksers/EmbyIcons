@@ -18,7 +18,15 @@
         </div>
     </div>
 
-    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Series Troubleshooter</h1>
+    <div class="segmented-control" style="display: flex; gap: 0.5em; margin: 2em 0 1.5em; flex-wrap: wrap;">
+        <button type="button" is="emby-button" class="raised segment-button button-submit" data-segment="tsPanelSeries"><span>Series</span></button>
+        <button type="button" is="emby-button" class="raised segment-button" data-segment="tsPanelMovies"><span>Movies</span></button>
+        <button type="button" is="emby-button" class="raised segment-button" data-segment="tsPanelMusic"><span>Music</span></button>
+        <button type="button" is="emby-button" class="raised segment-button" data-segment="tsPanelCalculator"><span>Aspect Ratio Calculator</span></button>
+    </div>
+
+    <div id="tsPanelSeries">
+    <h1 style="margin-top: 0; margin-bottom: 0.5em;">Series Troubleshooter</h1>
     <p class="fieldDescription">
         Many icons (e.g., audio language, resolution) appear on a TV show poster only if all episodes share the same property. This tool scans a series and reports inconsistencies.
     </p>
@@ -66,8 +74,10 @@
 
     <div id="seriesReportContainer" style="margin-top: 2em;">
     </div>
+    </div>
 
-    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Movie Troubleshooter</h1>
+    <div id="tsPanelMovies">
+    <h1 style="margin-top: 0; margin-bottom: 0.5em;">Movie Troubleshooter</h1>
     <p class="fieldDescription">
         Scans your movie library and reports which icon files are missing for properties found in your movies. This helps you identify which icons to add so that your movie posters display correctly.
     </p>
@@ -115,8 +125,10 @@
 
     <div id="movieReportContainer" style="margin-top: 2em;">
     </div>
+    </div>
 
-    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Music Troubleshooter</h1>
+    <div id="tsPanelMusic">
+    <h1 style="margin-top: 0; margin-bottom: 0.5em;">Music Troubleshooter</h1>
     <p class="fieldDescription">
         Scans your music library and reports which icon files are missing for properties found in your tracks. Useful for verifying sample rate, bitrate, codec, and channel icons are in place.
     </p>
@@ -161,8 +173,10 @@
 
     <div id="musicReportContainer" style="margin-top: 2em;">
     </div>
+    </div>
 
-    <h1 style="margin-top: 2.5em; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>
+    <div id="tsPanelCalculator">
+    <h1 style="margin-top: 0; margin-bottom: 0.5em;">Aspect Ratio Calculator</h1>
     <p class="fieldDescription">
         Enter your video's resolution to find the correct icon name for its aspect ratio.
     </p>
@@ -196,6 +210,7 @@
                 <code>ar.<span id="aspectPreciseIconName"></span>.png</code>
             </div>
         </div>
+    </div>
     </div>
 
 </div>

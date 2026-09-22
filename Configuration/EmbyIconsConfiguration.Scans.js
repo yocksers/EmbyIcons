@@ -17,7 +17,16 @@ define(['loading', 'toast'], function (loading, toast) {
                 const message = `${percent}% - ${progress.Message}`;
 
                 if (button) button.querySelector('span').textContent = message;
-                if (container) container.innerHTML = `<p>${message}</p>`;
+                if (container) {
+                    let bar = container.querySelector('.scan-progress-bar-fill');
+                    if (!bar) {
+                        container.innerHTML = `<div class="scan-progress-bar" style="background-color: rgba(128,128,128,0.2); border-radius: 4px; height: 10px; overflow: hidden; margin-bottom: 0.75em;"><div class="scan-progress-bar-fill" style="background-color: #52B54B; height: 100%; width: 0%; transition: width 0.3s ease;"></div></div><p class="scan-progress-message"></p>`;
+                        bar = container.querySelector('.scan-progress-bar-fill');
+                    }
+                    bar.style.width = `${percent}%`;
+                    const messageEl = container.querySelector('.scan-progress-message');
+                    if (messageEl) messageEl.textContent = message;
+                }
 
             } catch (err) {
                 console.error('Error polling for scan progress', err);
@@ -259,7 +268,7 @@ define(['loading', 'toast'], function (loading, toast) {
             });
 
             if (response.Items && response.Items.length > 0) {
-                showItemsInline(response.Items, iconType, iconName, clickedIcon);
+                showItemsInline(instance, response.Items, iconType, iconName, clickedIcon);
             } else {
                 clickedIcon.classList.remove('highlighted');
                 require(['toast'], function (toast) {
@@ -277,7 +286,7 @@ define(['loading', 'toast'], function (loading, toast) {
         }
     }
 
-    function showItemsInline(items, iconType, iconName, clickedIcon) {
+    function showItemsInline(instance, items, iconType, iconName, clickedIcon) {
         const friendlyNames = { Language: 'Audio Language', Subtitle: 'Subtitle Language', Channel: 'Audio Channel', AudioCodec: 'Audio Codec', VideoCodec: 'Video Codec', VideoFormat: 'Video Format', Resolution: 'Resolution', AspectRatio: 'Aspect Ratio', Tag: 'Tag', ParentalRating: 'Parental Rating', FrameRate: 'Frame Rate', OriginalLanguage: 'Original Language', SeriesStatus: 'Series Status' };
 
         const itemsHtml = items.map(item => {

@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Caching;
+using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Services;
@@ -9,6 +9,7 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.IO;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
@@ -54,7 +55,7 @@ namespace EmbyIcons
                     {
                         if (_globalConcurrencyLock == null)
                         {
-                            var multiplier = Math.Clamp(Plugin.Instance?.Configuration.GlobalConcurrencyMultiplier ?? 0.75, 0.1, 2.0);
+                            var multiplier = EmbyIcons.Compat.MathCompat.Clamp(Plugin.Instance?.Configuration.GlobalConcurrencyMultiplier ?? 0.75, 0.1, 2.0);
                             var maxConcurrency = Math.Max(1, Convert.ToInt32(Environment.ProcessorCount * multiplier));
                             _globalConcurrencyLock = new SemaphoreSlim(maxConcurrency, maxConcurrency);
                         }
@@ -190,7 +191,65 @@ namespace EmbyIcons
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
             ClearAllItemDataCaches();
+            _templateCache?.Clear();
             await _iconCacheManager.RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true).ConfigureAwait(false);
+            await RefreshAllMappedLibraryImagesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task RefreshAllMappedLibraryImagesAsync(CancellationToken cancellationToken)
+        {
+            var plugin = Plugin.Instance;
+            if (plugin == null) return;
+
+            var libraryIds = plugin.Configuration.LibraryProfileMappings
+                .Select(m => m.LibraryId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
+
+            if (libraryIds.Count == 0) return;
+
+            var ancestorIds = libraryIds
+                .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
+                .Where(guid => guid != Guid.Empty)
+                .Select(guid => _libraryManager.GetItemById(guid))
+                .Where(item => item != null)
+                .Select(item => item!.InternalId)
+                .ToArray();
+
+            if (ancestorIds.Length == 0) return;
+
+            const int maxItemsForRefresh = 50000;
+            var items = await Task.Run(() => _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                AncestorIds = ancestorIds,
+                Recursive = true,
+                Limit = maxItemsForRefresh
+            }).DistinctBy(i => i.Id).ToList(), cancellationToken).ConfigureAwait(false);
+
+            _logger.Info($"[EmbyIcons] Forcing image regeneration for {items.Count} items across {libraryIds.Count} mapped libraries after cache clear.");
+
+            var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllImages = false
+            };
+
+            foreach (var item in items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    await item.RefreshMetadata(refreshOptions, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] Error refreshing image for item '{item.Name}': {ex.Message}");
+                }
+            }
+
+            _logger.Info($"[EmbyIcons] Finished forcing image regeneration for {items.Count} items.");
         }
 
         public void ClearAllItemDataCaches()
@@ -345,7 +404,7 @@ namespace EmbyIcons
         private static string SanitizeTagForKey(string tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
-            Span<char> buf = stackalloc char[tag.Length];
+            var buf = new char[tag.Length];
             int j = 0;
             bool lastDash = false;
             for (int i = 0; i < tag.Length; i++)
@@ -367,7 +426,7 @@ namespace EmbyIcons
             while (start < j && buf[start] == '-') start++;
             int end = j - 1;
             while (end >= start && buf[end] == '-') end--;
-            return (start > end) ? string.Empty : new string(buf.Slice(start, end - start + 1));
+            return (start > end) ? string.Empty : new string(buf, start, end - start + 1);
         }
 
         public string GetConfigurationCacheKey(BaseItem item, ImageType imageType)
@@ -550,7 +609,7 @@ namespace EmbyIcons
                 item = GetFullItem(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
-                await using var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true);
+                using var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true);
                 using var sourceBitmap = SKBitmap.Decode(inputStream);
 
                 if (sourceBitmap == null)
@@ -571,10 +630,10 @@ namespace EmbyIcons
                 string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
-                    await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
+                    using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                     {
                         await _imageOverlayService.ApplyOverlaysToStreamAsync(
-                            bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
+                            bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null, _templateCache);
                     }
 
                     try

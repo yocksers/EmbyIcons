@@ -77,11 +77,45 @@ define([], function () {
         });
     }
 
+    function applyAdvancedMode(view, enabled) {
+        view.querySelectorAll('[data-advanced-only]').forEach(el => {
+            el.style.display = enabled ? (el.getAttribute('data-advanced-only-display') || '') : 'none';
+        });
+    }
+
+    function initializeSegmentedControls(view) {
+        const controls = view.querySelectorAll('.segmented-control');
+        controls.forEach(control => {
+            const buttons = Array.from(control.querySelectorAll('.segment-button'));
+            const panels = buttons
+                .map(btn => view.querySelector('#' + btn.getAttribute('data-segment')))
+                .filter(Boolean);
+
+            function activate(targetId) {
+                buttons.forEach(btn => {
+                    btn.classList.toggle('button-submit', btn.getAttribute('data-segment') === targetId);
+                });
+                panels.forEach(panel => {
+                    panel.style.display = (panel.id === targetId) ? '' : 'none';
+                });
+            }
+
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => activate(btn.getAttribute('data-segment')));
+            });
+
+            const initiallyActive = control.querySelector('.segment-button.button-submit') || buttons[0];
+            if (initiallyActive) activate(initiallyActive.getAttribute('data-segment'));
+        });
+    }
+
     return {
         debounce: debounce,
         transparentPixel: transparentPixel,
         initializeCollapsibleSections: initializeCollapsibleSections,
         expandAllSections: expandAllSections,
-        collapseAllSections: collapseAllSections
+        collapseAllSections: collapseAllSections,
+        applyAdvancedMode: applyAdvancedMode,
+        initializeSegmentedControls: initializeSegmentedControls
     };
 });

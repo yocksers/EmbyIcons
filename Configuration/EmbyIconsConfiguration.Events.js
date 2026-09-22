@@ -87,6 +87,9 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         if (dom.btnExpandAll) dom.btnExpandAll.addEventListener('click', () => utils.expandAllSections(instance.view));
         if (dom.btnCollapseAll) dom.btnCollapseAll.addEventListener('click', () => utils.collapseAllSections(instance.view));
 
+        if (dom.chkAdvancedMode) dom.chkAdvancedMode.addEventListener('change', instance.onAdvancedModeToggle.bind(instance));
+        utils.initializeSegmentedControls(instance.view);
+
         instance.documentClickHandler = (e) => {
             if (dom.seriesSearchResults && dom.txtSeriesSearch && !dom.seriesSearchResults.contains(e.target) && !dom.txtSeriesSearch.contains(e.target)) {
                 dom.seriesSearchResults.style.display = 'none';

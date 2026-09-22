@@ -80,6 +80,7 @@ define([
 
                 await this.fetchApiRoutes();
                 await this.loadData();
+                uiHandlers.initAdvancedMode(this);
             } catch (error) {
                 console.error('Failed to initialize EmbyIcons configuration page', error);
                 toast({ type: 'error', text: 'Error loading page. Please refresh.' });
@@ -177,6 +178,10 @@ define([
 
         onTabChange(e) {
             return uiHandlers.onTabChange(this, e);
+        }
+
+        onAdvancedModeToggle(event) {
+            return uiHandlers.onAdvancedModeToggle(this, event);
         }
 
         selectIconsFolder() {

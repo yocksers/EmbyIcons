@@ -107,6 +107,16 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         });
     }
 
+    function initAdvancedMode(instance) {
+        const enabled = !!(instance.dom.chkAdvancedMode && instance.dom.chkAdvancedMode.checked);
+        utils.applyAdvancedMode(instance.dom.view, enabled);
+    }
+
+    function onAdvancedModeToggle(instance, event) {
+        const enabled = event.target.checked;
+        utils.applyAdvancedMode(instance.dom.view, enabled);
+    }
+
     function selectIconsFolder(instance) {
         require(['directorybrowser'], (directorybrowser) => {
             const browser = new directorybrowser();
@@ -131,6 +141,8 @@ define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) 
         updateAllPriorityGroups: updateAllPriorityGroups,
         onTabChange: onTabChange,
         triggerPreviewUpdate: triggerPreviewUpdate,
-        selectIconsFolder: selectIconsFolder
+        selectIconsFolder: selectIconsFolder,
+        initAdvancedMode: initAdvancedMode,
+        onAdvancedModeToggle: onAdvancedModeToggle
     };
 });

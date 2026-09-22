@@ -25,7 +25,7 @@ namespace EmbyIcons.Helpers
             {
                 if (stream == null) return null;
                 var codec = stream.Codec?.Trim();
-                if (string.IsNullOrEmpty(codec)) return null;
+                if (codec == null || codec.Length == 0) return null;
 
                 var lowerCodec = codec.ToLowerInvariant();
                 var displayTitle = (stream.DisplayTitle ?? "").ToLowerInvariant();
@@ -73,7 +73,7 @@ namespace EmbyIcons.Helpers
             {
                 if (stream == null) return null;
                 var codec = stream.Codec?.Trim();
-                if (string.IsNullOrEmpty(codec)) return null;
+                if (codec == null || codec.Length == 0) return null;
 
                 var lowerCodec = codec.ToLowerInvariant();
                 
@@ -280,7 +280,7 @@ namespace EmbyIcons.Helpers
 
         public static string? GetParentalRatingIconName(string? officialRating)
         {
-            if (string.IsNullOrWhiteSpace(officialRating))
+            if (officialRating == null || officialRating.Trim().Length == 0)
             {
                 return null;
             }
@@ -544,7 +544,7 @@ namespace EmbyIcons.Helpers
                 if (statusProperty != null)
                 {
                     var statusValue = statusProperty.GetValue(series)?.ToString();
-                    if (!string.IsNullOrEmpty(statusValue))
+                    if (statusValue != null && statusValue.Length > 0)
                     {
                         // Check if the status indicates the series has ended
                         if (statusValue.IndexOf("Ended", StringComparison.OrdinalIgnoreCase) >= 0 ||

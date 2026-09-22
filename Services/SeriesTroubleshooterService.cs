@@ -81,7 +81,7 @@ namespace EmbyIcons.Services
             var reports = new List<SeriesTroubleshooterReport>();
 
             var requestedChecks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(request.ChecksToRun))
+            if (request.ChecksToRun != null && request.ChecksToRun.Length > 0)
             {
                 requestedChecks.UnionWith(request.ChecksToRun.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
             }

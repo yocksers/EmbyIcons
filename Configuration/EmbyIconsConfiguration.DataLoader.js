@@ -6,6 +6,7 @@ define([], function () {
     async function loadPagePartials(view) {
         const parts = [
             { id: 'settingsPage', page: 'EmbyIconsConfigurationSettings' },
+            { id: 'iconLayoutPage', page: 'EmbyIconsConfigurationIconLayout' },
             { id: 'advancedPage', page: 'EmbyIconsConfigurationAdvanced' },
             { id: 'iconManagerPage', page: 'EmbyIconsConfigurationIconManager' },
             { id: 'troubleshooterPage', page: 'EmbyIconsConfigurationTroubleshooter' },

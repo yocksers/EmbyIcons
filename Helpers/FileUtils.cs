@@ -16,8 +16,8 @@ namespace EmbyIcons.Helpers
             var tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                await using (var fsIn = fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
-                await using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
+                using (var fsIn = fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
+                using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                 {
                     await fsIn.CopyToAsync(fsOut, 262144, cancellationToken);
                 }

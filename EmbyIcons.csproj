@@ -1,22 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net6.0</TargetFramework>
+		<TargetFramework>netstandard2.0</TargetFramework>
 		<OutputType>Library</OutputType>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.57.9.0</Version>
-		<AssemblyVersion>5.57.9.0</AssemblyVersion>
-		<FileVersion>5.57.9.0</FileVersion>
+		<Version>5.60.0.1</Version>
+		<AssemblyVersion>5.60.0.1</AssemblyVersion>
+		<FileVersion>5.60.0.1</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<Compile Remove="Settings\**" />
-		<EmbeddedResource Remove="Settings\**" />
-		<None Remove="Settings\**" />
-	</ItemGroup>
 
 	<ItemGroup>
 		<EmbeddedResource Include="Assets\Roboto-Bold.ttf" />
@@ -145,6 +139,7 @@
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Api.js" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.SafeZones.js" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Settings.html" />
+		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconLayout.html" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Advanced.html" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.IconManager.html" />
 		<EmbeddedResource Include="Configuration\EmbyIconsConfiguration.Troubleshooter.html" />
@@ -162,6 +157,8 @@
 		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" />
 		<PackageReference Include="SkiaSharp" Version="2.88.6" />
+		<PackageReference Include="System.Memory" Version="4.6.3" />
+		<PackageReference Include="System.Text.Json" Version="6.0.10" />
 	</ItemGroup>
 
 </Project>

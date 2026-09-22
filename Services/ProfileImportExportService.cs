@@ -40,7 +40,7 @@ namespace EmbyIcons.Services
                 };
 
                 var json = JsonSerializer.Serialize(result.ExportData, options);
-                await File.WriteAllTextAsync(resolvedPath, json);
+                await EmbyIcons.Compat.FileCompat.WriteAllTextAsync(resolvedPath, json);
 
                 _logger.Info($"[EmbyIcons] Exported {result.ProfileCount} profile(s) to: {resolvedPath}");
                 
@@ -103,7 +103,7 @@ namespace EmbyIcons.Services
                     throw new FileNotFoundException("Profile file not found", resolvedPath);
                 }
 
-                var json = await File.ReadAllTextAsync(resolvedPath);
+                var json = await EmbyIcons.Compat.FileCompat.ReadAllTextAsync(resolvedPath);
                 var result = ImportProfilesFromJson(json, options);
 
                 _logger.Info($"[EmbyIcons] Imported {result.ImportedCount} profile(s) from: {resolvedPath}");

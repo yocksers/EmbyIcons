@@ -185,7 +185,7 @@ namespace EmbyIcons.Services
 
         private IconProfile? GetProfileForPath(string? path)
         {
-            if (string.IsNullOrEmpty(path))
+            if (path == null || path.Length == 0)
             {
                 return null;
             }
@@ -208,7 +208,7 @@ namespace EmbyIcons.Services
 
         private async Task<IconProfile?> GetProfileForPathAsync(string? path)
         {
-            if (string.IsNullOrEmpty(path))
+            if (path == null || path.Length == 0)
             {
                 return null;
             }

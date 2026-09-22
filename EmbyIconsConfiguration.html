@@ -11,17 +11,17 @@
                     <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">settings</i>
                     Settings
                 </a>
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="iconLayoutPage">
+                    <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">dashboard_customize</i>
+                    Icon Layout
+                </a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="advancedPage">
                     <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">tune</i>
                     Advanced
                 </a>
-                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="iconManagerPage">
-                    <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">image</i>
-                    Icon Manager
-                </a>
-                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="troubleshooterPage">
+                <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="diagnosticsPage">
                     <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">bug_report</i>
-                    Troubleshooter
+                    Diagnostics
                 </a>
                 <a is="emby-linkbutton" class="nav-button" href="#" data-role="button" data-target="readmePage">
                     <i class="md-icon" style="vertical-align: middle; margin-right: 0.25em;">help</i>
@@ -30,9 +30,20 @@
             </div>
 
             <div id="settingsPage" style="margin-top: 2em;"></div>
+            <div id="iconLayoutPage" class="hide" style="margin-top: 2em;"></div>
             <div id="advancedPage" class="hide" style="margin-top: 2em;"></div>
-            <div id="iconManagerPage" class="hide" style="margin-top: 2em;"></div>
-            <div id="troubleshooterPage" class="hide" style="margin-top: 2em;"></div>
+            <div id="diagnosticsPage" class="hide" style="margin-top: 2em;">
+                <div class="segmented-control" style="display: flex; gap: 0.5em; margin-bottom: 1.5em; flex-wrap: wrap;">
+                    <button type="button" is="emby-button" class="raised segment-button button-submit" data-segment="iconManagerPage">
+                        <span>Icon Manager</span>
+                    </button>
+                    <button type="button" is="emby-button" class="raised segment-button" data-segment="troubleshooterPage">
+                        <span>Troubleshooter</span>
+                    </button>
+                </div>
+                <div id="iconManagerPage"></div>
+                <div id="troubleshooterPage"></div>
+            </div>
             <div id="readmePage" class="hide" style="margin-top: 2em;"></div>
 
         </div>

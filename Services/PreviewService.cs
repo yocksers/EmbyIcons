@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Api;
+using EmbyIcons.Api;
 using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
@@ -44,7 +44,7 @@ namespace EmbyIcons
         public async Task<object> Get(GetIconPreview request)
         {
             var plugin = Plugin.Instance ?? throw new InvalidOperationException("Plugin instance is not initialized.");
-            if (string.IsNullOrEmpty(request.OptionsJson))
+            if (request.OptionsJson == null || request.OptionsJson.Length == 0)
             {
                 plugin.Logger.Warn("[EmbyIcons] Preview request received with empty options.");
                 return new MemoryStream();
@@ -93,7 +93,7 @@ namespace EmbyIcons
                 };
             }
 
-            var random = Random.Shared;
+            var random = EmbyIcons.Compat.RandomCompat.Shared;
             string GetRandom(IconCacheManager.IconType type, string fallback)
             {
                 var list = masterIconList.GetValueOrDefault(type, new List<string>());
@@ -135,7 +135,7 @@ namespace EmbyIcons
             var injectedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>>();
             var asm = Assembly.GetExecutingAssembly();
             var resourceName = $"{GetType().Namespace}.Images.tag.png";
-            await using (var stream = asm.GetManifestResourceStream(resourceName))
+            using (var stream = asm.GetManifestResourceStream(resourceName))
             {
                 if (stream != null && stream.Length > 0)
                 {

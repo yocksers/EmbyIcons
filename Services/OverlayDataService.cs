@@ -1,4 +1,4 @@
-﻿using EmbyIcons.Caching;
+using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Models;
@@ -13,7 +13,6 @@ using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -351,7 +350,7 @@ namespace EmbyIcons.Services
                     if (float.TryParse(num, System.Globalization.NumberStyles.Float, 
                         System.Globalization.CultureInfo.InvariantCulture, out var f))
                     {
-                        return Math.Clamp(f, 0f, 100f);
+                        return EmbyIcons.Compat.MathCompat.Clamp(f, 0f, 100f);
                     }
                 }
 
@@ -365,16 +364,16 @@ namespace EmbyIcons.Services
                             System.Globalization.CultureInfo.InvariantCulture, out var b) && 
                         b != 0)
                     {
-                        return Math.Clamp((a / b) * 100f, 0f, 100f);
+                        return EmbyIcons.Compat.MathCompat.Clamp((a / b) * 100f, 0f, 100f);
                     }
                 }
 
                 if (float.TryParse(s, System.Globalization.NumberStyles.Float, 
                     System.Globalization.CultureInfo.InvariantCulture, out var v))
                 {
-                    if (v <= 1f) return Math.Clamp(v * 100f, 0f, 100f);
-                    if (v <= 10f) return Math.Clamp(v * 10f, 0f, 100f);
-                    return Math.Clamp(v, 0f, 100f);
+                    if (v <= 1f) return EmbyIcons.Compat.MathCompat.Clamp(v * 100f, 0f, 100f);
+                    if (v <= 10f) return EmbyIcons.Compat.MathCompat.Clamp(v * 10f, 0f, 100f);
+                    return EmbyIcons.Compat.MathCompat.Clamp(v, 0f, 100f);
                 }
             }
             catch (Exception ex)
@@ -508,14 +507,14 @@ namespace EmbyIcons.Services
                             System.Globalization.CultureInfo.InvariantCulture, out var b) && 
                         b != 0)
                     {
-                        return Math.Clamp(a / b * 10f, 0f, 10f);
+                        return EmbyIcons.Compat.MathCompat.Clamp(a / b * 10f, 0f, 10f);
                     }
                 }
 
                 if (float.TryParse(s, System.Globalization.NumberStyles.Float, 
                     System.Globalization.CultureInfo.InvariantCulture, out var v))
                 {
-                    return Math.Clamp(v, 0f, 10f);
+                    return EmbyIcons.Compat.MathCompat.Clamp(v, 0f, 10f);
                 }
             }
             catch (Exception ex)
@@ -1051,7 +1050,7 @@ namespace EmbyIcons.Services
                     }
                 }
 
-                if (!string.IsNullOrEmpty(providerIdKey) && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
+                if (providerIdKey != null && providerIdKey.Length > 0 && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
                 {
                     var cacheKey = $"{providerIdKey}:{providerIdValue}";
                     if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
@@ -1302,7 +1301,7 @@ namespace EmbyIcons.Services
             if (profileOptions.OriginalLanguageIconAlignment != IconAlignment.Disabled)
             {
                 var originalLang = GetOriginalLanguage(item);
-                if (!string.IsNullOrEmpty(originalLang))
+                if (originalLang != null && originalLang.Length > 0)
                 {
                     data.OriginalLanguageIconName = LanguageHelper.NormalizeLangCode(originalLang);
                 }
@@ -1359,7 +1358,7 @@ namespace EmbyIcons.Services
             return x.Id == y.Id;
         }
 
-        public int GetHashCode([DisallowNull] BaseItem obj)
+        public int GetHashCode(BaseItem obj)
         {
             return obj.Id.GetHashCode();
         }

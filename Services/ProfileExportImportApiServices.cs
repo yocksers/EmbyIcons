@@ -48,7 +48,7 @@ namespace EmbyIcons.Services
                 var service = new ProfileImportExportService(plugin.Logger, plugin.Configuration);
 
                 List<Guid>? profileIds = null;
-                if (!string.IsNullOrWhiteSpace(request.ProfileIds))
+                if (request.ProfileIds != null && request.ProfileIds.Trim().Length > 0)
                 {
                     profileIds = request.ProfileIds
                         .Split(',')

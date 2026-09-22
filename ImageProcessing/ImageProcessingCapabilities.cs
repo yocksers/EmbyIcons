@@ -50,12 +50,5 @@ namespace EmbyIcons.ImageProcessing
                 return false;
             }
         }
-        public static void Reset()
-        {
-            lock (_lock)
-            {
-                _skiaSharpAvailable = null;
-            }
-        }
     }
 }

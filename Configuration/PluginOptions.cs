@@ -72,13 +72,13 @@ namespace EmbyIcons.Configuration
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
         public bool EnableCollectionProfileLookup { get; set; } = true;
-        public bool EnableLazyIconLoading { get; set; } = true;
         public bool EnableIconTemplateCaching { get; set; } = true;
 
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
         public int JpegQuality { get; set; } = 75;
         public bool EnableImageSmoothing { get; set; } = false;
+        public bool ShowAdvancedOptions { get; set; } = false;
 
         public List<IconProfile> Profiles { get; set; } = new List<IconProfile>();
         public List<LibraryMapping> LibraryProfileMappings { get; set; } = new List<LibraryMapping>();

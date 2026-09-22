@@ -85,7 +85,7 @@
                     </label>
                 </div>
             </div>
-            <button is="emby-button" type="button" class="raised button-cancel btnDeleteFilenameMapping" title="Delete Mapping" style="flex-shrink: 0;"><span></span></button>
+            <button is="emby-button" type="button" class="raised button-cancel btnDeleteFilenameMapping" title="Delete Mapping" style="flex-shrink: 0;"><i class="md-icon" style="font-size: 1.2em;">delete</i></button>
         `;
 
         return newRow;
@@ -171,7 +171,7 @@
                     </label>
                 </div>
             </div>
-            <button is="emby-button" type="button" class="raised button-cancel btnDeleteTagMapping" title="Delete Mapping" style="flex-shrink: 0;"><span></span></button>
+            <button is="emby-button" type="button" class="raised button-cancel btnDeleteTagMapping" title="Delete Mapping" style="flex-shrink: 0;"><i class="md-icon" style="font-size: 1.2em;">delete</i></button>
         `;
 
         return newRow;

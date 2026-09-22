@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +26,14 @@ namespace EmbyIcons.Caching
         private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
         private volatile string? _iconsFolder;
+
+        private static MemoryCacheEntryOptions CreateBitmapCacheEntryOptions(SKBitmap bitmap)
+        {
+            return new MemoryCacheEntryOptions()
+                .SetSize(bitmap.ByteCount)
+                .SetSlidingExpiration(TimeSpan.FromHours(2))
+                .RegisterPostEvictionCallback((_, value, _, _) => (value as SKBitmap)?.Dispose());
+        }
 
         internal static readonly HashSet<string> SupportedCustomIconExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -277,9 +285,9 @@ namespace EmbyIcons.Caching
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (cache.TryGetValue(baseFileName, out byte[]? cachedBytes) && cachedBytes != null)
+            if (cache.TryGetValue(baseFileName, out SKBitmap? cachedBitmap) && cachedBitmap != null)
             {
-                return SKImage.FromEncodedData(cachedBytes);
+                return SKImage.FromBitmap(cachedBitmap);
             }
 
             foreach (var ext in SupportedCustomIconExtensions)
@@ -290,29 +298,28 @@ namespace EmbyIcons.Caching
                     try
                     {
                         byte[] bytes;
-                        await using (var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
+                        using (var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
                         {
                             if (fs.Length == 0) return null;
                             using var ms = new MemoryStream((int)fs.Length);
-                            await fs.CopyToAsync(ms, cancellationToken);
+                            await fs.CopyToAsync(ms, 81920, cancellationToken);
                             bytes = ms.ToArray();
                         }
 
-                        var image = SKImage.FromEncodedData(bytes);
-                        if (image == null)
+                        var bitmap = SKBitmap.Decode(bytes);
+                        if (bitmap == null)
                         {
                             _logger.Debug($"[EmbyIcons] Failed to decode icon file: {fullPath}");
                             return null;
                         }
 
-                        var cacheEntryOptions = new MemoryCacheEntryOptions()
-                            .SetSize(bytes.Length)
-                            .SetSlidingExpiration(TimeSpan.FromHours(2));
+                        bool cached = true;
+                        try { cache.Set(baseFileName, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
+                        catch (ObjectDisposedException) { bitmap.Dispose(); return null; }
+                        catch { cached = false; }
 
-                        try { cache.Set(baseFileName, bytes, cacheEntryOptions); }
-                        catch (ObjectDisposedException) { image.Dispose(); return null; }
-                        catch { }
-
+                        var image = SKImage.FromBitmap(bitmap);
+                        if (!cached) bitmap.Dispose();
                         return image;
                     }
                     catch (Exception ex)
@@ -327,33 +334,32 @@ namespace EmbyIcons.Caching
 
         private async Task<SKImage?> LoadEmbeddedIconAsync(string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
         {
-            if (cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null)
+            if (cache.TryGetValue(cacheKey, out SKBitmap? cachedBitmap) && cachedBitmap != null)
             {
-                return SKImage.FromEncodedData(cachedBytes);
+                return SKImage.FromBitmap(cachedBitmap);
             }
 
             var resourceName = $"EmbyIcons.EmbeddedIcons.{cacheKey.Substring("embedded_".Length)}.png";
 
-            await using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
             if (stream == null) return null;
 
             try
             {
                 using var ms = new MemoryStream();
-                await stream.CopyToAsync(ms, cancellationToken);
+                await stream.CopyToAsync(ms, 81920, cancellationToken);
                 byte[] bytes = ms.ToArray();
 
-                var image = SKImage.FromEncodedData(bytes);
-                if (image == null) return null;
+                var bitmap = SKBitmap.Decode(bytes);
+                if (bitmap == null) return null;
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetSize(bytes.Length)
-                    .SetSlidingExpiration(TimeSpan.FromHours(2));
+                bool cached = true;
+                try { cache.Set(cacheKey, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
+                catch (ObjectDisposedException) { bitmap.Dispose(); return null; }
+                catch { cached = false; }
 
-                try { cache.Set(cacheKey, bytes, cacheEntryOptions); }
-                catch (ObjectDisposedException) { image.Dispose(); return null; }
-                catch { }
-
+                var image = SKImage.FromBitmap(bitmap);
+                if (!cached) bitmap.Dispose();
                 return image;
             }
             catch { }
