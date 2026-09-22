@@ -24,9 +24,8 @@ EmbyIcons enhances your Emby Server by overlaying informational icons directly o
 ---
 
 ## Installation
-1.  Place `EmbyIcons.dll` in your Emby Server's `/plugins` directory
-2.  Restart Emby Server
-3.  Navigate to **Dashboard → Plugins → EmbyIcons** to configure
+1.  Go to the catalog in Emby and find EmbyIcons under general.
+2.  Press install.
 
 ---
 
