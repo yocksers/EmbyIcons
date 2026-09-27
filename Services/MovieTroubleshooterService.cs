@@ -7,7 +7,6 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Generic;
@@ -363,7 +362,7 @@ namespace EmbyIcons.Services
                 case CheckNames.Resolution:
                 {
                     var res = videoStream != null
-                        ? MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, movie)
+                        ? MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions)
                         : null;
                     return res != null ? new List<string> { res } : new List<string>();
                 }

@@ -8,7 +8,6 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Collections.Concurrent;
@@ -206,9 +205,6 @@ namespace EmbyIcons.Services
         {
             if (it == null) return null;
 
-            var result = TryExtractCommunityRatingFromProviderIds(it);
-            if (result.HasValue) return result;
-
             return TryExtractCommunityRatingFromRatingProperties(it);
         }
 
@@ -387,36 +383,6 @@ namespace EmbyIcons.Services
             return null;
         }
 
-        private static float? TryExtractCommunityRatingFromProviderIds(BaseItem item)
-        {
-            try
-            {
-                var providerIds = _getProviderIds?.Invoke(item);
-                if (providerIds == null) return null;
-
-                foreach (System.Collections.DictionaryEntry de in providerIds)
-                {
-                    var key = de.Key?.ToString() ?? string.Empty;
-                    var val = de.Value?.ToString() ?? string.Empty;
-
-                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) ||
-                        key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parsed = TryParseCommunityRating(val);
-                        if (parsed.HasValue) return parsed.Value;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from provider IDs: {ex.Message}");
-                }
-            }
-            return null;
-        }
-
         private static float? TryExtractCommunityRatingFromRatingProperties(BaseItem item)
         {
             try
@@ -528,52 +494,88 @@ namespace EmbyIcons.Services
             return null;
         }
 
+        private static bool TagMappingAppliesTo(TagIconMapping mapping, BaseItem item) => item switch
+        {
+            Series => mapping.ApplyToSeries,
+            Season => mapping.ApplyToSeasons,
+            BoxSet => mapping.ApplyToMovies || mapping.ApplyToSeries,
+            Movie => mapping.ApplyToMovies,
+            Episode => mapping.ApplyToEpisodes,
+            Audio => mapping.ApplyToTracks,
+            MusicAlbum => mapping.ApplyToAlbums,
+            MusicArtist => mapping.ApplyToArtists,
+            _ => true
+        };
+
+        private static void PopulateTagData(BaseItem item, ProfileSettings profileOptions, HashSet<string> tags, List<FilenameBasedIconData> tagBasedIcons)
+        {
+            if (item.Tags == null || item.Tags.Length == 0) return;
+
+            bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+
+            foreach (var tag in item.Tags)
+            {
+                var nt = NormalizeTag(tag);
+                if (string.IsNullOrEmpty(nt)) continue;
+
+                bool mappedAtLeastOnce = false;
+                if (hasTagMappings)
+                {
+                    foreach (var mapping in profileOptions.TagBasedIcons)
+                    {
+                        if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                            continue;
+                        if (TagMappingAppliesTo(mapping, item) && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                        {
+                            tagBasedIcons.Add(new FilenameBasedIconData
+                            {
+                                IconName = nt,
+                                Alignment = mapping.IconAlignment,
+                                Priority = mapping.Priority,
+                                HorizontalLayout = mapping.HorizontalLayout
+                            });
+                            mappedAtLeastOnce = true;
+                        }
+                    }
+                }
+
+                if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                {
+                    tags.Add(nt);
+                }
+            }
+        }
+
+        private async Task ApplyMdbListRatingsAsync(BaseItem item, ProfileSettings profileOptions, OverlayData overlayData, CancellationToken cancellationToken)
+        {
+            if (profileOptions.PopcornScoreIconAlignment == IconAlignment.Disabled && profileOptions.MyAnimeListScoreIconAlignment == IconAlignment.Disabled)
+                return;
+
+            try
+            {
+                var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(apiKey)) return;
+
+                var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
+                if (mdbData != null)
+                {
+                    overlayData.PopcornRating = mdbData.PopcornScore;
+                    overlayData.PopcornVotes = mdbData.PopcornVotes;
+                    overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for '{item.Name}': {ex.Message}");
+            }
+        }
+
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item, ProfileSettings profileOptions)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
-
-            if (item.Tags != null && item.Tags.Length > 0)
-            {
-                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
-                bool isSeries = item is Series;
-                bool isSeason = item is Season;
-
-                foreach (var tag in item.Tags)
-                {
-                    var nt = NormalizeTag(tag);
-                    if (string.IsNullOrEmpty(nt)) continue;
-
-                    bool mappedAtLeastOnce = false;
-                    if (hasTagMappings)
-                    {
-                        foreach (var mapping in profileOptions.TagBasedIcons)
-                        {
-                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
-                                continue;
-                            bool shouldApply = isSeries ? mapping.ApplyToSeries
-                                             : isSeason ? mapping.ApplyToSeasons
-                                             : mapping.ApplyToMovies || mapping.ApplyToSeries;
-                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
-                            {
-                                tagBasedIcons.Add(new FilenameBasedIconData
-                                {
-                                    IconName = nt,
-                                    Alignment = mapping.IconAlignment,
-                                    Priority = mapping.Priority,
-                                    HorizontalLayout = mapping.HorizontalLayout
-                                });
-                                mappedAtLeastOnce = true;
-                            }
-                        }
-                    }
-
-                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
-                    {
-                        tags.Add(nt);
-                    }
-                }
-            }
+            PopulateTagData(item, profileOptions, tags, tagBasedIcons);
 
             float? currentCommunityRating = null;
             if (item.CommunityRating.HasValue)
@@ -630,46 +632,7 @@ namespace EmbyIcons.Services
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
-
-            if (item.Tags != null && item.Tags.Length > 0)
-            {
-                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
-                bool isAlbum  = item is MusicAlbum;
-                bool isArtist = item is MusicArtist;
-
-                foreach (var tag in item.Tags)
-                {
-                    var nt = NormalizeTag(tag);
-                    if (string.IsNullOrEmpty(nt)) continue;
-
-                    bool mappedAtLeastOnce = false;
-                    if (hasTagMappings)
-                    {
-                        foreach (var mapping in profileOptions.TagBasedIcons)
-                        {
-                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
-                                continue;
-                            bool shouldApply = isAlbum  ? mapping.ApplyToAlbums
-                                             : isArtist ? mapping.ApplyToArtists
-                                             : false;
-                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
-                            {
-                                tagBasedIcons.Add(new FilenameBasedIconData
-                                {
-                                    IconName         = nt,
-                                    Alignment        = mapping.IconAlignment,
-                                    Priority         = mapping.Priority,
-                                    HorizontalLayout = mapping.HorizontalLayout
-                                });
-                                mappedAtLeastOnce = true;
-                            }
-                        }
-                    }
-
-                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
-                        tags.Add(nt);
-                }
-            }
+            PopulateTagData(item, profileOptions, tags, tagBasedIcons);
 
             float? communityRating = item.CommunityRating;
             if (!communityRating.HasValue)
@@ -716,12 +679,19 @@ namespace EmbyIcons.Services
 
             if (item is Series seriesItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
+                if (!profileOptions.UseSeriesLiteMode && !profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Overlays for TV show posters are disabled in the current profile. Skipping '{item.Name}'.");
+                    return new OverlayData();
+                }
+
+                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(seriesItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 overlayData = CreateOverlayDataFromAggregate(aggResult, seriesItem, profileOptions);
             }
             else if (item is Season seasonItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
+                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(seasonItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 overlayData = CreateOverlayDataFromAggregate(aggResult, seasonItem, profileOptions);
             }
             else if (item is BoxSet collectionItem)
@@ -735,17 +705,17 @@ namespace EmbyIcons.Services
                     return new OverlayData();
                 }
 
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
+                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(collectionItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
                 overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
             }
             else if (item is MusicAlbum albumItem && profileOptions.EnableMusicAlbumAggregation)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(albumItem, profileOptions, globalOptions);
+                var aggResult = await _enhancer.GetOrBuildAggregatedDataForAlbumAsync(albumItem, profileOptions, cancellationToken).ConfigureAwait(false);
                 overlayData = CreateOverlayDataFromMusicAggregate(aggResult, albumItem, profileOptions);
             }
             else if (item is MusicArtist artistItem && profileOptions.EnableMusicAlbumAggregation)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(artistItem, profileOptions, globalOptions);
+                var aggResult = await _enhancer.GetOrBuildAggregatedDataForAlbumAsync(artistItem, profileOptions, cancellationToken).ConfigureAwait(false);
                 overlayData = CreateOverlayDataFromMusicAggregate(aggResult, artistItem, profileOptions);
             }
             else
@@ -754,28 +724,7 @@ namespace EmbyIcons.Services
                 return overlayData;
             }
 
-            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
-            {
-                try
-                {
-                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
-                        if (mdbData != null)
-                        {
-                            overlayData.PopcornRating = mdbData.PopcornScore;
-                            overlayData.PopcornVotes = mdbData.PopcornVotes;
-                            overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for aggregate: {ex.Message}");
-                }
-            }
+            await ApplyMdbListRatingsAsync(item, profileOptions, overlayData, cancellationToken).ConfigureAwait(false);
 
             return overlayData;
         }
@@ -829,51 +778,7 @@ namespace EmbyIcons.Services
                 
                 var cachedTagBasedIcons = new List<FilenameBasedIconData>();
                 var cachedGlobalTags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-
-                if (cachedInfo.Tags.Count > 0)
-                {
-                    bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
-                    bool isMovie = item is Movie;
-                    bool isEpisode = item is Episode;
-                    bool isTrack = item is Audio;
-                    bool isMusicAlbum = item is MusicAlbum;
-                    bool isMusicArtist = item is MusicArtist;
-
-                    foreach (var tag in cachedInfo.Tags)
-                    {
-                        bool mappedAtLeastOnce = false;
-                        if (hasTagMappings)
-                        {
-                            foreach (var mapping in profileOptions.TagBasedIcons)
-                            {
-                                if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
-                                    continue;
-                                bool shouldApply = isMovie ? mapping.ApplyToMovies
-                                                 : isEpisode ? mapping.ApplyToEpisodes
-                                                 : isTrack ? mapping.ApplyToTracks
-                                                 : isMusicAlbum ? mapping.ApplyToAlbums
-                                                 : isMusicArtist ? mapping.ApplyToArtists
-                                                 : true;
-                                if (shouldApply && string.Equals(mapping.TagName, tag, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    cachedTagBasedIcons.Add(new FilenameBasedIconData
-                                    {
-                                        IconName = tag,
-                                        Alignment = mapping.IconAlignment,
-                                        Priority = mapping.Priority,
-                                        HorizontalLayout = mapping.HorizontalLayout
-                                    });
-                                    mappedAtLeastOnce = true;
-                                }
-                            }
-                        }
-
-                        if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
-                        {
-                            cachedGlobalTags.Add(tag);
-                        }
-                    }
-                }
+                PopulateTagData(item, profileOptions, cachedGlobalTags, cachedTagBasedIcons);
 
                 var cachedOverlayData = new OverlayData
                 {
@@ -883,6 +788,7 @@ namespace EmbyIcons.Services
                     VideoCodecs = cachedInfo.VideoCodecs,
                     Tags = cachedGlobalTags,
                     TagBasedIcons = cachedTagBasedIcons,
+                    FilenameBasedIcons = new List<FilenameBasedIconData>(cachedInfo.FilenameBasedIcons),
                     SourceIcons = cachedInfo.SourceIcons,
                     ChannelIconName = cachedInfo.ChannelIconName,
                     VideoFormatIconName = cachedInfo.VideoFormatIconName,
@@ -898,28 +804,12 @@ namespace EmbyIcons.Services
                     BitDepthIconName = cachedInfo.BitDepthIconName
                 };
 
-                if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
+                if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
                 {
-                    try
-                    {
-                        var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                        if (!string.IsNullOrWhiteSpace(apiKey))
-                        {
-                            var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
-                            if (mdbData != null)
-                            {
-                                cachedOverlayData.PopcornRating = mdbData.PopcornScore;
-                                cachedOverlayData.PopcornVotes = mdbData.PopcornVotes;
-                                cachedOverlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                            _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
-                    }
+                    cachedOverlayData.FavoriteCount = _enhancer.GetFavoriteCount(item);
                 }
+
+                await ApplyMdbListRatingsAsync(item, profileOptions, cachedOverlayData, cancellationToken).ConfigureAwait(false);
 
                 return cachedOverlayData;
             }
@@ -934,12 +824,11 @@ namespace EmbyIcons.Services
                 SubtitleLangs = overlayData.SubtitleLanguages,
                 AudioCodecs = overlayData.AudioCodecs,
                 VideoCodecs = overlayData.VideoCodecs,
-                Tags = overlayData.Tags,
+                FilenameBasedIcons = new List<FilenameBasedIconData>(overlayData.FilenameBasedIcons),
                 SourceIcons = overlayData.SourceIcons,
                 ChannelIconName = overlayData.ChannelIconName,
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
-                RottenTomatoesRating = overlayData.RottenTomatoesRating,
                 DateModifiedTicks = item.DateModified.Ticks,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName,
@@ -957,28 +846,7 @@ namespace EmbyIcons.Services
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
             EmbyIconsEnhancer._episodeIconCache?.Set(item.Id, newInfo, cacheEntryOptions);
 
-            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
-            {
-                try
-                {
-                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
-                        if (mdbData != null)
-                        {
-                            overlayData.PopcornRating = mdbData.PopcornScore;
-                            overlayData.PopcornVotes = mdbData.PopcornVotes;
-                            overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
-                }
-            }
+            await ApplyMdbListRatingsAsync(item, profileOptions, overlayData, cancellationToken).ConfigureAwait(false);
 
             return overlayData;
         }
@@ -1036,7 +904,11 @@ namespace EmbyIcons.Services
                 data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
             }
 
-            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any(m =>
+                    m.ApplyToMovies &&
+                    m.IconAlignment != IconAlignment.Disabled &&
+                    !string.IsNullOrWhiteSpace(m.Keyword) &&
+                    !string.IsNullOrWhiteSpace(m.IconName)))
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 string? providerIdKey = null;
@@ -1156,53 +1028,7 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (item.Tags != null && item.Tags.Length > 0)
-            {
-                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
-                bool isMovie = item is Movie;
-                bool isEpisode = item is Episode;
-                bool isTrack = item is Audio;
-                bool isMusicAlbum = item is MusicAlbum;
-                bool isMusicArtist = item is MusicArtist;
-
-                foreach (var tag in item.Tags)
-                {
-                    var nt = NormalizeTag(tag);
-                    if (string.IsNullOrEmpty(nt)) continue;
-
-                    bool mappedAtLeastOnce = false;
-                    if (hasTagMappings)
-                    {
-                        foreach (var mapping in profileOptions.TagBasedIcons)
-                        {
-                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
-                                continue;
-                            bool shouldApply = isMovie ? mapping.ApplyToMovies
-                                             : isEpisode ? mapping.ApplyToEpisodes
-                                             : isTrack ? mapping.ApplyToTracks
-                                             : isMusicAlbum ? mapping.ApplyToAlbums
-                                             : isMusicArtist ? mapping.ApplyToArtists
-                                             : true;
-                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
-                            {
-                                data.TagBasedIcons.Add(new FilenameBasedIconData
-                                {
-                                    IconName = nt,
-                                    Alignment = mapping.IconAlignment,
-                                    Priority = mapping.Priority,
-                                    HorizontalLayout = mapping.HorizontalLayout
-                                });
-                                mappedAtLeastOnce = true;
-                            }
-                        }
-                    }
-
-                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
-                    {
-                        data.Tags.Add(nt);
-                    }
-                }
-            }
+            PopulateTagData(item, profileOptions, data.Tags, data.TagBasedIcons);
 
             var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
 
@@ -1270,7 +1096,7 @@ namespace EmbyIcons.Services
                     IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
                     _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
                 };
-                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys, item);
+                data.ResolutionIconName = MediaStreamHelper.GetResolutionIconNameFromStream(primaryVideoStream, knownResolutionKeys);
             }
 
             if (profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled)

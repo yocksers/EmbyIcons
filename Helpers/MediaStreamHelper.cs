@@ -6,7 +6,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace EmbyIcons.Helpers
 {
@@ -198,7 +197,7 @@ namespace EmbyIcons.Helpers
             return null;
         }
 
-        public static string? GetResolutionIconNameFromStream(MediaStream? videoStream, IList<string> knownKeys, BaseItem? item = null)
+        public static string? GetResolutionIconNameFromStream(MediaStream? videoStream, IList<string> knownKeys)
         {
             if (videoStream == null) return null;
 
@@ -311,95 +310,39 @@ namespace EmbyIcons.Helpers
             return fpsValue.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
+        [ThreadStatic]
+        private static System.Security.Cryptography.MD5? _threadMd5;
+
         public static string GetItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams)
-        {
-            var audioLangList = new List<string>();
-            var subLangList = new List<string>();
-            var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var videoCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            MediaStream? videoStream = null;
-            MediaStream? topAudio = null;
-
-            foreach (var s in streams)
-            {
-                switch (s.Type)
-                {
-                    case MediaStreamType.Audio:
-                        if (!string.IsNullOrEmpty(s.Language))
-                            audioLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
-                        var ac = GetAudioCodecIconName(s);
-                        if (ac != null) audioCodecSet.Add(ac);
-                        if (topAudio == null || (s.Channels ?? 0) > (topAudio.Channels ?? 0))
-                            topAudio = s;
-                        break;
-                    case MediaStreamType.Subtitle:
-                        if (!string.IsNullOrEmpty(s.Language))
-                            subLangList.Add(LanguageHelper.NormalizeLangCode(s.Language));
-                        break;
-                    case MediaStreamType.Video:
-                        var vc = GetVideoCodecIconName(s);
-                        if (vc != null) videoCodecSet.Add(vc);
-                        break;
-                }
-            }
-
-            videoStream = GetPrimaryVideoStream(streams);
-
-            audioLangList.Sort(StringComparer.Ordinal);
-            subLangList.Sort(StringComparer.Ordinal);
-            var audioCodecList = new List<string>(audioCodecSet);
-            audioCodecList.Sort(StringComparer.Ordinal);
-            var videoCodecList = new List<string>(videoCodecSet);
-            videoCodecList.Sort(StringComparer.Ordinal);
-
-            using var md5 = System.Security.Cryptography.MD5.Create();
-            var encoding = System.Text.Encoding.UTF8;
-            var separator = encoding.GetBytes("|");
-
-            void HashPart(string part)
-            {
-                var bytes = encoding.GetBytes(part);
-                md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                md5.TransformBlock(separator, 0, separator.Length, null, 0);
-            }
-
-            HashPart(string.Join(",", audioLangList));
-            HashPart(string.Join(",", subLangList));
-            HashPart(string.Join(",", audioCodecList));
-            HashPart(string.Join(",", videoCodecList));
-            HashPart(topAudio != null ? GetChannelIconName(topAudio) ?? "none" : "none");
-            HashPart(videoStream != null ? GetAspectRatioIconName(videoStream, true) ?? "none" : "none");
-            HashPart(videoStream != null ? $"{videoStream.Width ?? 0}x{videoStream.Height ?? 0}" : "none");
-            HashPart(item.DateModified.Ticks.ToString());
-
-            md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-            return BitConverter.ToString(md5.Hash!).Replace("-", "").ToLowerInvariant();
-        }
+            => ComputeItemMediaStreamHash(item, streams, useDisplayLanguage: false);
 
         public static string GetItemMediaStreamHashV2(BaseItem item, IReadOnlyList<MediaStream> streams)
+            => ComputeItemMediaStreamHash(item, streams, useDisplayLanguage: true);
+
+        private static string ComputeItemMediaStreamHash(BaseItem item, IReadOnlyList<MediaStream> streams, bool useDisplayLanguage)
         {
             var audioLangList = new List<string>();
             var subLangList = new List<string>();
             var audioCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var videoCodecSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            MediaStream? videoStream = null;
             MediaStream? topAudio = null;
 
             foreach (var s in streams)
             {
+                var language = useDisplayLanguage ? s.DisplayLanguage : s.Language;
                 switch (s.Type)
                 {
                     case MediaStreamType.Audio:
-                        if (!string.IsNullOrEmpty(s.DisplayLanguage))
-                            audioLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        if (!string.IsNullOrEmpty(language))
+                            audioLangList.Add(LanguageHelper.NormalizeLangCode(language));
                         var ac = GetAudioCodecIconName(s);
                         if (ac != null) audioCodecSet.Add(ac);
                         if (topAudio == null || (s.Channels ?? 0) > (topAudio.Channels ?? 0))
                             topAudio = s;
                         break;
                     case MediaStreamType.Subtitle:
-                        if (!string.IsNullOrEmpty(s.DisplayLanguage))
-                            subLangList.Add(LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        if (!string.IsNullOrEmpty(language))
+                            subLangList.Add(LanguageHelper.NormalizeLangCode(language));
                         break;
                     case MediaStreamType.Video:
                         var vc = GetVideoCodecIconName(s);
@@ -408,7 +351,7 @@ namespace EmbyIcons.Helpers
                 }
             }
 
-            videoStream = GetPrimaryVideoStream(streams);
+            var videoStream = GetPrimaryVideoStream(streams);
 
             audioLangList.Sort(StringComparer.Ordinal);
             subLangList.Sort(StringComparer.Ordinal);
@@ -417,7 +360,8 @@ namespace EmbyIcons.Helpers
             var videoCodecList = new List<string>(videoCodecSet);
             videoCodecList.Sort(StringComparer.Ordinal);
 
-            using var md5 = System.Security.Cryptography.MD5.Create();
+            var md5 = _threadMd5 ??= System.Security.Cryptography.MD5.Create();
+            md5.Initialize();
             var encoding = System.Text.Encoding.UTF8;
             var separator = encoding.GetBytes("|");
 
@@ -546,13 +490,11 @@ namespace EmbyIcons.Helpers
                     var statusValue = statusProperty.GetValue(series)?.ToString();
                     if (statusValue != null && statusValue.Length > 0)
                     {
-                        // Check if the status indicates the series has ended
                         if (statusValue.IndexOf("Ended", StringComparison.OrdinalIgnoreCase) >= 0 ||
                             statusValue.IndexOf("Canceled", StringComparison.OrdinalIgnoreCase) >= 0)
                         {
                             return "ended";
                         }
-                        // Check if the status indicates the series is continuing/running
                         else if (statusValue.IndexOf("Continuing", StringComparison.OrdinalIgnoreCase) >= 0 ||
                                  statusValue.IndexOf("Running", StringComparison.OrdinalIgnoreCase) >= 0)
                         {
@@ -571,7 +513,6 @@ namespace EmbyIcons.Helpers
                     }
                 }
 
-                // If we have a PremiereDate but no EndDate or status, assume it's running
                 if (series.PremiereDate.HasValue)
                 {
                     return "running";
@@ -579,7 +520,6 @@ namespace EmbyIcons.Helpers
             }
             catch
             {
-                // If we can't determine the status, return null
             }
 
             return null;

@@ -1,5 +1,4 @@
-﻿using System;
-
+﻿
 namespace EmbyIcons.Helpers
 {
     internal static class LanguageHelper

@@ -33,7 +33,6 @@ namespace EmbyIcons.Services
             var progress = new ScanProgress { Current = current, Total = total, Message = message, IsComplete = current >= total };
             _progressCache.AddOrUpdate(scanType, progress, (key, old) => progress);
 
-            // Auto-clear completed scans after a delay to prevent memory buildup
             if (progress.IsComplete)
             {
                 var shutdownToken = Plugin.Instance?.ShutdownToken ?? CancellationToken.None;

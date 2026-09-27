@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
 using EmbyIcons.Api;
-using EmbyIcons.Caching;
+using EmbyIcons.Compat;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 
@@ -59,15 +56,10 @@ namespace EmbyIcons.Services
 
                 var result = service.ExportProfiles(profileIds, request.IncludeLibraryMappings);
 
-                var jsonOptions = new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                };
-
                 return new ExportProfilesResponse
                 {
                     Success = result.Success,
-                    JsonData = JsonSerializer.Serialize(result.ExportData, jsonOptions),
+                    JsonData = SimpleJson.Serialize(result.ExportData, indented: true),
                     ProfileCount = result.ProfileCount
                 };
             }
@@ -257,146 +249,6 @@ namespace EmbyIcons.Services
                 {
                     IsValid = false,
                     Errors = new List<string> { ex.Message }
-                };
-            }
-        }
-    }
-
-    #endregion
-
-    #region Template Cache Stats
-
-    [Authenticated]
-    [Route(ApiRoutes.TemplateCacheStats, "GET", Summary = "Get icon template cache statistics")]
-    public class TemplateCacheStatsRequest : IReturn<TemplateCacheStatsResponse> { }
-
-    public class TemplateCacheStatsResponse
-    {
-        public bool Success { get; set; }
-        public long CacheHits { get; set; }
-        public long CacheMisses { get; set; }
-        public long TotalRequests { get; set; }
-        public double HitRate { get; set; }
-        public long TemplatesGenerated { get; set; }
-        public bool TemplatesCachingEnabled { get; set; }
-        public string? Error { get; set; }
-    }
-
-    public class TemplateCacheStatsService : IService
-    {
-        public object Get(TemplateCacheStatsRequest request)
-        {
-            try
-            {
-                var plugin = Plugin.Instance;
-                if (plugin == null)
-                {
-                    return new TemplateCacheStatsResponse
-                    {
-                        Success = false,
-                        Error = "Plugin instance not available"
-                    };
-                }
-
-                var enhancer = plugin.Enhancer;
-                var templateCache = enhancer.TemplateCache;
-
-                if (templateCache == null)
-                {
-                    return new TemplateCacheStatsResponse
-                    {
-                        Success = true,
-                        TemplatesCachingEnabled = false,
-                        CacheHits = 0,
-                        CacheMisses = 0,
-                        TotalRequests = 0,
-                        HitRate = 0,
-                        TemplatesGenerated = 0
-                    };
-                }
-
-                var stats = templateCache.GetStats();
-
-                return new TemplateCacheStatsResponse
-                {
-                    Success = true,
-                    TemplatesCachingEnabled = plugin.Configuration.EnableIconTemplateCaching,
-                    CacheHits = stats.CacheHits,
-                    CacheMisses = stats.CacheMisses,
-                    TotalRequests = stats.TotalRequests,
-                    HitRate = stats.HitRate,
-                    TemplatesGenerated = stats.TemplatesGenerated
-                };
-            }
-            catch (Exception ex)
-            {
-                return new TemplateCacheStatsResponse
-                {
-                    Success = false,
-                    Error = ex.Message
-                };
-            }
-        }
-    }
-
-    #endregion
-
-    #region Clear Template Cache
-
-    [Authenticated]
-    [Route(ApiRoutes.ClearTemplateCache, "POST", Summary = "Clear the icon template cache")]
-    public class ClearTemplateCacheRequest : IReturn<ClearTemplateCacheResponse> { }
-
-    public class ClearTemplateCacheResponse
-    {
-        public bool Success { get; set; }
-        public string? Message { get; set; }
-        public string? Error { get; set; }
-    }
-
-    public class ClearTemplateCacheService : IService
-    {
-        public object Post(ClearTemplateCacheRequest request)
-        {
-            try
-            {
-                var plugin = Plugin.Instance;
-                if (plugin == null)
-                {
-                    return new ClearTemplateCacheResponse
-                    {
-                        Success = false,
-                        Error = "Plugin instance not available"
-                    };
-                }
-
-                var enhancer = plugin.Enhancer;
-                var templateCache = enhancer.TemplateCache;
-
-                if (templateCache != null)
-                {
-                    templateCache.Clear();
-                    return new ClearTemplateCacheResponse
-                    {
-                        Success = true,
-                        Message = "Icon template cache cleared successfully"
-                    };
-                }
-                else
-                {
-                    return new ClearTemplateCacheResponse
-                    {
-                        Success = true,
-                        Message = "Template caching is not enabled"
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                return new ClearTemplateCacheResponse
-                {
-                    Success = false,
-                    Error = ex.Message
                 };
             }
         }

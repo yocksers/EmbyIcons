@@ -3,9 +3,7 @@ using MediaBrowser.Model.Services;
 using MediaBrowser.Model.Logging;
 using EmbyIcons.Api;
 using System;
-using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,13 +30,6 @@ namespace EmbyIcons.Services
     public class MemoryUsageService : IService
     {
         private readonly ILogger _logger;
-        private static readonly ConcurrentDictionary<(Type, string, System.Reflection.BindingFlags), System.Reflection.FieldInfo?> _fieldCache = new ConcurrentDictionary<(Type, string, System.Reflection.BindingFlags), System.Reflection.FieldInfo?>();
-
-        private static System.Reflection.FieldInfo? GetCachedField(Type type, string fieldName, System.Reflection.BindingFlags bindingFlags)
-        {
-            return _fieldCache.GetOrAdd((type, fieldName, bindingFlags), key => key.Item1.GetField(key.Item2, key.Item3));
-        }
-
         public MemoryUsageService(ILogManager logManager)
         {
             _logger = logManager.GetLogger(nameof(MemoryUsageService));
@@ -73,47 +64,15 @@ namespace EmbyIcons.Services
                 var plugin = EmbyIcons.Plugin.Instance;
                 if (plugin != null)
                 {
-                    var enhancer = plugin.Enhancer;
-                    
-                    var seriesCacheField = GetCachedField(typeof(EmbyIconsEnhancer), "_seriesAggregationCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    if (seriesCacheField?.GetValue(null) is ConcurrentDictionary<Guid, EmbyIconsEnhancer.AggregatedSeriesResult> seriesCache)
-                    {
-                        seriesCacheCount = seriesCache.Count;
-                    }
-                    
-                    var episodeCacheField = GetCachedField(typeof(EmbyIconsEnhancer), "_episodeIconCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    if (episodeCacheField?.GetValue(null) is Microsoft.Extensions.Caching.Memory.MemoryCache episodeCache)
-                    {
-                        episodeCacheCount = episodeCache.Count;
-                    }
-                    
-                    var locksField = GetCachedField(typeof(EmbyIconsEnhancer), "_locks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    if (locksField?.GetValue(null) is ConcurrentDictionary<string, SemaphoreSlim> locks)
-                    {
-                        itemLocksCount = locks.Count;
-                    }
-                    
-                    var field = GetCachedField(enhancer.GetType(), "_iconCacheManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-                    var icm = field?.GetValue(enhancer);
-                    if (icm != null)
-                    {
-                        var cacheField = GetCachedField(icm.GetType(), "_iconImageCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        var cache = cacheField?.GetValue(icm) as Microsoft.Extensions.Caching.Memory.MemoryCache;
-                        if (cache != null)
-                        {
-                            iconCacheEstimate = 0;
-                            
-                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                            {
-                                _logger.Debug("[EmbyIcons] Icon cache memory estimation not yet implemented.");
-                            }
-                        }
-                    }
+                    seriesCacheCount = EmbyIconsEnhancer._seriesAggregationCache.Count;
+                    episodeCacheCount = EmbyIconsEnhancer._episodeIconCache?.Count ?? 0;
+                    itemLocksCount = EmbyIconsEnhancer.ItemLockCount;
+                    iconCacheEstimate = plugin.Enhancer.IconCacheEstimatedBytes;
                 }
             }
             catch (Exception ex)
             {
-                _logger.ErrorException("[EmbyIcons] Error while estimating icon cache size.", ex);
+                _logger.ErrorException("[EmbyIcons] Error while collecting plugin cache statistics.", ex);
             }
 
             var result = new MemoryUsageResult

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EmbyIcons.Compat;
 using EmbyIcons.Configuration;
 using MediaBrowser.Controller.Entities;
 
@@ -20,9 +20,11 @@ namespace EmbyIcons.Services
         private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
         private static readonly SemaphoreSlim _httpConcurrencyLock = new SemaphoreSlim(4, 4);
         private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
+        private static readonly TimeSpan NotFoundCacheExpiration = TimeSpan.FromHours(6);
+        private static readonly TimeSpan ErrorCacheExpiration = TimeSpan.FromMinutes(15);
         private static Timer? _cacheCleanupTimer;
         private static readonly object _timerLock = new object();
-        private const int MAX_CACHE_ENTRIES = 1000;
+        private const int MAX_CACHE_ENTRIES = 20000;
 
         static MDBListService()
         {
@@ -46,7 +48,7 @@ namespace EmbyIcons.Services
                 {
                     var now = DateTime.UtcNow;
                     var keysToRemove = _ratingsCache
-                        .Where(kvp => now - kvp.Value.CachedAt > CacheExpiration)
+                        .Where(kvp => now - kvp.Value.CachedAt > kvp.Value.Ttl)
                         .Select(kvp => kvp.Key)
                         .ToList();
 
@@ -55,7 +57,6 @@ namespace EmbyIcons.Services
                         _ratingsCache.Remove(key);
                     }
 
-                    // Also enforce max size limit by removing oldest entries
                     if (_ratingsCache.Count > MAX_CACHE_ENTRIES)
                     {
                         var oldestKeys = _ratingsCache
@@ -110,7 +111,7 @@ namespace EmbyIcons.Services
             {
                 if (_ratingsCache.TryGetValue(cacheKey, out var cachedData))
                 {
-                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration)
+                    if (DateTime.UtcNow - cachedData.CachedAt < cachedData.Ttl)
                     {
                         return cachedData.Data;
                     }
@@ -133,18 +134,19 @@ namespace EmbyIcons.Services
                 var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}?apikey={Uri.EscapeDataString(apiKey)}";
                 using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
                 
-                var response = await _httpClient.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
+                using var response = await _httpClient.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
+                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, cancellationToken).ConfigureAwait(false);
                     return null;
                 }
 
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                using var jsonDoc = JsonDocument.Parse(content);
-                var root = jsonDoc.RootElement;
+                var root = SimpleJson.Parse(content) as Dictionary<string, object?>;
 
-                if (!root.TryGetProperty("ratings", out var ratingsArray))
+                if (root == null || !root.TryGetValue("ratings", out var ratingsValue) || ratingsValue is not List<object?> ratingsArray)
                 {
+                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, cancellationToken).ConfigureAwait(false);
                     return null;
                 }
 
@@ -152,30 +154,33 @@ namespace EmbyIcons.Services
                 int? popcornVotes = null;
                 float? myAnimeListScore = null;
 
-                foreach (var rating in ratingsArray.EnumerateArray())
+                foreach (var ratingValue in ratingsArray)
                 {
-                    if (!rating.TryGetProperty("source", out var sourceElement))
+                    if (ratingValue is not Dictionary<string, object?> rating)
                         continue;
 
-                    var source = sourceElement.GetString()?.ToLowerInvariant() ?? string.Empty;
-                    
+                    if (!rating.TryGetValue("source", out var sourceValue) || sourceValue is not string sourceText)
+                        continue;
+
+                    var source = sourceText.ToLowerInvariant();
+
                     if (source.Contains(StringConstants.MdbListPopcornSource) || source.Contains(StringConstants.MdbListAudienceSource))
                     {
-                        if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
+                        if (rating.TryGetValue("value", out var valueRaw) && IsNumber(valueRaw))
                         {
-                            popcornScore = (float)valueElement.GetDouble();
+                            popcornScore = (float)Convert.ToDouble(valueRaw, System.Globalization.CultureInfo.InvariantCulture);
                         }
 
-                        if (rating.TryGetProperty("votes", out var votesElement) && votesElement.ValueKind == JsonValueKind.Number)
+                        if (rating.TryGetValue("votes", out var votesRaw) && IsNumber(votesRaw))
                         {
-                            popcornVotes = votesElement.GetInt32();
+                            popcornVotes = Convert.ToInt32(votesRaw, System.Globalization.CultureInfo.InvariantCulture);
                         }
                     }
                     else if (source.Contains(StringConstants.MdbListMyAnimeListSource) || source.Contains(StringConstants.MdbListMalSource))
                     {
-                        if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
+                        if (rating.TryGetValue("value", out var valueRaw) && IsNumber(valueRaw))
                         {
-                            myAnimeListScore = (float)valueElement.GetDouble();
+                            myAnimeListScore = (float)Convert.ToDouble(valueRaw, System.Globalization.CultureInfo.InvariantCulture);
                         }
                     }
                 }
@@ -187,29 +192,7 @@ namespace EmbyIcons.Services
                     MyAnimeListScore = myAnimeListScore
                 };
 
-                await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    if (_ratingsCache.Count >= MAX_CACHE_ENTRIES)
-                    {
-                        var oldestKey = _ratingsCache
-                            .OrderBy(kvp => kvp.Value.CachedAt)
-                            .Select(kvp => kvp.Key)
-                            .FirstOrDefault();
-                        if (oldestKey != null)
-                            _ratingsCache.Remove(oldestKey);
-                    }
-
-                    _ratingsCache[cacheKey] = new CachedRatingData
-                    {
-                        Data = result,
-                        CachedAt = DateTime.UtcNow
-                    };
-                }
-                finally
-                {
-                    _cacheLock.Release();
-                }
+                await StoreAsync(cacheKey, result, CacheExpiration, cancellationToken).ConfigureAwait(false);
 
                 return result;
                 }
@@ -228,9 +211,50 @@ namespace EmbyIcons.Services
                 {
                     Plugin.Instance.Logger.Info($"[EmbyIcons] Error fetching MDBList ratings for {tmdbId}: {ex.Message}");
                 }
+
+                try { await StoreAsync(cacheKey, new MDBListRatingData(), ErrorCacheExpiration, CancellationToken.None).ConfigureAwait(false); }
+                catch { }
+
                 return null;
             }
         }
+
+        private static async Task StoreAsync(string cacheKey, MDBListRatingData data, TimeSpan ttl, CancellationToken cancellationToken)
+        {
+            await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (_ratingsCache.Count >= MAX_CACHE_ENTRIES && !_ratingsCache.ContainsKey(cacheKey))
+                {
+                    string? oldestKey = null;
+                    var oldestTime = DateTime.MaxValue;
+                    foreach (var kvp in _ratingsCache)
+                    {
+                        if (kvp.Value.CachedAt < oldestTime)
+                        {
+                            oldestTime = kvp.Value.CachedAt;
+                            oldestKey = kvp.Key;
+                        }
+                    }
+
+                    if (oldestKey != null)
+                        _ratingsCache.Remove(oldestKey);
+                }
+
+                _ratingsCache[cacheKey] = new CachedRatingData
+                {
+                    Data = data,
+                    CachedAt = DateTime.UtcNow,
+                    Ttl = ttl
+                };
+            }
+            finally
+            {
+                _cacheLock.Release();
+            }
+        }
+
+        private static bool IsNumber(object? value) => value is long || value is double;
 
         private static string? GetTmdbId(BaseItem item)
         {
@@ -266,6 +290,7 @@ namespace EmbyIcons.Services
     {
         public MDBListRatingData Data { get; set; } = new MDBListRatingData();
         public DateTime CachedAt { get; set; }
+        public TimeSpan Ttl { get; set; }
     }
 
     internal class MDBListRatingData

@@ -7,7 +7,6 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Generic;

@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using EmbyIcons.Compat;
 using EmbyIcons.Configuration;
 using MediaBrowser.Model.Logging;
 
@@ -33,13 +32,7 @@ namespace EmbyIcons.Services
 
                 var result = ExportProfiles(profileIds, includeLibraryMappings);
                 
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                };
-
-                var json = JsonSerializer.Serialize(result.ExportData, options);
+                var json = SimpleJson.Serialize(result.ExportData, indented: true);
                 await EmbyIcons.Compat.FileCompat.WriteAllTextAsync(resolvedPath, json);
 
                 _logger.Info($"[EmbyIcons] Exported {result.ProfileCount} profile(s) to: {resolvedPath}");
@@ -120,12 +113,7 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var jsonOptions = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-
-                var exportData = JsonSerializer.Deserialize<ProfileExportData>(json, jsonOptions);
+                var exportData = SimpleJson.Deserialize<ProfileExportData>(json);
                 
                 if (exportData == null || exportData.Profiles == null)
                 {
@@ -245,12 +233,7 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var jsonOptions = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-
-                var exportData = JsonSerializer.Deserialize<ProfileExportData>(json, jsonOptions);
+                var exportData = SimpleJson.Deserialize<ProfileExportData>(json);
                 
                 if (exportData == null)
                 {

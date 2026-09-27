@@ -1,6 +1,4 @@
-﻿using EmbyIcons.Api;
-using EmbyIcons.Configuration;
-using EmbyIcons.Helpers;
+﻿using EmbyIcons.Configuration;
 using EmbyIcons.Services;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
@@ -9,24 +7,21 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Drawing;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Plugins;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EmbyIcons.Compat;
 
 namespace EmbyIcons
 {
@@ -34,7 +29,6 @@ namespace EmbyIcons
     {
         private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
-        private readonly IUserViewManager _userViewManager;
         private readonly IUserManager _userManager;
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _logger;
@@ -96,7 +90,6 @@ namespace EmbyIcons
             IApplicationHost appHost,
             IApplicationPaths appPaths,
             ILibraryManager libraryManager,
-            IUserViewManager userViewManager,
             IUserManager userManager,
             ILogManager logManager,
             IFileSystem fileSystem,
@@ -105,7 +98,6 @@ namespace EmbyIcons
         {
             _appHost = appHost;
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-            _userViewManager = userViewManager ?? throw new ArgumentNullException(nameof(userViewManager));
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _logManager = logManager ?? throw new ArgumentNullException(nameof(logManager));
             _logger = logManager.GetLogger(nameof(Plugin));
@@ -130,9 +122,9 @@ namespace EmbyIcons
 
             _enhancerLazy = new Lazy<EmbyIconsEnhancer>(() =>
             {
-                var enhancer = new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
+                var imageProcessor = _appHost.Resolve<MediaBrowser.Controller.Drawing.IImageProcessor>();
+                var enhancer = new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem, imageProcessor);
                 EnsurePruningTimerInitialized();
-                enhancer.EnsureTemplateCacheInitialized();
                 return enhancer;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -286,11 +278,6 @@ namespace EmbyIcons
         public Task<IconProfile?> GetProfileForItemAsync(BaseItem item)
         {
             return ProfileManager.GetProfileForItemAsync(item);
-        }
-
-        public bool IsLibraryAllowed(BaseItem item)
-        {
-            return GetProfileForItem(item) != null;
         }
 
         public IEnumerable<PluginPageInfo> GetPages()
@@ -538,6 +525,12 @@ namespace EmbyIcons
                 {
                     enhancer.InvalidateMovieProviderPathCache(e.Item);
                 }
+                else if (e.Item is MediaBrowser.Controller.Entities.Audio.Audio ||
+                         e.Item is MediaBrowser.Controller.Entities.Audio.MusicAlbum ||
+                         e.Item is MediaBrowser.Controller.Entities.Audio.MusicArtist)
+                {
+                    ClearMusicAggregatesFor(enhancer, e.Item, e.Parent);
+                }
 
                 if (seasonIdToClear != Guid.Empty)
                 {
@@ -559,12 +552,31 @@ namespace EmbyIcons
             }
         }
 
+        private void ClearMusicAggregatesFor(EmbyIconsEnhancer enhancer, BaseItem item, BaseItem? parent)
+        {
+            if (item is MediaBrowser.Controller.Entities.Audio.MusicAlbum || item is MediaBrowser.Controller.Entities.Audio.MusicArtist)
+            {
+                enhancer.ClearAlbumAggregationCache(item.Id);
+            }
+
+            var current = parent ?? item.Parent;
+            for (int depth = 0; current != null && depth < 4; depth++)
+            {
+                if (current is MediaBrowser.Controller.Entities.Audio.MusicAlbum || current is MediaBrowser.Controller.Entities.Audio.MusicArtist)
+                {
+                    enhancer.ClearAlbumAggregationCache(current.Id);
+                }
+
+                current = current.Parent;
+            }
+        }
+
         public void SaveCurrentConfiguration() => SaveConfiguration();
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var newOptions = (PluginOptions)configuration;
-            var oldOptions = JsonSerializer.Deserialize<PluginOptions>(JsonSerializer.Serialize(Configuration));
+            var oldOptions = SimpleJson.Deserialize<PluginOptions>(SimpleJson.Serialize(Configuration));
 
             _logger.Info("[EmbyIcons] Saving new configuration.");
 
@@ -574,20 +586,24 @@ namespace EmbyIcons
             if (oldOptions != null)
             {
                 ConfigMonitor.CheckForChangesAndTriggerRefreshes(oldOptions, newOptions);
-                
-                if (oldOptions.EnableIconTemplateCaching != newOptions.EnableIconTemplateCaching)
-                {
-                    _logger.Info($"[EmbyIcons] Template caching setting changed to: {newOptions.EnableIconTemplateCaching}");
-                    Enhancer.EnsureTemplateCacheInitialized();
-                }
             }
 
             Enhancer.ClearAllItemDataCaches();
             IconManagerService.InvalidateCache();
-            ProfileManager.InvalidateLibraryCache();
+            var previousProfileManager = _profileManagerLazy;
             _profileManagerLazy = new Lazy<ProfileManagerService>(
                 () => new ProfileManagerService(_libraryManager, _logger, newOptions),
                 LazyThreadSafetyMode.ExecutionAndPublication);
+
+            if (previousProfileManager != null && previousProfileManager.IsValueCreated)
+            {
+                var retired = previousProfileManager.Value;
+                _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ =>
+                {
+                    try { retired.Dispose(); }
+                    catch (Exception ex) { _logger.Debug($"[EmbyIcons] Error disposing previous profile manager: {ex.Message}"); }
+                }, TaskScheduler.Default);
+            }
 
             _logger.Info($"[EmbyIcons] Configuration saved. New cache-busting version is '{newOptions.PersistedVersion}'. Images will refresh as they are viewed.");
         }

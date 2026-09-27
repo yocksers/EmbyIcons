@@ -7,7 +7,6 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Generic;
@@ -194,7 +193,7 @@ namespace EmbyIcons.Services
                 report.Checks.Add(CheckProperty(baseItems, "Resolution", ep => {
                     var s = streamCache.TryGetValue(ep.InternalId, out var ms) ? ms : new List<MediaStream>();
                     var stream = MediaStreamHelper.GetPrimaryVideoStream(s);
-                    var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, ep) : null;
+                    var resName = stream != null ? MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions) : null;
                     return resName != null ? new List<string> { resName } : new List<string>();
                 }));
 

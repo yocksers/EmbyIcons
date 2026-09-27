@@ -2,12 +2,10 @@ using EmbyIcons.Api;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Concurrent;
@@ -156,7 +154,7 @@ namespace EmbyIcons.Services
                         var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
                         if (videoStream != null)
                         {
-                            var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, item);
+                            var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
                             matches = res != null && res.Equals(iconName, StringComparison.OrdinalIgnoreCase);
                         }
                         break;

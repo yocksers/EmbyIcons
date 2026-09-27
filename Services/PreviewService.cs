@@ -1,7 +1,7 @@
 using EmbyIcons.Api;
 using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
-using EmbyIcons.Helpers;
+using EmbyIcons.ImageProcessing;
 using EmbyIcons.Models;
 using EmbyIcons.Services;
 using MediaBrowser.Controller.Net;
@@ -12,10 +12,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using EmbyIcons.Compat;
 
 namespace EmbyIcons
 {
@@ -29,11 +28,6 @@ namespace EmbyIcons
     public class PreviewService : IService
     {
         private readonly ImageOverlayService _imageOverlayService;
-        private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            Converters = { new JsonStringEnumConverter() }
-        };
 
         public PreviewService()
         {
@@ -44,6 +38,12 @@ namespace EmbyIcons
         public async Task<object> Get(GetIconPreview request)
         {
             var plugin = Plugin.Instance ?? throw new InvalidOperationException("Plugin instance is not initialized.");
+            if (!ImageProcessingCapabilities.IsSkiaSharpAvailable(plugin.Logger))
+            {
+                plugin.Logger.Warn("[EmbyIcons] Preview request rejected: the live preview feature requires SkiaSharp, which is not available on this system.");
+                return new MemoryStream();
+            }
+
             if (request.OptionsJson == null || request.OptionsJson.Length == 0)
             {
                 plugin.Logger.Warn("[EmbyIcons] Preview request received with empty options.");
@@ -60,10 +60,10 @@ namespace EmbyIcons
             ProfileSettings profileSettings;
             try
             {
-                profileSettings = JsonSerializer.Deserialize<ProfileSettings>(request.OptionsJson, _jsonOptions)
+                profileSettings = SimpleJson.Deserialize<ProfileSettings>(request.OptionsJson)
                     ?? throw new ArgumentException("Could not deserialize profile settings from JSON.");
             }
-            catch (Exception ex) when (ex is JsonException || ex is ArgumentException)
+            catch (Exception ex) when (ex is SimpleJsonException || ex is ArgumentException)
             {
                 plugin.Logger.Warn($"[EmbyIcons] Preview request contained invalid options JSON: {ex.Message}");
                 return new MemoryStream();
@@ -71,7 +71,16 @@ namespace EmbyIcons
 
             var globalOptions = plugin.GetConfiguredOptions();
 
-            using var originalBitmap = SKBitmap.Decode(Assembly.GetExecutingAssembly().GetManifestResourceStream("EmbyIcons.Images.preview.png"))
+            byte[] previewBytes;
+            using (var previewStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EmbyIcons.Images.preview.png")
+                ?? throw new InvalidOperationException("Preview background image resource is missing."))
+            using (var previewBuffer = new MemoryStream())
+            {
+                previewStream.CopyTo(previewBuffer);
+                previewBytes = previewBuffer.ToArray();
+            }
+
+            using var originalBitmap = SKBitmap.Decode(previewBytes)
                 ?? throw new InvalidOperationException("Failed to decode the preview background image.");
 
             var cacheManager = plugin.Enhancer._iconCacheManager;

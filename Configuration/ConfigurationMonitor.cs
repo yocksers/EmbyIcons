@@ -6,11 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using MediaBrowser.Model.Querying;
 
 namespace EmbyIcons.Configuration
 {
@@ -147,6 +144,9 @@ namespace EmbyIcons.Configuration
             if (oldS.ShowOverlaysForEpisodes != newS.ShowOverlaysForEpisodes) return true;
             if (oldS.ShowOverlaysForSeasons != newS.ShowOverlaysForSeasons) return true;
             if (oldS.ShowSeriesIconsIfAllEpisodesHaveLanguage != newS.ShowSeriesIconsIfAllEpisodesHaveLanguage) return true;
+            if (oldS.UseSeriesLiteMode != newS.UseSeriesLiteMode) return true;
+            if (oldS.ShowCollectionIconsIfAllChildrenHaveLanguage != newS.ShowCollectionIconsIfAllChildrenHaveLanguage) return true;
+            if (oldS.UseCollectionLiteMode != newS.UseCollectionLiteMode) return true;
             if (oldS.ExcludeSpecialsFromSeriesAggregation != newS.ExcludeSpecialsFromSeriesAggregation) return true;
 
             if (oldS.EnableMusicAlbumAggregation != newS.EnableMusicAlbumAggregation) return true;

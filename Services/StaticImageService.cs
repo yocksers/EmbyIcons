@@ -1,7 +1,6 @@
 using EmbyIcons.Api;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
-using System;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;

@@ -84,7 +84,7 @@ namespace EmbyIcons.Services
             return false;
         }
 
-        public async Task ApplyOverlaysToStreamAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons, IconTemplateCache? templateCache = null)
+        public async Task ApplyOverlaysToStreamAsync(SKBitmap sourceBitmap, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             if (!HasAnyOverlaysEnabled(profileOptions))
             {
@@ -95,13 +95,15 @@ namespace EmbyIcons.Services
                     _ => (sourceBitmap.Info.AlphaType == SKAlphaType.Opaque) ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png
                 };
                 int quality = EmbyIcons.Compat.MathCompat.Clamp(globalOptions.JpegQuality, 10, 100);
-                using var image = SKImage.FromBitmap(sourceBitmap);
-                using var encodedData = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? quality : 100);
+                using var image = SKImage.FromBitmap(sourceBitmap)
+                    ?? throw new InvalidOperationException("SkiaSharp could not create an image from the source bitmap.");
+                using var encodedData = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? quality : 100)
+                    ?? throw new InvalidOperationException($"SkiaSharp could not encode the image as {format}.");
                 encodedData.SaveTo(outputStream);
                 return;
             }
 
-            await _iconCache.InitializeAsync(globalOptions.IconsFolder, cancellationToken).ConfigureAwait(false);
+            _iconCache.Initialize(globalOptions.IconsFolder);
 
             List<OverlayGroupInfo>? iconGroups = null;
             RatingOverlayInfo? ratingInfo = null;
@@ -113,7 +115,7 @@ namespace EmbyIcons.Services
             try
             {
                 var posterMinDimension = Math.Min(sourceBitmap.Width, sourceBitmap.Height);
-                var iconGroupsTask = CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons, templateCache, posterMinDimension);
+                var iconGroupsTask = CreateIconGroups(data, profileOptions, globalOptions, cancellationToken, injectedIcons);
                 var ratingInfoTask = CreateRatingInfo(data, profileOptions, globalOptions, cancellationToken);
                 var rottenInfoTask = CreateRottenRatingInfo(data, profileOptions, globalOptions, cancellationToken);
                 var popcornInfoTask = CreatePopcornRatingInfo(data, profileOptions, globalOptions, cancellationToken);
@@ -166,7 +168,8 @@ namespace EmbyIcons.Services
                 int finalHeight = sourceBitmap.Height + topBarSpace + bottomBarSpace;
                 int posterYOffset = topBarSpace;
 
-                using var surface = SKSurface.Create(new SKImageInfo(finalWidth, finalHeight));
+                using var surface = SKSurface.Create(new SKImageInfo(finalWidth, finalHeight))
+                    ?? throw new InvalidOperationException($"SkiaSharp could not allocate a {finalWidth}x{finalHeight} drawing surface.");
                 var canvas = surface.Canvas;
                 canvas.Clear(SKColors.Transparent);
 
@@ -274,7 +277,8 @@ namespace EmbyIcons.Services
                     DrawCorner(overlaysByCorner[corner], corner, drawingContext);
                 }
 
-                using var image = surface.Snapshot();
+                using var image = surface.Snapshot()
+                    ?? throw new InvalidOperationException("SkiaSharp could not snapshot the drawing surface.");
 
                 var format = globalOptions.OutputFormat switch
                 {
@@ -284,7 +288,8 @@ namespace EmbyIcons.Services
                 };
 
                 int quality = EmbyIcons.Compat.MathCompat.Clamp(globalOptions.JpegQuality, 10, 100);
-                using var encodedData = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? quality : 100);
+                using var encodedData = image.Encode(format, format == SKEncodedImageFormat.Jpeg ? quality : 100)
+                    ?? throw new InvalidOperationException($"SkiaSharp could not encode the image as {format}.");
 
                 encodedData.SaveTo(outputStream);
             }
@@ -833,29 +838,7 @@ namespace EmbyIcons.Services
             }
         }
 
-        private static int GetGenericIconSize(int posterMinDimension, ProfileSettings profileOptions)
-            => EmbyIcons.Compat.MathCompat.Clamp((posterMinDimension * profileOptions.IconSize) / 100, 8, 512);
-
-        private static int GetCornerIconSize(int posterMinDimension, ProfileSettings profileOptions, IconAlignment alignment)
-        {
-            var iconSize = GetGenericIconSize(posterMinDimension, profileOptions);
-            return alignment switch
-            {
-                IconAlignment.TopLeft => profileOptions.TopLeftIconSize > 0 ? (int)EmbyIcons.Compat.MathCompat.Clamp((posterMinDimension * profileOptions.TopLeftIconSize) / 100, 8, 512) : iconSize,
-                IconAlignment.TopRight => profileOptions.TopRightIconSize > 0 ? (int)EmbyIcons.Compat.MathCompat.Clamp((posterMinDimension * profileOptions.TopRightIconSize) / 100, 8, 512) : iconSize,
-                IconAlignment.BottomLeft => profileOptions.BottomLeftIconSize > 0 ? (int)EmbyIcons.Compat.MathCompat.Clamp((posterMinDimension * profileOptions.BottomLeftIconSize) / 100, 8, 512) : iconSize,
-                IconAlignment.BottomRight => profileOptions.BottomRightIconSize > 0 ? (int)EmbyIcons.Compat.MathCompat.Clamp((posterMinDimension * profileOptions.BottomRightIconSize) / 100, 8, 512) : iconSize,
-                _ => iconSize
-            };
-        }
-
-        private static int GetInterIconPadding(int posterMinDimension, ProfileSettings profileOptions)
-        {
-            var iconSize = GetGenericIconSize(posterMinDimension, profileOptions);
-            return (int)EmbyIcons.Compat.MathCompat.Clamp((iconSize * profileOptions.IconSpacing) / 100, 0, 64);
-        }
-
-        private async Task<List<OverlayGroupInfo>> CreateIconGroups(OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons, IconTemplateCache? templateCache, int posterMinDimension)
+        private async Task<List<OverlayGroupInfo>> CreateIconGroups(OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             var groups = new List<OverlayGroupInfo>(_groupDefinitions.Count);
 
@@ -868,7 +851,7 @@ namespace EmbyIcons.Services
                 {
                     var priority = def.GetPriority(profileOptions);
                     var isHorizontal = def.IsHorizontal(profileOptions);
-                    await AddGroup(groups, names, def.IconType, alignment, priority, isHorizontal, globalOptions, cancellationToken, injectedIcons, templateCache, posterMinDimension, profileOptions);
+                    await AddGroup(groups, names, def.IconType, alignment, priority, isHorizontal, globalOptions, cancellationToken, injectedIcons);
                 }
             }
 
@@ -876,7 +859,7 @@ namespace EmbyIcons.Services
             {
                 if (filenameIcon.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(filenameIcon.IconName))
                 {
-                    await AddGroup(groups, new[] { filenameIcon.IconName }, IconCacheManager.IconType.Source, filenameIcon.Alignment, filenameIcon.Priority, filenameIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons, templateCache, posterMinDimension, profileOptions);
+                    await AddGroup(groups, new[] { filenameIcon.IconName }, IconCacheManager.IconType.Source, filenameIcon.Alignment, filenameIcon.Priority, filenameIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons);
                 }
             }
 
@@ -884,18 +867,16 @@ namespace EmbyIcons.Services
             {
                 if (tagIcon.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(tagIcon.IconName))
                 {
-                    await AddGroup(groups, new[] { tagIcon.IconName }, IconCacheManager.IconType.Tag, tagIcon.Alignment, tagIcon.Priority, tagIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons, templateCache, posterMinDimension, profileOptions);
+                    await AddGroup(groups, new[] { tagIcon.IconName }, IconCacheManager.IconType.Tag, tagIcon.Alignment, tagIcon.Priority, tagIcon.HorizontalLayout, globalOptions, cancellationToken, injectedIcons);
                 }
             }
 
             return groups;
         }
 
-        private async Task AddGroup(List<OverlayGroupInfo> groups, IEnumerable<string> names, IconCacheManager.IconType type, IconAlignment align, int prio, bool horizontal, PluginOptions options, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons, IconTemplateCache? templateCache, int posterMinDimension, ProfileSettings profileOptions)
+        private async Task AddGroup(List<OverlayGroupInfo> groups, IEnumerable<string> names, IconCacheManager.IconType type, IconAlignment align, int prio, bool horizontal, PluginOptions options, CancellationToken cancellationToken, Dictionary<IconCacheManager.IconType, List<SKImage>>? injectedIcons)
         {
             var imgs = new List<SKImage>();
-            bool loadedFromCache = false;
-            List<string>? namesForTemplate = null;
 
             if (injectedIcons != null && injectedIcons.TryGetValue(type, out var inj) && inj.Count > 0)
             {
@@ -903,9 +884,7 @@ namespace EmbyIcons.Services
             }
             else
             {
-                loadedFromCache = true;
                 var namesList = names as IList<string> ?? names.ToList();
-                namesForTemplate = namesList as List<string> ?? namesList.ToList();
                 if (namesList.Count > 1)
                 {
                     var tasks = new Task<SKImage?>[namesList.Count];
@@ -930,34 +909,6 @@ namespace EmbyIcons.Services
                     {
                         imgs.Add(icon);
                     }
-                }
-            }
-
-            if (loadedFromCache && templateCache != null && horizontal && imgs.Count > 1)
-            {
-                var cornerIconSize = GetCornerIconSize(posterMinDimension, profileOptions, align);
-                var interIconPadding = GetInterIconPadding(posterMinDimension, profileOptions);
-                var loadedIcons = new Dictionary<IconCacheManager.IconType, List<SKImage>> { [type] = imgs };
-                var templateGroups = new List<(IconCacheManager.IconType Type, List<string> Names)> { (type, namesForTemplate!) };
-
-                SKImage? template = null;
-                try
-                {
-                    template = await templateCache.GetOrCreateTemplateAsync(templateGroups, loadedIcons, cornerIconSize, interIconPadding, true, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _logger?.Debug($"[EmbyIcons] Failed to build icon template for {type}: {ex.Message}");
-                }
-
-                if (template != null)
-                {
-                    foreach (var img in imgs)
-                    {
-                        try { img?.Dispose(); } catch { }
-                    }
-                    imgs = new List<SKImage> { template };
                 }
             }
 

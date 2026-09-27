@@ -5,21 +5,18 @@ using EmbyIcons.Services;
 using EmbyIcons.ImageProcessing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
-using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.IO;
+using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
-using MediaBrowser.Model.Users;
 using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -40,10 +37,16 @@ namespace EmbyIcons
         private readonly ILibraryManager _libraryManager;
         internal readonly ILogger _logger;
         private readonly IFileSystem _fileSystem;
+        private readonly RenderBackend _activeBackend;
+        private readonly EmbyIcons.ImageProcessing.Vips.NetVipsIconCacheManager? _netVipsIconCacheManager;
+
+        internal static int ItemLockCount => _locks.Count;
+
+        internal long IconCacheEstimatedBytes => _iconCacheManager.EstimatedCacheBytes + (_netVipsIconCacheManager?.EstimatedCacheBytes ?? 0);
+        private readonly EmbyIcons.ImageProcessing.Vips.NetVipsImageOverlayService? _netVipsOverlayService;
 
         private volatile SemaphoreSlim? _globalConcurrencyLock;
         private readonly object _lockInitializationLock = new object();
-        private readonly object _templateCacheLock = new object();
 
         private SemaphoreSlim GlobalConcurrencyLock
         {
@@ -71,13 +74,11 @@ namespace EmbyIcons
 
         internal readonly OverlayDataService _overlayDataService;
         private readonly ImageOverlayService _imageOverlayService;
-        private volatile IconTemplateCache? _templateCache;
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
         public ILogger Logger => _logger;
-        public IconTemplateCache? TemplateCache => _templateCache;
 
-        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager, IFileSystem fileSystem)
+        public EmbyIconsEnhancer(ILibraryManager libraryManager, ILogManager logManager, IFileSystem fileSystem, IImageProcessor imageProcessor)
         {
             _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
             _logger = logManager.GetLogger(nameof(EmbyIconsEnhancer));
@@ -85,14 +86,21 @@ namespace EmbyIcons
 
             _logger.Info("[EmbyIcons] Session started.");
 
-            if (ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger))
+            _activeBackend = ImageProcessingCapabilities.GetActiveBackend(_logger, imageProcessor);
+            switch (_activeBackend)
             {
-                _logger.Info("[EmbyIcons] SkiaSharp is available. Icon overlays will be applied.");
-            }
-            else
-            {
-                _logger.Warn("[EmbyIcons] SkiaSharp is not available. Icon overlays will be disabled.");
-                _logger.Warn("[EmbyIcons] To enable icon overlays, ensure SkiaSharp native libraries are installed for your platform.");
+                case RenderBackend.Skia:
+                    _logger.Info("[EmbyIcons] SkiaSharp is available. Icon overlays will be applied.");
+                    break;
+                case RenderBackend.NetVips:
+                    _logger.Info("[EmbyIcons] SkiaSharp is unavailable, but NetVips (libvips) is active. Icon overlays will use the NetVips renderer.");
+                    _netVipsIconCacheManager = new EmbyIcons.ImageProcessing.Vips.NetVipsIconCacheManager(_logger);
+                    _netVipsOverlayService = new EmbyIcons.ImageProcessing.Vips.NetVipsImageOverlayService(_logger, _netVipsIconCacheManager);
+                    break;
+                default:
+                    _logger.Warn("[EmbyIcons] Neither SkiaSharp nor NetVips is available. Icon overlays will be disabled.");
+                    _logger.Warn("[EmbyIcons] To enable icon overlays, ensure SkiaSharp or libvips native libraries are installed for your platform.");
+                    break;
             }
 
             _iconCacheManager = new IconCacheManager(_logger);
@@ -106,45 +114,6 @@ namespace EmbyIcons
                     if (_lockCleanupTimer == null)
                     {
                         _lockCleanupTimer = new Timer(_ => CleanupUnusedLocks(), null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
-                    }
-                }
-            }
-        }
-        public void EnsureTemplateCacheInitialized()
-        {
-            if (Plugin.Instance?.Configuration.EnableIconTemplateCaching ?? false)
-            {
-                if (_templateCache == null)
-                {
-                    lock (_templateCacheLock)
-                    {
-                        if (_templateCache == null)
-                        {
-                            _templateCache = new IconTemplateCache(_logger);
-                            _logger.Info("[EmbyIcons] Icon template caching enabled.");
-                        }
-                    }
-                }
-            }
-            else
-            {
-                if (_templateCache != null)
-                {
-                    lock (_templateCacheLock)
-                    {
-                        if (_templateCache != null)
-                        {
-                            try
-                            {
-                                _templateCache.Dispose();
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}");
-                            }
-                            _templateCache = null;
-                            _logger.Info("[EmbyIcons] Icon template caching disabled.");
-                        }
                     }
                 }
             }
@@ -191,8 +160,7 @@ namespace EmbyIcons
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
             ClearAllItemDataCaches();
-            _templateCache?.Clear();
-            await _iconCacheManager.RefreshCacheOnDemandAsync(iconsFolder, cancellationToken, force: true).ConfigureAwait(false);
+            _iconCacheManager.RefreshCache(iconsFolder);
             await RefreshAllMappedLibraryImagesAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -349,7 +317,7 @@ namespace EmbyIcons
 
             if (item.Id == Guid.Empty && item.InternalId == 0) return false;
 
-            if (!ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger))
+            if (_activeBackend == RenderBackend.None)
             {
                 return false;
             }
@@ -374,6 +342,7 @@ namespace EmbyIcons
 
             if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
             if (item is Season && !(options.ShowOverlaysForSeasons)) return false;
+            if (item is Series && !options.UseSeriesLiteMode && !options.ShowSeriesIconsIfAllEpisodesHaveLanguage) return false;
 
             return options.AudioIconAlignment != IconAlignment.Disabled ||
                    options.SubtitleIconAlignment != IconAlignment.Disabled ||
@@ -541,20 +510,18 @@ namespace EmbyIcons
             else if (item is MusicAlbum musicAlbum && options.EnableMusicAlbumAggregation)
             {
                 var fullAlbum = GetFullItem(musicAlbum) as MusicAlbum ?? musicAlbum;
-                var aggResult = GetOrBuildAggregatedDataForAlbum(fullAlbum, options, globalOptions);
+                var aggResult = GetOrBuildAggregatedDataForAlbum(fullAlbum, options);
                 sb.Append("_c").Append(aggResult.CombinedTracksHashShort);
             }
             else if (item is MusicArtist musicArtist && options.EnableMusicAlbumAggregation)
             {
                 var fullArtist = GetFullItem(musicArtist) as MusicArtist ?? musicArtist;
-                var aggResult = GetOrBuildAggregatedDataForAlbum(fullArtist, options, globalOptions);
+                var aggResult = GetOrBuildAggregatedDataForAlbum(fullArtist, options);
                 sb.Append("_c").Append(aggResult.CombinedTracksHashShort);
             }
             else
             {
-                var mediaStreams = item.GetMediaStreams();
-                if (mediaStreams == null) mediaStreams = new List<MediaStream>();
-                sb.Append("_i").Append(MediaStreamHelper.GetItemMediaStreamHashV2(item, mediaStreams));
+                sb.Append("_i").Append(GetCachedItemMediaStreamHash(item));
             }
 
             if (item.Tags != null && item.Tags.Length > 0)
@@ -580,6 +547,12 @@ namespace EmbyIcons
             var plugin = Plugin.Instance;
             if (plugin == null) return;
 
+            if (_activeBackend == RenderBackend.None)
+            {
+                await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, cancellationToken);
+                return;
+            }
+
             var profile = await plugin.GetProfileForItemAsync(item).ConfigureAwait(false);
             if (profile == null)
             {
@@ -596,21 +569,34 @@ namespace EmbyIcons
             
             try
             {
-                await GlobalConcurrencyLock.WaitAsync(cancellationToken);
-                globalLockAcquired = true;
-
                 var itemKey = item.Id != Guid.Empty ? item.Id.ToString("N") : $"iid_{item.InternalId}";
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
                 itemSemaphore = _locks.GetOrAdd(itemKey, _ => new SemaphoreSlim(1, 1));
                 _lockLastUsed[itemKey] = DateTime.UtcNow;
                 await itemSemaphore.WaitAsync(cancellationToken);
                 itemLockAcquired = true;
-                
+
+                await GlobalConcurrencyLock.WaitAsync(cancellationToken);
+                globalLockAcquired = true;
+
                 item = GetFullItem(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
 
-                using var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true);
-                using var sourceBitmap = SKBitmap.Decode(inputStream);
+                if (_activeBackend == RenderBackend.NetVips)
+                {
+                    await EnhanceImageWithNetVipsAsync(item, inputFile, outputFile, imageType, overlayData, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                byte[] inputBytes;
+                using (var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
+                using (var inputBuffer = new MemoryStream())
+                {
+                    await inputStream.CopyToAsync(inputBuffer, 81920, cancellationToken).ConfigureAwait(false);
+                    inputBytes = inputBuffer.ToArray();
+                }
+
+                using var sourceBitmap = inputBytes.Length > 0 ? SKBitmap.Decode(inputBytes) : null;
 
                 if (sourceBitmap == null)
                 {
@@ -633,7 +619,7 @@ namespace EmbyIcons
                     using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                     {
                         await _imageOverlayService.ApplyOverlaysToStreamAsync(
-                            bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null, _templateCache);
+                            bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
                     }
 
                     try
@@ -705,6 +691,86 @@ namespace EmbyIcons
             }
         }
 
+        private async Task EnhanceImageWithNetVipsAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, Models.OverlayData overlayData, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
+        {
+            byte[] sourceBytes;
+            using (var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
+            using (var ms = new MemoryStream())
+            {
+                await inputStream.CopyToAsync(ms, 81920, cancellationToken).ConfigureAwait(false);
+                sourceBytes = ms.ToArray();
+            }
+
+            bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
+
+            NetVips.Image? normalized = null;
+            try
+            {
+                using var decoded = NetVips.Image.NewFromBuffer(sourceBytes);
+
+                normalized = isMusicItem
+                    ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToSquare(decoded) : null)
+                    : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeTo2x3(decoded)
+                    : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToThumb(decoded)
+                    : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToBanner(decoded)
+                    : null;
+
+                if (normalized != null)
+                {
+                    sourceBytes = normalized.PngsaveBuffer();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[EmbyIcons] NetVips failed to decode/normalize source image for '{item?.Name}': {ex.Message}");
+            }
+            finally
+            {
+                normalized?.Dispose();
+            }
+
+            string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
+                {
+                    await _netVipsOverlayService!.ApplyOverlaysToStreamAsync(sourceBytes, overlayData, profileOptions, globalOptions, fsOut, cancellationToken).ConfigureAwait(false);
+                }
+
+                try
+                {
+                    if (File.Exists(outputFile))
+                    {
+                        File.Replace(tempOutput, outputFile, null);
+                    }
+                    else
+                    {
+                        File.Move(tempOutput, outputFile);
+                    }
+                }
+                catch (IOException ioEx) when (ioEx.Message.Contains("volume", StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(tempOutput, outputFile, overwrite: true);
+                    try { File.Delete(tempOutput); }
+                    catch (Exception cleanupEx)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _logger.Debug($"[EmbyIcons] Failed to delete temp file '{tempOutput}': {cleanupEx.Message}");
+                    }
+                }
+            }
+            catch
+            {
+                try { if (File.Exists(tempOutput)) File.Delete(tempOutput); }
+                catch (Exception cleanupEx)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] Failed to clean up temp file '{tempOutput}': {cleanupEx.Message}");
+                }
+                throw;
+            }
+        }
+
         public EnhancedImageInfo GetEnhancedImageInfo(BaseItem item, string inputFile, ImageType imageType, int imageIndex) =>
             new() { RequiresTransparency = false };
 
@@ -733,7 +799,16 @@ namespace EmbyIcons
             int x = (source.Width - cropWidth) / 2;
             int y = (source.Height - cropHeight) / 2;
 
+            if (cropWidth <= 0 || cropHeight <= 0)
+                return null;
+
             var result = new SKBitmap(cropWidth, cropHeight);
+            if (result.Handle == IntPtr.Zero || result.GetPixels() == IntPtr.Zero)
+            {
+                result.Dispose();
+                return null;
+            }
+
             using var canvas = new SKCanvas(result);
             canvas.DrawBitmap(source, SKRect.Create(x, y, cropWidth, cropHeight), SKRect.Create(0, 0, cropWidth, cropHeight));
             return result;
@@ -868,12 +943,12 @@ namespace EmbyIcons
         {
             try { _iconCacheManager?.Dispose(); } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing icon cache manager: {ex.Message}"); }
-            
+
+            try { _netVipsIconCacheManager?.Dispose(); }
+            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing NetVips icon cache manager: {ex.Message}"); }
+
             try { _overlayDataService?.Dispose(); } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing overlay data service: {ex.Message}"); }
-            
-            try { _templateCache?.Dispose(); } 
-            catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}"); }
             
             if (_globalConcurrencyLock != null)
             {

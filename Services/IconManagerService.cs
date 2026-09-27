@@ -7,13 +7,11 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Services;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
@@ -244,7 +242,7 @@ namespace EmbyIcons.Services
                                     localReport.VideoCodecs.Add(videoCodec);
                                     localReport.VideoCodec = videoCodec;
                                 }
-                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions, item);
+                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
                                 if (res != null)
                                 {
                                     localReport.Resolutions.Add(res);
@@ -380,7 +378,7 @@ namespace EmbyIcons.Services
                     var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
                     isLikelyImage = fps.HasValue && fps.Value > 1000;
 
-                    var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions, item);
+                    var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
                     if (res != null) resolutionCounts.AddOrUpdate(res, 1, (k, v) => v + 1);
 
                     var ar = MediaStreamHelper.GetAspectRatioIconName(videoStream, true);

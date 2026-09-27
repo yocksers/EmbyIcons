@@ -26,13 +26,74 @@ namespace EmbyIcons.Caching
         private static readonly Dictionary<string, IconType> _prefixLookup = Constants.PrefixMap.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
         private volatile string? _iconsFolder;
+        private readonly object _initLock = new object();
 
-        private static MemoryCacheEntryOptions CreateBitmapCacheEntryOptions(SKBitmap bitmap)
+        private static readonly TimeSpan MissingCustomIconRetryInterval = TimeSpan.FromMinutes(2);
+        private readonly ConcurrentDictionary<string, DateTime> _missingCustomIcons = new(StringComparer.Ordinal);
+
+        private readonly object _bitmapGate = new object();
+
+        private MemoryCacheEntryOptions CreateBitmapCacheEntryOptions(SKBitmap bitmap)
         {
             return new MemoryCacheEntryOptions()
                 .SetSize(bitmap.ByteCount)
                 .SetSlidingExpiration(TimeSpan.FromHours(2))
-                .RegisterPostEvictionCallback((_, value, _, _) => (value as SKBitmap)?.Dispose());
+                .RegisterPostEvictionCallback((_, value, _, _) => DisposeCachedBitmap(value as SKBitmap));
+        }
+
+        private void DisposeCachedBitmap(SKBitmap? bitmap)
+        {
+            if (bitmap == null) return;
+
+            lock (_bitmapGate)
+            {
+                try { bitmap.Dispose(); } catch { }
+            }
+        }
+
+        private SKImage? TryGetCachedImage(MemoryCache cache, string key)
+        {
+            lock (_bitmapGate)
+            {
+                try
+                {
+                    if (cache.TryGetValue(key, out SKBitmap? cachedBitmap) && cachedBitmap != null && cachedBitmap.Handle != IntPtr.Zero)
+                    {
+                        return SKImage.FromBitmap(cachedBitmap);
+                    }
+                }
+                catch (ObjectDisposedException) { }
+            }
+
+            return null;
+        }
+
+        private SKImage? CacheBitmapAndCreateImage(MemoryCache cache, string key, SKBitmap bitmap)
+        {
+            lock (_bitmapGate)
+            {
+                SKImage? image;
+                try
+                {
+                    image = SKImage.FromBitmap(bitmap);
+                }
+                catch
+                {
+                    bitmap.Dispose();
+                    throw;
+                }
+
+                if (image == null)
+                {
+                    bitmap.Dispose();
+                    return null;
+                }
+
+                try { cache.Set(key, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
+                catch { bitmap.Dispose(); }
+
+                return image;
+            }
         }
 
         internal static readonly HashSet<string> SupportedCustomIconExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -50,7 +111,7 @@ namespace EmbyIcons.Caching
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _cacheSizeLimitInBytes = 100 * 1024 * 1024; // 100 MB
+            _cacheSizeLimitInBytes = 100 * 1024 * 1024;
 
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
@@ -75,12 +136,6 @@ namespace EmbyIcons.Caching
                 return CreateEmptyIconKeyMap();
             }
 
-            if (!Directory.Exists(iconsFolder))
-            {
-                _logger.Warn($"[EmbyIcons] Custom icons folder does not exist: '{iconsFolder}'. No custom icons will be loaded.");
-                return CreateEmptyIconKeyMap();
-            }
-
             lock (_customKeysLock)
             {
                 if (_customIconKeys != null &&
@@ -89,6 +144,18 @@ namespace EmbyIcons.Caching
                 {
                     return _customIconKeys;
                 }
+            }
+
+            if (!Directory.Exists(iconsFolder))
+            {
+                _logger.Warn($"[EmbyIcons] Custom icons folder does not exist: '{iconsFolder}'. No custom icons will be loaded.");
+                var emptyKeys = CreateEmptyIconKeyMap();
+                lock (_customKeysLock)
+                {
+                    _customKeysFolder = iconsFolder;
+                    _customIconKeys = emptyKeys;
+                }
+                return emptyKeys;
             }
 
             var allKeys = CreateEmptyIconKeyMap();
@@ -168,21 +235,25 @@ namespace EmbyIcons.Caching
             }
         }
 
-        public Task InitializeAsync(string iconsFolder, CancellationToken cancellationToken)
+        public void Initialize(string iconsFolder)
         {
             var effectiveFolder = iconsFolder ?? string.Empty;
 
-            if (_iconsFolder != null &&
-                string.Equals(_iconsFolder, effectiveFolder, StringComparison.OrdinalIgnoreCase))
+            lock (_initLock)
             {
-                return Task.CompletedTask;
+                if (_iconsFolder != null &&
+                    string.Equals(_iconsFolder, effectiveFolder, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _iconsFolder = effectiveFolder;
             }
 
-            _iconsFolder = effectiveFolder;
-            return RefreshCacheOnDemandAsync(effectiveFolder, cancellationToken, force: true);
+            RefreshCache(effectiveFolder);
         }
 
-        public Task RefreshCacheOnDemandAsync(string iconsFolder, CancellationToken cancellationToken, bool force = false)
+        public void RefreshCache(string iconsFolder)
         {
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
@@ -209,7 +280,7 @@ namespace EmbyIcons.Caching
                 _customKeysFolder = null;
             }
 
-            return Task.CompletedTask;
+            _missingCustomIcons.Clear();
         }
 
         public async Task<SKImage?> GetIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
@@ -285,9 +356,17 @@ namespace EmbyIcons.Caching
         {
             if (string.IsNullOrEmpty(iconsFolder)) return null;
 
-            if (cache.TryGetValue(baseFileName, out SKBitmap? cachedBitmap) && cachedBitmap != null)
+            var cachedImage = TryGetCachedImage(cache, baseFileName);
+            if (cachedImage != null)
             {
-                return SKImage.FromBitmap(cachedBitmap);
+                return cachedImage;
+            }
+
+            var missingKey = iconsFolder + "|" + baseFileName;
+            if (_missingCustomIcons.TryGetValue(missingKey, out var missingSince) &&
+                DateTime.UtcNow - missingSince < MissingCustomIconRetryInterval)
+            {
+                return null;
             }
 
             foreach (var ext in SupportedCustomIconExtensions)
@@ -313,14 +392,7 @@ namespace EmbyIcons.Caching
                             return null;
                         }
 
-                        bool cached = true;
-                        try { cache.Set(baseFileName, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
-                        catch (ObjectDisposedException) { bitmap.Dispose(); return null; }
-                        catch { cached = false; }
-
-                        var image = SKImage.FromBitmap(bitmap);
-                        if (!cached) bitmap.Dispose();
-                        return image;
+                        return CacheBitmapAndCreateImage(cache, baseFileName, bitmap);
                     }
                     catch (Exception ex)
                     {
@@ -329,14 +401,16 @@ namespace EmbyIcons.Caching
                 }
             }
 
+            _missingCustomIcons[missingKey] = DateTime.UtcNow;
             return null;
         }
 
         private async Task<SKImage?> LoadEmbeddedIconAsync(string cacheKey, CancellationToken cancellationToken, MemoryCache cache)
         {
-            if (cache.TryGetValue(cacheKey, out SKBitmap? cachedBitmap) && cachedBitmap != null)
+            var cachedImage = TryGetCachedImage(cache, cacheKey);
+            if (cachedImage != null)
             {
-                return SKImage.FromBitmap(cachedBitmap);
+                return cachedImage;
             }
 
             var resourceName = $"EmbyIcons.EmbeddedIcons.{cacheKey.Substring("embedded_".Length)}.png";
@@ -353,14 +427,7 @@ namespace EmbyIcons.Caching
                 var bitmap = SKBitmap.Decode(bytes);
                 if (bitmap == null) return null;
 
-                bool cached = true;
-                try { cache.Set(cacheKey, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
-                catch (ObjectDisposedException) { bitmap.Dispose(); return null; }
-                catch { cached = false; }
-
-                var image = SKImage.FromBitmap(bitmap);
-                if (!cached) bitmap.Dispose();
-                return image;
+                return CacheBitmapAndCreateImage(cache, cacheKey, bitmap);
             }
             catch { }
 
@@ -384,6 +451,8 @@ namespace EmbyIcons.Caching
             try { _cacheMaintenanceTimer?.Dispose(); } catch { }
             _cacheMaintenanceTimer = null;
         }
+
+        public long EstimatedCacheBytes => _iconImageCache?.CurrentSize ?? 0;
 
         private void CompactCache()
         {
@@ -410,4 +479,4 @@ namespace EmbyIcons.Caching
             return dict;
         }
     }
-}
+}

@@ -34,7 +34,6 @@ namespace EmbyIcons.Configuration
         public const string ScorePropertyName = "Score";
 
         public const string EpisodeType = "Episode";
-        public const string MovieType = "Movie";
 
         public const string MediaTypeMovie = "movie";
         public const string MediaTypeShow = "show";
@@ -42,8 +41,6 @@ namespace EmbyIcons.Configuration
         public const string MdbListAudienceSource = "audience";
         public const string MdbListMyAnimeListSource = "myanimelist";
         public const string MdbListMalSource = "mal";
-
-        public const string LogPrefix = "[EmbyIcons]";
 
         public const string PercentFormat = "F1";
     }

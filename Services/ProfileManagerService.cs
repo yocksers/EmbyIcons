@@ -1,10 +1,8 @@
 ﻿using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Logging;
-using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using System;
 using System.Linq;

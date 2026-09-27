@@ -1,8 +1,6 @@
-using EmbyIcons.Configuration;
 using MediaBrowser.Model.Plugins;
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 
 namespace EmbyIcons.Configuration
 {
@@ -64,15 +62,9 @@ namespace EmbyIcons.Configuration
         public string PersistedVersion { get; set; } = "1.0.0";
         public string IconsFolder { get; set; } = string.Empty;
 
-        private static string GetDefaultIconsFolder()
-        {
-            return string.Empty;
-        }
-
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
         public bool EnableCollectionProfileLookup { get; set; } = true;
-        public bool EnableIconTemplateCaching { get; set; } = true;
 
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
@@ -92,7 +84,7 @@ namespace EmbyIcons.Configuration
         public int EpisodeCacheSlidingExpirationHours { get; set; } = 6;
         public int CachePruningIntervalHours { get; set; } = 6;
         public int CacheMaintenanceIntervalHours { get; set; } = 1;
-        public double GlobalConcurrencyMultiplier { get; set; } = 0.75; // Multiplied by processor count
+        public double GlobalConcurrencyMultiplier { get; set; } = 0.75;
         public bool ForceDisableSkiaSharp { get; set; } = false;
         public string MDBListApiKey { get; set; } = string.Empty;
         
