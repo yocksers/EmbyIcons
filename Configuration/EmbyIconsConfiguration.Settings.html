@@ -65,6 +65,20 @@
             <input is="emby-input" type="number" label="Image Quality (10-100):" min="10" max="100" data-config-key="JpegQuality" />
             <div class="fieldDescription">Used for JPEG output format. Higher is better.</div>
         </div>
+
+        <div class="inputContainer" style="margin-top: 1.5em;">
+            <select is="emby-select" id="selMaxRenderDimension" label="Poster Render Resolution:" data-config-key="MaxRenderDimension">
+                <option value="0">Original size (no scaling)</option>
+                <option value="3000">3000 px (2000 × 3000 poster)</option>
+                <option value="2250">2250 px (1500 × 2250 poster)</option>
+                <option value="1800">1800 px (1200 × 1800 poster)</option>
+                <option value="1500">1500 px (1000 × 1500 poster)</option>
+                <option value="1200">1200 px (800 × 1200 poster)</option>
+                <option value="900">900 px (600 × 900 poster)</option>
+                <option value="750">750 px (500 × 750 poster)</option>
+            </select>
+            <div class="fieldDescription">Largest size, measured on the longest side, that images are drawn at. Larger images are scaled down with their proportions kept; smaller images are never enlarged. Lower values draw faster and use less memory; Original size keeps full detail. Changing this redraws all posters.</div>
+        </div>
         <div class="checkboxContainer" style="margin-top: 1.5em;">
             <label>
                 <input is="emby-checkbox" type="checkbox" data-config-key="EnableImageSmoothing" />

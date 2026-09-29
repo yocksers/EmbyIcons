@@ -12,6 +12,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace EmbyIcons.Services
 {
@@ -85,11 +87,15 @@ namespace EmbyIcons.Services
 
         public static void InvalidateCache()
         {
+            bool hadReport;
             lock (_cacheLock)
             {
+                hadReport = _cachedReport != null;
                 _cachedReport = null;
-                Plugin.Instance?.Logger.Info("[EmbyIcons] Icon Manager report cache invalidated.");
             }
+
+            if (hadReport)
+                Plugin.Instance?.Logger.Info("[EmbyIcons] Icon Manager report cache invalidated.");
         }
 
         private class LocalItemReport
@@ -107,18 +113,92 @@ namespace EmbyIcons.Services
             public HashSet<string> FrameRates { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> OriginalLanguages { get; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> SeriesStatuses { get; } = new(StringComparer.OrdinalIgnoreCase);
-            
-            public string? Resolution { get; set; }
-            public string? PrimaryLanguage { get; set; }
-            public string? PrimarySubtitle { get; set; }
-            public string? AudioCodec { get; set; }
-            public string? VideoCodec { get; set; }
-            public string? VideoFormat { get; set; }
-            public string? AspectRatio { get; set; }
-            public string? Channel { get; set; }
-            public string? FrameRate { get; set; }
-            public string? OriginalLanguage { get; set; }
+
+            public void MergeFrom(LocalItemReport other)
+            {
+                Languages.UnionWith(other.Languages);
+                Subtitles.UnionWith(other.Subtitles);
+                Channels.UnionWith(other.Channels);
+                AudioCodecs.UnionWith(other.AudioCodecs);
+                VideoCodecs.UnionWith(other.VideoCodecs);
+                VideoFormats.UnionWith(other.VideoFormats);
+                Resolutions.UnionWith(other.Resolutions);
+                AspectRatios.UnionWith(other.AspectRatios);
+                Tags.UnionWith(other.Tags);
+                ParentalRatings.UnionWith(other.ParentalRatings);
+                FrameRates.UnionWith(other.FrameRates);
+                OriginalLanguages.UnionWith(other.OriginalLanguages);
+                SeriesStatuses.UnionWith(other.SeriesStatuses);
+            }
         }
+
+        private sealed class StatisticsAccumulator
+        {
+            public int TotalItems;
+            public Dictionary<string, int> Resolutions { get; } = NewCounter();
+            public Dictionary<string, int> AudioLanguages { get; } = NewCounter();
+            public Dictionary<string, int> SubtitleLanguages { get; } = NewCounter();
+            public Dictionary<string, int> AudioCodecs { get; } = NewCounter();
+            public Dictionary<string, int> VideoCodecs { get; } = NewCounter();
+            public Dictionary<string, int> VideoFormats { get; } = NewCounter();
+            public Dictionary<string, int> AspectRatios { get; } = NewCounter();
+            public Dictionary<string, int> Channels { get; } = NewCounter();
+            public Dictionary<string, int> FrameRates { get; } = NewCounter();
+            public Dictionary<string, int> OriginalLanguages { get; } = NewCounter();
+
+            private static Dictionary<string, int> NewCounter() => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            public static void Increment(Dictionary<string, int> counter, string? key)
+            {
+                if (key == null) return;
+                counter.TryGetValue(key, out var current);
+                counter[key] = current + 1;
+            }
+
+            public void MergeFrom(StatisticsAccumulator other)
+            {
+                TotalItems += other.TotalItems;
+                Merge(Resolutions, other.Resolutions);
+                Merge(AudioLanguages, other.AudioLanguages);
+                Merge(SubtitleLanguages, other.SubtitleLanguages);
+                Merge(AudioCodecs, other.AudioCodecs);
+                Merge(VideoCodecs, other.VideoCodecs);
+                Merge(VideoFormats, other.VideoFormats);
+                Merge(AspectRatios, other.AspectRatios);
+                Merge(Channels, other.Channels);
+                Merge(FrameRates, other.FrameRates);
+                Merge(OriginalLanguages, other.OriginalLanguages);
+            }
+
+            private static void Merge(Dictionary<string, int> target, Dictionary<string, int> source)
+            {
+                foreach (var kv in source)
+                {
+                    target.TryGetValue(kv.Key, out var current);
+                    target[kv.Key] = current + kv.Value;
+                }
+            }
+
+            private static Dictionary<string, int> Sorted(Dictionary<string, int> counter)
+                => counter.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            public LibraryStatistics ToStatistics() => new LibraryStatistics
+            {
+                TotalItems = TotalItems,
+                ResolutionCounts = Sorted(Resolutions),
+                AudioLanguageCounts = Sorted(AudioLanguages),
+                SubtitleLanguageCounts = Sorted(SubtitleLanguages),
+                AudioCodecCounts = Sorted(AudioCodecs),
+                VideoCodecCounts = Sorted(VideoCodecs),
+                VideoFormatCounts = Sorted(VideoFormats),
+                AspectRatioCounts = Sorted(AspectRatios),
+                ChannelCounts = Sorted(Channels),
+                FrameRateCounts = Sorted(FrameRates),
+                OriginalLanguageCounts = Sorted(OriginalLanguages)
+            };
+        }
+
+        private const int ReportBatchSize = 5000;
 
         private IconManagerReport GenerateReport()
         {
@@ -131,19 +211,6 @@ namespace EmbyIcons.Services
             pluginInstance.Logger.Info("[EmbyIcons] Generating new Icon Manager report...");
             var options = pluginInstance.GetConfiguredOptions();
 
-            const int MAX_ITEMS_TO_ANALYZE = 50000;
-            
-            var allItems = _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { "Movie", Constants.Episode, "Series" },
-                IsVirtualItem = false,
-                Recursive = true,
-                Limit = MAX_ITEMS_TO_ANALYZE
-            });
-
-            int totalItems = allItems.Count();
-            int processedCount = 0;
-
             var customIcons = _iconCacheManager.GetAllAvailableIconKeys(options.IconsFolder);
             var customResolutionKeys = customIcons.GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
             var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
@@ -154,178 +221,35 @@ namespace EmbyIcons.Services
                 _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
             };
 
-            var finalReportData = allItems
-                .AsParallel()
-                .WithDegreeOfParallelism(Math.Max(1, Environment.ProcessorCount / 2))
-                .Select(item =>
+            InternalItemsQuery CreateQuery() => new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { "Movie", Constants.Episode, "Series" },
+                IsVirtualItem = false,
+                Recursive = true
+            };
+
+            var finalReportData = new LocalItemReport();
+            var statistics = new StatisticsAccumulator();
+            int totalItems = 0;
+            int processedCount = 0;
+            var batch = new List<BaseItem>(ReportBatchSize);
+
+            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateQuery, ReportBatchSize, total => totalItems = total))
+            {
+                batch.Add(item);
+                if (batch.Count >= ReportBatchSize)
                 {
-                    var localReport = new LocalItemReport();
-                    var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+                    AnalyzeBatch(batch, knownResolutions, finalReportData, statistics, processedCount, totalItems);
+                    processedCount += batch.Count;
+                    batch.Clear();
+                }
+            }
 
-                    var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
-                    if (rating != null) localReport.ParentalRatings.Add(rating);
-
-                    if (item.Tags != null)
-                    {
-                        foreach (var tag in item.Tags) localReport.Tags.Add(tag);
-                    }
-
-                    if (!streams.Any()) return localReport;
-
-                    var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
-                    var isLikelyImage = false;
-                    if (videoStream != null)
-                    {
-                        var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
-                        isLikelyImage = fps.HasValue && fps.Value > 1000;
-                    }
-
-                    var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
-                    if (format != null)
-                    {
-                        localReport.VideoFormats.Add(format);
-                        localReport.VideoFormat = format;
-                    }
-
-                    if (!isLikelyImage)
-                    {
-                        var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
-                        if (primaryAudio != null)
-                        {
-                            var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
-                            if (ch != null)
-                            {
-                                localReport.Channels.Add(ch);
-                                localReport.Channel = ch;
-                            }
-                        }
-                    }
-
-                    foreach (var stream in streams)
-                    {
-                        switch (stream.Type)
-                        {
-                            case MediaStreamType.Audio:
-                                if (!isLikelyImage)
-                                {
-                                    var audioLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
-                                    if (!string.IsNullOrEmpty(audioLangCode))
-                                    {
-                                        var lang = LanguageHelper.NormalizeLangCode(audioLangCode);
-                                        localReport.Languages.Add(lang);
-                                        if (localReport.PrimaryLanguage == null) localReport.PrimaryLanguage = lang;
-                                    }
-                                    var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
-                                    if (audioCodec != null)
-                                    {
-                                        localReport.AudioCodecs.Add(audioCodec);
-                                        if (localReport.AudioCodec == null) localReport.AudioCodec = audioCodec;
-                                    }
-                                }
-                                break;
-                            case MediaStreamType.Subtitle:
-                                if (!isLikelyImage)
-                                {
-                                    var subLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
-                                    if (!string.IsNullOrEmpty(subLangCode))
-                                    {
-                                        var subLang = LanguageHelper.NormalizeLangCode(subLangCode);
-                                        localReport.Subtitles.Add(subLang);
-                                        if (localReport.PrimarySubtitle == null) localReport.PrimarySubtitle = subLang;
-                                    }
-                                }
-                                break;
-                            case MediaStreamType.Video:
-                                var videoCodec = MediaStreamHelper.GetVideoCodecIconName(stream);
-                                if (videoCodec != null)
-                                {
-                                    localReport.VideoCodecs.Add(videoCodec);
-                                    localReport.VideoCodec = videoCodec;
-                                }
-                                var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
-                                if (res != null)
-                                {
-                                    localReport.Resolutions.Add(res);
-                                    localReport.Resolution = res;
-                                }
-                                var ar = MediaStreamHelper.GetAspectRatioIconName(stream, true);
-                                if (ar != null)
-                                {
-                                    localReport.AspectRatios.Add(ar);
-                                    localReport.AspectRatio = ar;
-                                }
-                                if (!isLikelyImage)
-                                {
-                                    var fps = MediaStreamHelper.GetFrameRateIconName(stream);
-                                    if (fps != null)
-                                    {
-                                        localReport.FrameRates.Add(fps);
-                                        localReport.FrameRate = fps;
-                                    }
-                                }
-                                break;
-                        }
-                    }
-
-                    var originalLang = GetOriginalLanguageFromItem(item);
-                    if (originalLang != null && originalLang.Length > 0)
-                    {
-                        var normalizedLang = LanguageHelper.NormalizeLangCode(originalLang);
-                        localReport.OriginalLanguages.Add(normalizedLang);
-                        localReport.OriginalLanguage = normalizedLang;
-                    }
-
-                    if (item is MediaBrowser.Controller.Entities.TV.Series series)
-                    {
-                        var status = MediaStreamHelper.GetSeriesStatusIconName(series);
-                        if (status != null) localReport.SeriesStatuses.Add(status);
-                    }
-
-                    var newCount = System.Threading.Interlocked.Increment(ref processedCount);
-                    if (newCount % 200 == 0)
-                    {
-                        ScanProgressService.UpdateProgress("IconManager", newCount, totalItems, $"Scanning item {newCount} of {totalItems}...");
-                    }
-
-                    return localReport;
-                })
-                .Aggregate(
-                    seedFactory: () => new LocalItemReport(),
-                    updateAccumulatorFunc: (threadReport, itemReport) =>
-                    {
-                        threadReport.Languages.UnionWith(itemReport.Languages);
-                        threadReport.Subtitles.UnionWith(itemReport.Subtitles);
-                        threadReport.Channels.UnionWith(itemReport.Channels);
-                        threadReport.AudioCodecs.UnionWith(itemReport.AudioCodecs);
-                        threadReport.VideoCodecs.UnionWith(itemReport.VideoCodecs);
-                        threadReport.VideoFormats.UnionWith(itemReport.VideoFormats);
-                        threadReport.Resolutions.UnionWith(itemReport.Resolutions);
-                        threadReport.AspectRatios.UnionWith(itemReport.AspectRatios);
-                        threadReport.Tags.UnionWith(itemReport.Tags);
-                        threadReport.ParentalRatings.UnionWith(itemReport.ParentalRatings);
-                        threadReport.FrameRates.UnionWith(itemReport.FrameRates);
-                        threadReport.OriginalLanguages.UnionWith(itemReport.OriginalLanguages);
-                        threadReport.SeriesStatuses.UnionWith(itemReport.SeriesStatuses);
-                        return threadReport;
-                    },
-                    combineAccumulatorsFunc: (mainReport, threadReport) =>
-                    {
-                        mainReport.Languages.UnionWith(threadReport.Languages);
-                        mainReport.Subtitles.UnionWith(threadReport.Subtitles);
-                        mainReport.Channels.UnionWith(threadReport.Channels);
-                        mainReport.AudioCodecs.UnionWith(threadReport.AudioCodecs);
-                        mainReport.VideoCodecs.UnionWith(threadReport.VideoCodecs);
-                        mainReport.VideoFormats.UnionWith(threadReport.VideoFormats);
-                        mainReport.Resolutions.UnionWith(threadReport.Resolutions);
-                        mainReport.AspectRatios.UnionWith(threadReport.AspectRatios);
-                        mainReport.Tags.UnionWith(threadReport.Tags);
-                        mainReport.ParentalRatings.UnionWith(threadReport.ParentalRatings);
-                        mainReport.FrameRates.UnionWith(threadReport.FrameRates);
-                        mainReport.OriginalLanguages.UnionWith(threadReport.OriginalLanguages);
-                        mainReport.SeriesStatuses.UnionWith(threadReport.SeriesStatuses);
-                        return mainReport;
-                    },
-                    resultSelector: finalReport => finalReport);
+            if (batch.Count > 0)
+            {
+                AnalyzeBatch(batch, knownResolutions, finalReportData, statistics, processedCount, totalItems);
+                processedCount += batch.Count;
+            }
 
             var report = new IconManagerReport { ReportDate = DateTime.UtcNow };
 
@@ -343,108 +267,167 @@ namespace EmbyIcons.Services
             report.Groups[IconCacheManager.IconType.OriginalLanguage.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.OriginalLanguages.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.OriginalLanguage, new List<string>()) };
             report.Groups[IconCacheManager.IconType.SeriesStatus.ToString()] = new IconGroupReport { FoundInLibrary = finalReportData.SeriesStatuses.OrderBy(p => p).ToList(), FoundInFolder = customIcons.GetValueOrDefault(IconCacheManager.IconType.SeriesStatus, new List<string>()) };
 
-            report.Statistics = CalculateStatistics(allItems, knownResolutions);
+            report.Statistics = statistics.ToStatistics();
 
-            pluginInstance.Logger.Info("[EmbyIcons] Icon Manager report generation complete.");
+            pluginInstance.Logger.Info($"[EmbyIcons] Icon Manager report generation complete. Analyzed {processedCount} items.");
             return report;
         }
 
-        private LibraryStatistics CalculateStatistics(IEnumerable<BaseItem> items, List<string> knownResolutions)
+        private static void AnalyzeBatch(List<BaseItem> batch, List<string> knownResolutions, LocalItemReport finalReport, StatisticsAccumulator finalStatistics, int processedBefore, int totalItems)
         {
-            var stats = new LibraryStatistics();
-            var itemsList = items.Where(i => i is not Series).ToList();
-            stats.TotalItems = itemsList.Count;
+            var mergeLock = new object();
+            int batchProcessed = 0;
 
-            var resolutionCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var languageCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var subtitleCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var audioCodecCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var videoCodecCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var videoFormatCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var aspectRatioCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var channelCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var frameRateCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var originalLanguageCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-            System.Threading.Tasks.Parallel.ForEach(itemsList, item =>
-            {
-                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                if (!streams.Any()) return;
-
-                var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
-                var isLikelyImage = false;
-                if (videoStream != null)
+            Parallel.ForEach(
+                batch,
+                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2) },
+                () => (Report: new LocalItemReport(), Statistics: new StatisticsAccumulator()),
+                (item, _, local) =>
                 {
-                    var fps = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
-                    isLikelyImage = fps.HasValue && fps.Value > 1000;
+                    AnalyzeItem(item, knownResolutions, local.Report, local.Statistics);
 
-                    var res = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions);
-                    if (res != null) resolutionCounts.AddOrUpdate(res, 1, (k, v) => v + 1);
-
-                    var ar = MediaStreamHelper.GetAspectRatioIconName(videoStream, true);
-                    if (ar != null) aspectRatioCounts.AddOrUpdate(ar, 1, (k, v) => v + 1);
-
-                    if (!isLikelyImage)
+                    var done = processedBefore + Interlocked.Increment(ref batchProcessed);
+                    if (done % 200 == 0)
                     {
-                        var fpsIconName = MediaStreamHelper.GetFrameRateIconName(videoStream);
-                        if (fpsIconName != null) frameRateCounts.AddOrUpdate(fpsIconName, 1, (k, v) => v + 1);
+                        ScanProgressService.UpdateProgress("IconManager", done, totalItems, $"Scanning item {done} of {totalItems}...");
                     }
 
-                    var vc = MediaStreamHelper.GetVideoCodecIconName(videoStream);
-                    if (vc != null) videoCodecCounts.AddOrUpdate(vc, 1, (k, v) => v + 1);
+                    return local;
+                },
+                local =>
+                {
+                    lock (mergeLock)
+                    {
+                        finalReport.MergeFrom(local.Report);
+                        finalStatistics.MergeFrom(local.Statistics);
+                    }
+                });
+        }
+
+        private static void AnalyzeItem(BaseItem item, List<string> knownResolutions, LocalItemReport report, StatisticsAccumulator statistics)
+        {
+            bool countInStatistics = item is not Series;
+            if (countInStatistics) statistics.TotalItems++;
+
+            var rating = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
+            if (rating != null) report.ParentalRatings.Add(rating);
+
+            if (item.Tags != null)
+            {
+                foreach (var tag in item.Tags) report.Tags.Add(tag);
+            }
+
+            var originalLang = GetOriginalLanguageFromItem(item);
+            var normalizedOriginalLang = !string.IsNullOrEmpty(originalLang) ? LanguageHelper.NormalizeLangCode(originalLang!) : null;
+            if (normalizedOriginalLang != null) report.OriginalLanguages.Add(normalizedOriginalLang);
+
+            if (item is Series series)
+            {
+                var status = MediaStreamHelper.GetSeriesStatusIconName(series);
+                if (status != null) report.SeriesStatuses.Add(status);
+            }
+
+            var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+            if (streams.Count == 0) return;
+
+            var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
+            bool isLikelyImage = false;
+            if (videoStream != null)
+            {
+                var fpsValue = videoStream.RealFrameRate ?? videoStream.AverageFrameRate;
+                isLikelyImage = fpsValue.HasValue && fpsValue.Value > 1000;
+            }
+
+            var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
+            if (format != null) report.VideoFormats.Add(format);
+
+            var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
+            if (!isLikelyImage && primaryAudio != null)
+            {
+                var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
+                if (ch != null) report.Channels.Add(ch);
+            }
+
+            foreach (var stream in streams)
+            {
+                switch (stream.Type)
+                {
+                    case MediaStreamType.Audio:
+                        if (!isLikelyImage)
+                        {
+                            var audioLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                            if (!string.IsNullOrEmpty(audioLangCode))
+                            {
+                                report.Languages.Add(LanguageHelper.NormalizeLangCode(audioLangCode));
+                            }
+                            var audioCodec = MediaStreamHelper.GetAudioCodecIconName(stream);
+                            if (audioCodec != null) report.AudioCodecs.Add(audioCodec);
+                        }
+                        break;
+                    case MediaStreamType.Subtitle:
+                        if (!isLikelyImage)
+                        {
+                            var subLangCode = !string.IsNullOrEmpty(stream.DisplayLanguage) ? stream.DisplayLanguage : stream.Language;
+                            if (!string.IsNullOrEmpty(subLangCode))
+                            {
+                                report.Subtitles.Add(LanguageHelper.NormalizeLangCode(subLangCode));
+                            }
+                        }
+                        break;
+                    case MediaStreamType.Video:
+                        var videoCodec = MediaStreamHelper.GetVideoCodecIconName(stream);
+                        if (videoCodec != null) report.VideoCodecs.Add(videoCodec);
+                        var res = MediaStreamHelper.GetResolutionIconNameFromStream(stream, knownResolutions);
+                        if (res != null) report.Resolutions.Add(res);
+                        var ar = MediaStreamHelper.GetAspectRatioIconName(stream, true);
+                        if (ar != null) report.AspectRatios.Add(ar);
+                        if (!isLikelyImage)
+                        {
+                            var fps = MediaStreamHelper.GetFrameRateIconName(stream);
+                            if (fps != null) report.FrameRates.Add(fps);
+                        }
+                        break;
                 }
+            }
 
-                var format = MediaStreamHelper.GetVideoFormatIconName(item, streams);
-                if (format != null) videoFormatCounts.AddOrUpdate(format, 1, (k, v) => v + 1);
+            if (!countInStatistics) return;
 
+            if (videoStream != null)
+            {
+                StatisticsAccumulator.Increment(statistics.Resolutions, MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutions));
+                StatisticsAccumulator.Increment(statistics.AspectRatios, MediaStreamHelper.GetAspectRatioIconName(videoStream, true));
                 if (!isLikelyImage)
                 {
-                    var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels).FirstOrDefault();
-                    if (primaryAudio != null)
-                    {
-                        var primaryLangCode = !string.IsNullOrEmpty(primaryAudio.DisplayLanguage) ? primaryAudio.DisplayLanguage : primaryAudio.Language;
-                        if (!string.IsNullOrEmpty(primaryLangCode))
-                        {
-                            var lang = LanguageHelper.NormalizeLangCode(primaryLangCode);
-                            languageCounts.AddOrUpdate(lang, 1, (k, v) => v + 1);
-                        }
-
-                        var ch = MediaStreamHelper.GetChannelIconName(primaryAudio);
-                        if (ch != null) channelCounts.AddOrUpdate(ch, 1, (k, v) => v + 1);
-
-                        var ac = MediaStreamHelper.GetAudioCodecIconName(primaryAudio);
-                        if (ac != null) audioCodecCounts.AddOrUpdate(ac, 1, (k, v) => v + 1);
-                    }
-
-                    var firstSubtitle = streams.FirstOrDefault(s => s.Type == MediaStreamType.Subtitle && (!string.IsNullOrEmpty(s.DisplayLanguage) || !string.IsNullOrEmpty(s.Language)));
-                    if (firstSubtitle != null)
-                    {
-                        var firstSubLangCode = !string.IsNullOrEmpty(firstSubtitle.DisplayLanguage) ? firstSubtitle.DisplayLanguage : firstSubtitle.Language;
-                        var subLang = LanguageHelper.NormalizeLangCode(firstSubLangCode!);
-                        subtitleCounts.AddOrUpdate(subLang, 1, (k, v) => v + 1);
-                    }
+                    StatisticsAccumulator.Increment(statistics.FrameRates, MediaStreamHelper.GetFrameRateIconName(videoStream));
                 }
+                StatisticsAccumulator.Increment(statistics.VideoCodecs, MediaStreamHelper.GetVideoCodecIconName(videoStream));
+            }
 
-                var originalLang = GetOriginalLanguageFromItem(item);
-                if (originalLang != null && originalLang.Length > 0)
+            StatisticsAccumulator.Increment(statistics.VideoFormats, format);
+
+            if (!isLikelyImage)
+            {
+                if (primaryAudio != null)
                 {
-                    var normalizedOriginalLang = LanguageHelper.NormalizeLangCode(originalLang);
-                    originalLanguageCounts.AddOrUpdate(normalizedOriginalLang, 1, (k, v) => v + 1);
+                    var primaryLangCode = !string.IsNullOrEmpty(primaryAudio.DisplayLanguage) ? primaryAudio.DisplayLanguage : primaryAudio.Language;
+                    if (!string.IsNullOrEmpty(primaryLangCode))
+                    {
+                        StatisticsAccumulator.Increment(statistics.AudioLanguages, LanguageHelper.NormalizeLangCode(primaryLangCode));
+                    }
+
+                    StatisticsAccumulator.Increment(statistics.Channels, MediaStreamHelper.GetChannelIconName(primaryAudio));
+                    StatisticsAccumulator.Increment(statistics.AudioCodecs, MediaStreamHelper.GetAudioCodecIconName(primaryAudio));
                 }
-            });
 
-            stats.ResolutionCounts = resolutionCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.AudioLanguageCounts = languageCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.SubtitleLanguageCounts = subtitleCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.AudioCodecCounts = audioCodecCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.VideoCodecCounts = videoCodecCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.VideoFormatCounts = videoFormatCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.AspectRatioCounts = aspectRatioCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.ChannelCounts = channelCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.FrameRateCounts = frameRateCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
-            stats.OriginalLanguageCounts = originalLanguageCounts.OrderByDescending(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value);
+                var firstSubtitle = streams.FirstOrDefault(st => st.Type == MediaStreamType.Subtitle && (!string.IsNullOrEmpty(st.DisplayLanguage) || !string.IsNullOrEmpty(st.Language)));
+                if (firstSubtitle != null)
+                {
+                    var firstSubLangCode = !string.IsNullOrEmpty(firstSubtitle.DisplayLanguage) ? firstSubtitle.DisplayLanguage : firstSubtitle.Language;
+                    StatisticsAccumulator.Increment(statistics.SubtitleLanguages, LanguageHelper.NormalizeLangCode(firstSubLangCode!));
+                }
+            }
 
-            return stats;
+            StatisticsAccumulator.Increment(statistics.OriginalLanguages, normalizedOriginalLang);
         }
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo? OriginalLanguage, System.Reflection.PropertyInfo? ProductionLocations)> _originalLangPropCache

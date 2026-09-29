@@ -59,7 +59,7 @@ namespace EmbyIcons.Configuration
 
     public class PluginOptions : BasePluginConfiguration
     {
-        public string PersistedVersion { get; set; } = "1.0.0";
+        public string ImageCacheVersion { get; set; } = string.Empty;
         public string IconsFolder { get; set; } = string.Empty;
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
@@ -69,6 +69,7 @@ namespace EmbyIcons.Configuration
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
         public int JpegQuality { get; set; } = 75;
+        public int MaxRenderDimension { get; set; } = 3000;
         public bool EnableImageSmoothing { get; set; } = false;
         public bool ShowAdvancedOptions { get; set; } = false;
 

@@ -76,10 +76,8 @@ namespace EmbyIcons.ImageProcessing.Vips
             return false;
         }
 
-        public async Task ApplyOverlaysToStreamAsync(byte[] sourceImageBytes, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken)
+        public async Task ApplyOverlaysToStreamAsync(Image sourceImage, OverlayData data, ProfileSettings profileOptions, PluginOptions globalOptions, Stream outputStream, CancellationToken cancellationToken)
         {
-            using var sourceImage = Image.NewFromBuffer(sourceImageBytes);
-
             if (!HasAnyOverlaysEnabled(profileOptions))
             {
                 EncodeAndSave(sourceImage, globalOptions, outputStream, needsAlphaChannel: false);

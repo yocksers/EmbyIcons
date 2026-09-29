@@ -117,6 +117,12 @@ namespace EmbyIcons
             }
         }
 
+        internal static void ClearStreamHashCache()
+        {
+            var oldHashCache = Interlocked.Exchange(ref _streamHashCache, new MemoryCache(new MemoryCacheOptions { SizeLimit = StreamHashCacheSize }));
+            try { oldHashCache?.Dispose(); } catch { }
+        }
+
         public void ClearAllEpisodeCaches()
         {
             var newCache = new MemoryCache(new MemoryCacheOptions
@@ -125,9 +131,6 @@ namespace EmbyIcons
             });
 
             var oldCache = Interlocked.Exchange(ref _episodeIconCache, newCache);
-
-            var oldHashCache = Interlocked.Exchange(ref _streamHashCache, new MemoryCache(new MemoryCacheOptions { SizeLimit = StreamHashCacheSize }));
-            try { oldHashCache?.Dispose(); } catch { }
             
             if (oldCache != null)
             {

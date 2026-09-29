@@ -3,7 +3,6 @@ using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Services;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
@@ -38,34 +37,11 @@ namespace EmbyIcons.Services
             }
 
             var config = plugin.Configuration;
-            var iconsFolder = config.IconsFolder;
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(plugin.ShutdownToken);
-
-            config.PersistedVersion = Guid.NewGuid().ToString("N");
+            config.ImageCacheVersion = Guid.NewGuid().ToString("N");
             plugin.SaveCurrentConfiguration();
-            _logger.Info($"[EmbyIcons] Cache clear requested. New cache-busting version is '{config.PersistedVersion}'. Cache refresh running in background.");
 
-            var cacheRefreshTask = Task.Run(async () =>
-            {
-                try
-                {
-                    _logger.Info("[EmbyIcons] Starting background cache refresh.");
-                    await _enhancer.ForceCacheRefreshAsync(iconsFolder, cts.Token);
-                    _logger.Info("[EmbyIcons] Background cache refresh completed successfully.");
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Info("[EmbyIcons] Background cache refresh was cancelled.");
-                }
-                catch (Exception ex)
-                {
-                    _logger.ErrorException("[EmbyIcons] Error during background cache refresh.", ex);
-                }
-                finally
-                {
-                    try { cts?.Dispose(); } catch { }
-                }
-            });
+            _enhancer.ForceCacheRefresh(config.IconsFolder);
+            _logger.Info("[EmbyIcons] Caches cleared. All posters will be redrawn as they are viewed.");
 
             return Task.CompletedTask;
         }

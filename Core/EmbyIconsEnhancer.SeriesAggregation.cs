@@ -23,6 +23,13 @@ namespace EmbyIcons
         private const int CACHE_SIZE_CHECK_FREQUENCY = 50;
         private static int _additionsCounter = 0;
         private static readonly KeyedAsyncLock<Guid> _aggregationLocks = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, Guid> _aggregatedParentIds = new();
+
+        internal static bool TryGetAggregatedParentId(long internalId, out Guid parentId)
+            => _aggregatedParentIds.TryGetValue(internalId, out parentId);
+
+        internal static void ForgetAggregatedParent(long internalId)
+            => _aggregatedParentIds.TryRemove(internalId, out _);
 
         internal record AggregatedSeriesResult
         {
@@ -522,6 +529,10 @@ namespace EmbyIcons
             };
 
             _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
+            if (parent.InternalId > 0)
+            {
+                _aggregatedParentIds[parent.InternalId] = parent.Id;
+            }
 
             if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
             {

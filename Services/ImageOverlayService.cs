@@ -58,6 +58,27 @@ namespace EmbyIcons.Services
             _iconCache = iconCache;
         }
 
+        internal static bool HasVisibleContent(OverlayData data, ProfileSettings profileOptions)
+        {
+            foreach (var def in _groupDefinitions)
+            {
+                if (def.GetAlignment(profileOptions) == IconAlignment.Disabled) continue;
+                var names = def.GetNames(data);
+                if (names != null && names.Count > 0) return true;
+            }
+
+            if (data.FilenameBasedIcons.Any(i => i.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(i.IconName))) return true;
+            if (data.TagBasedIcons.Any(i => i.Alignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(i.IconName))) return true;
+
+            if (profileOptions.CommunityScoreIconAlignment != IconAlignment.Disabled && data.CommunityRating.HasValue) return true;
+            if (profileOptions.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled && data.RottenTomatoesRating.HasValue) return true;
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled && data.PopcornRating.HasValue) return true;
+            if (profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled && data.MyAnimeListRating.HasValue) return true;
+            if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled && data.FavoriteCount.HasValue && data.FavoriteCount.Value > 0) return true;
+
+            return false;
+        }
+
         private bool HasAnyOverlaysEnabled(ProfileSettings profileOptions)
         {
             foreach (var def in _groupDefinitions)

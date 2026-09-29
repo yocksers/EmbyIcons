@@ -96,44 +96,27 @@ namespace EmbyIcons.Services
                 return reports;
             }
 
-            const int MAX_SERIES_TO_ANALYZE = 1000;
-            const int MAX_EPISODES_TO_ANALYZE = 25000;
-
-            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery 
-            { 
-                IncludeItemTypes = new[] { "Series" }, 
-                Recursive = true,
-                Limit = MAX_SERIES_TO_ANALYZE
-            })
-                                           .OfType<Series>()
-                                           .ToDictionary(s => s.InternalId);
-
-            var allEpisodes = _libraryManager.GetItemList(new InternalItemsQuery 
-            { 
-                IncludeItemTypes = new[] { "Episode" }, 
-                Recursive = true,
-                Limit = MAX_EPISODES_TO_ANALYZE
-            })
-                                             .OfType<Episode>();
-
-            var episodesBySeries = allEpisodes.GroupBy(e => e.SeriesId);
-
-            foreach (var seriesGroup in episodesBySeries)
+            InternalItemsQuery CreateSeriesQuery() => new InternalItemsQuery
             {
-                if (allSeries.TryGetValue(seriesGroup.Key, out var series))
+                IncludeItemTypes = new[] { "Series" },
+                Recursive = true
+            };
+
+            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateSeriesQuery, 500))
+            {
+                if (item is not Series series) continue;
+
+                var report = GenerateReportForSeries(series, requestedChecks, runAllChecks);
+                if (report.Checks.Any(c => c.Status == "Mismatch"))
                 {
-                    var report = GenerateReportForSeries(series, requestedChecks, runAllChecks, seriesGroup.ToList());
-                    if (report.Checks.Any(c => c.Status == "Mismatch"))
-                    {
-                        reports.Add(report);
-                    }
+                    reports.Add(report);
                 }
             }
 
             return reports.OrderBy(r => r.SeriesName, StringComparer.CurrentCulture).ToList();
         }
 
-        private SeriesTroubleshooterReport GenerateReportForSeries(Series series, HashSet<string> requestedChecks, bool runAllChecks, List<Episode>? episodes = null)
+        private SeriesTroubleshooterReport GenerateReportForSeries(Series series, HashSet<string> requestedChecks, bool runAllChecks)
         {
             var report = new SeriesTroubleshooterReport
             {
@@ -141,7 +124,7 @@ namespace EmbyIcons.Services
                 SeriesId = series.Id.ToString()
             };
 
-            episodes ??= _libraryManager.GetItemList(new InternalItemsQuery
+            var episodes = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 Parent = series,
                 Recursive = true,

@@ -31,6 +31,16 @@ namespace EmbyIcons.ImageProcessing.Vips
             return source.Crop(x, y, cropWidth, cropHeight);
         }
 
+        public static Image? TryDownscale(Image source, int maxDimension)
+        {
+            if (maxDimension <= 0) return null;
+
+            int longest = Math.Max(source.Width, source.Height);
+            if (longest <= maxDimension) return null;
+
+            return source.Resize((double)maxDimension / longest);
+        }
+
         public static Image? TryNormalizeTo2x3(Image source) => NormalizeToAspectRatio(source, 2f, 3f);
         public static Image? TryNormalizeToThumb(Image source) => NormalizeToAspectRatio(source, 16f, 9f);
         public static Image? TryNormalizeToBanner(Image source) => NormalizeToAspectRatio(source, 1000f, 185f);

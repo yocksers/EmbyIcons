@@ -221,21 +221,19 @@ namespace EmbyIcons.Services
             Dictionary<string, HashSet<string>> availableIcons,
             IList<string> knownResolutions)
         {
-            const int MaxMovies       = 25000;
             const int MaxSampleMovies = 10;
 
-            var movies = _libraryManager.GetItemList(new InternalItemsQuery
+            InternalItemsQuery CreateMovieQuery() => new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Movie" },
                 IsVirtualItem    = false,
-                Recursive        = true,
-                Limit            = MaxMovies
-            }).ToList();
+                Recursive        = true
+            };
 
             var response = new MovieTroubleshooterResponse
             {
                 IsSingleMovieScan   = false,
-                TotalMoviesScanned  = movies.Count
+                TotalMoviesScanned  = 0
             };
 
             var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
@@ -245,8 +243,9 @@ namespace EmbyIcons.Services
                 _ => new Dictionary<string, List<(string Name, string Id)>>(StringComparer.OrdinalIgnoreCase),
                 StringComparer.OrdinalIgnoreCase);
 
-            foreach (var movie in movies)
+            foreach (var movie in LibraryItemPager.EnumerateAll(_libraryManager, CreateMovieQuery, 2000))
             {
+                response.TotalMoviesScanned++;
                 var streams      = movie.GetMediaStreams() ?? new List<MediaStream>();
                 var videoStream  = MediaStreamHelper.GetPrimaryVideoStream(streams);
                 var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio)

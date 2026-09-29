@@ -171,6 +171,7 @@ namespace EmbyIcons.Services
 
             if (!tracks.Any()) return response;
 
+            var trackStreams = tracks.Select(t => t.GetMediaStreams() ?? new List<MediaStream>()).ToList();
             var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
 
             foreach (var checkKey in activeChecks)
@@ -180,10 +181,9 @@ namespace EmbyIcons.Services
                 var iconSet = availableIcons.TryGetValue(iconTypeKey, out var s) ? s : new HashSet<string>();
 
                 var allValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var track in tracks)
+                foreach (var streams in trackStreams)
                 {
-                    var trackValues = GetTrackValues(checkKey, track);
-                    allValues.UnionWith(trackValues);
+                    allValues.UnionWith(GetTrackValues(checkKey, streams));
                 }
 
                 foreach (var value in allValues.OrderBy(v => v))
@@ -217,70 +217,85 @@ namespace EmbyIcons.Services
             bool runAllChecks,
             Dictionary<string, HashSet<string>> availableIcons)
         {
-            var allTracks = _libraryManager.GetItemList(new InternalItemsQuery
+            var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
+            var checksToRun = activeChecks.Where(c => CheckMeta.ContainsKey(c)).ToList();
+
+            var iconSets = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var missingByCheck = new Dictionary<string, Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>>(StringComparer.OrdinalIgnoreCase);
+            var coveredByCheck = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var checkKey in checksToRun)
+            {
+                var iconTypeKey = CheckMeta[checkKey].IconTypeKey;
+                iconSets[checkKey] = availableIcons.TryGetValue(iconTypeKey, out var set) ? set : new HashSet<string>();
+                missingByCheck[checkKey] = new Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>(StringComparer.OrdinalIgnoreCase);
+                coveredByCheck[checkKey] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            InternalItemsQuery CreateTrackQuery() => new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Audio" },
                 IsVirtualItem = false,
-                Recursive = true,
-                Limit = 50000
-            }).OfType<Audio>().ToList();
-
-            var response = new MusicTroubleshooterResponse
-            {
-                IsSingleAlbumScan = false,
-                TotalTracksScanned = allTracks.Count
+                Recursive = true
             };
 
-            var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
-
-            foreach (var checkKey in activeChecks)
+            int totalTracks = 0;
+            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateTrackQuery, 2000))
             {
-                if (!CheckMeta.TryGetValue(checkKey, out var meta)) continue;
-                var (displayName, iconTypeKey) = meta;
-                var iconSet = availableIcons.TryGetValue(iconTypeKey, out var s) ? s : new HashSet<string>();
+                if (item is not Audio track) continue;
+                totalTracks++;
 
-                var valueCounts = new Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>(StringComparer.OrdinalIgnoreCase);
+                var streams = track.GetMediaStreams() ?? new List<MediaStream>();
 
-                foreach (var track in allTracks)
+                foreach (var checkKey in checksToRun)
                 {
-                    var values = GetTrackValues(checkKey, track);
-                    foreach (var value in values)
+                    var iconSet = iconSets[checkKey];
+                    var valueCounts = missingByCheck[checkKey];
+
+                    foreach (var value in GetTrackValues(checkKey, streams))
                     {
-                        if (iconSet.Contains(value)) continue;
+                        if (iconSet.Contains(value))
+                        {
+                            coveredByCheck[checkKey].Add(value);
+                            continue;
+                        }
 
                         if (!valueCounts.TryGetValue(value, out var entry))
                         {
                             entry = (0, new List<AffectedTrackInfo>());
-                            valueCounts[value] = entry;
                         }
 
-                        var newCount = entry.Count + 1;
-                        var samples = entry.Samples;
-                        if (samples.Count < 3)
+                        if (entry.Samples.Count < 3)
                         {
-                            samples.Add(new AffectedTrackInfo
+                            entry.Samples.Add(new AffectedTrackInfo
                             {
                                 Name      = track.Name,
                                 Id        = track.Id.ToString(),
                                 AlbumName = track.Album
                             });
                         }
-                        valueCounts[value] = (newCount, samples);
+
+                        valueCounts[value] = (entry.Count + 1, entry.Samples);
                     }
                 }
+            }
 
-                var covered = allTracks
-                    .SelectMany(t => GetTrackValues(checkKey, t))
-                    .Where(v => iconSet.Contains(v))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(v => v)
-                    .ToList();
+            var response = new MusicTroubleshooterResponse
+            {
+                IsSingleAlbumScan = false,
+                TotalTracksScanned = totalTracks
+            };
+
+            foreach (var checkKey in checksToRun)
+            {
+                var valueCounts = missingByCheck[checkKey];
+                var covered = coveredByCheck[checkKey].OrderBy(v => v).ToList();
 
                 if (valueCounts.Any() || covered.Any())
                 {
                     response.LibraryGroups.Add(new MusicLibraryCheckGroup
                     {
-                        CheckName = displayName,
+                        CheckName = CheckMeta[checkKey].DisplayName,
                         Missing = valueCounts
                             .OrderByDescending(kvp => kvp.Value.Count)
                             .Select(kvp => new MissingMusicIconEntry
@@ -297,9 +312,8 @@ namespace EmbyIcons.Services
             return response;
         }
 
-        private static List<string> GetTrackValues(string checkKey, Audio track)
+        private static List<string> GetTrackValues(string checkKey, List<MediaStream> streams)
         {
-            var streams = track.GetMediaStreams() ?? new List<MediaStream>();
             var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio)
                                       .OrderByDescending(s => s.Channels)
                                       .FirstOrDefault();

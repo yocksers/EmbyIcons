@@ -69,15 +69,15 @@ namespace EmbyIcons.Services
                 ? new[] { "Series" }
                 : new[] { "Movie", Constants.Episode, "Audio" };
 
-            var query = new InternalItemsQuery
+            InternalItemsQuery CreateQuery() => new InternalItemsQuery
             {
                 IncludeItemTypes = includeTypes,
                 IsVirtualItem = false,
-                Recursive = true,
-                Limit = 5000
+                Recursive = true
             };
 
-            var allItems = _libraryManager.GetItemList(query);
+            var iconTypeUpper = iconType.ToUpperInvariant();
+            bool needsStreams = iconTypeUpper != "TAG" && iconTypeUpper != "PARENTALRATING" && iconTypeUpper != "SERIESSTATUS" && iconTypeUpper != "ORIGINALLANGUAGE";
             var matchingItems = new List<MediaItemInfo>();
 
             var options = Plugin.Instance?.GetConfiguredOptions();
@@ -98,17 +98,17 @@ namespace EmbyIcons.Services
                 }
             }
 
-            foreach (var item in allItems)
+            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateQuery, 1000))
             {
                 if (matchingItems.Count >= limit) break;
 
-                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                if (!streams.Any() && !iconType.Equals("Tag", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("ParentalRating", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("SeriesStatus", StringComparison.OrdinalIgnoreCase))
+                var streams = needsStreams ? (item.GetMediaStreams() ?? new List<MediaStream>()) : new List<MediaStream>();
+                if (needsStreams && streams.Count == 0)
                     continue;
 
                 bool matches = false;
 
-                switch (iconType.ToUpperInvariant())
+                switch (iconTypeUpper)
                 {
                     case "LANGUAGE":
                         matches = streams.Any(s => s.Type == MediaStreamType.Audio && 

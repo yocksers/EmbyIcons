@@ -25,6 +25,7 @@ namespace EmbyIcons.Services
         private static Timer? _cacheCleanupTimer;
         private static readonly object _timerLock = new object();
         private const int MAX_CACHE_ENTRIES = 20000;
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<MDBListRatingData?>>> _inFlight = new();
 
         static MDBListService()
         {
@@ -126,18 +127,46 @@ namespace EmbyIcons.Services
                 _cacheLock.Release();
             }
 
+            var fetch = _inFlight.GetOrAdd(cacheKey, key => new Lazy<Task<MDBListRatingData?>>(
+                () => FetchAndCacheAsync(key, mediaType, tmdbId!, apiKey),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+
+            return await WaitWithCancellationAsync(fetch.Value, cancellationToken).ConfigureAwait(false);
+        }
+
+        private static async Task<T> WaitWithCancellationAsync<T>(Task<T> task, CancellationToken cancellationToken)
+        {
+            if (task.IsCompleted || !cancellationToken.CanBeCanceled)
+            {
+                return await task.ConfigureAwait(false);
+            }
+
+            var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using (cancellationToken.Register(() => cancelled.TrySetResult(true)))
+            {
+                if (await Task.WhenAny(task, cancelled.Task).ConfigureAwait(false) != task)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+            }
+
+            return await task.ConfigureAwait(false);
+        }
+
+        private static async Task<MDBListRatingData?> FetchAndCacheAsync(string cacheKey, string mediaType, string tmdbId, string apiKey)
+        {
             try
             {
-                await _httpConcurrencyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await _httpConcurrencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
                 try
                 {
                 var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}?apikey={Uri.EscapeDataString(apiKey)}";
                 using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
                 
-                using var response = await _httpClient.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
+                using var response = await _httpClient.SendAsync(requestMessage, CancellationToken.None).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
-                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, cancellationToken).ConfigureAwait(false);
+                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, CancellationToken.None).ConfigureAwait(false);
                     return null;
                 }
 
@@ -146,7 +175,7 @@ namespace EmbyIcons.Services
 
                 if (root == null || !root.TryGetValue("ratings", out var ratingsValue) || ratingsValue is not List<object?> ratingsArray)
                 {
-                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, cancellationToken).ConfigureAwait(false);
+                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, CancellationToken.None).ConfigureAwait(false);
                     return null;
                 }
 
@@ -192,7 +221,7 @@ namespace EmbyIcons.Services
                     MyAnimeListScore = myAnimeListScore
                 };
 
-                await StoreAsync(cacheKey, result, CacheExpiration, cancellationToken).ConfigureAwait(false);
+                await StoreAsync(cacheKey, result, CacheExpiration, CancellationToken.None).ConfigureAwait(false);
 
                 return result;
                 }
@@ -200,10 +229,6 @@ namespace EmbyIcons.Services
                 {
                     _httpConcurrencyLock.Release();
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
             }
             catch (Exception ex)
             {
@@ -216,6 +241,10 @@ namespace EmbyIcons.Services
                 catch { }
 
                 return null;
+            }
+            finally
+            {
+                _inFlight.TryRemove(cacheKey, out _);
             }
         }
 

@@ -73,6 +73,11 @@ namespace EmbyIcons
         internal static readonly ConcurrentDictionary<Guid, AggregatedSeriesResult> _seriesAggregationCache = new();
 
         internal readonly OverlayDataService _overlayDataService;
+
+        private const int FavoriteCountCacheSize = 20000;
+        private MemoryCache _favoriteCountCache = CreateFavoriteCountCache();
+
+        private static MemoryCache CreateFavoriteCountCache() => new MemoryCache(new MemoryCacheOptions { SizeLimit = FavoriteCountCacheSize });
         private readonly ImageOverlayService _imageOverlayService;
 
         private static readonly TimeSpan SeriesAggregationPruneInterval = TimeSpan.FromDays(7);
@@ -156,68 +161,26 @@ namespace EmbyIcons
                 Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during lock cleanup: {ex.Message}");
             }
         }
-        public async Task ForceCacheRefreshAsync(string iconsFolder, CancellationToken cancellationToken)
+        public void ForceCacheRefresh(string iconsFolder)
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
             ClearAllItemDataCaches();
-            _iconCacheManager.RefreshCache(iconsFolder);
-            await RefreshAllMappedLibraryImagesAsync(cancellationToken).ConfigureAwait(false);
+            ClearItemStatisticsCaches();
+            RefreshIconCaches(iconsFolder);
         }
 
-        private async Task RefreshAllMappedLibraryImagesAsync(CancellationToken cancellationToken)
+        internal void ClearItemStatisticsCaches()
         {
-            var plugin = Plugin.Instance;
-            if (plugin == null) return;
+            ClearStreamHashCache();
 
-            var libraryIds = plugin.Configuration.LibraryProfileMappings
-                .Select(m => m.LibraryId)
-                .Where(id => !string.IsNullOrEmpty(id))
-                .Distinct()
-                .ToList();
+            var oldFavoriteCache = Interlocked.Exchange(ref _favoriteCountCache, CreateFavoriteCountCache());
+            try { oldFavoriteCache.Dispose(); } catch { }
+        }
 
-            if (libraryIds.Count == 0) return;
-
-            var ancestorIds = libraryIds
-                .Select(guidString => Guid.TryParse(guidString, out var guid) ? guid : Guid.Empty)
-                .Where(guid => guid != Guid.Empty)
-                .Select(guid => _libraryManager.GetItemById(guid))
-                .Where(item => item != null)
-                .Select(item => item!.InternalId)
-                .ToArray();
-
-            if (ancestorIds.Length == 0) return;
-
-            const int maxItemsForRefresh = 50000;
-            var items = await Task.Run(() => _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                AncestorIds = ancestorIds,
-                Recursive = true,
-                Limit = maxItemsForRefresh
-            }).DistinctBy(i => i.Id).ToList(), cancellationToken).ConfigureAwait(false);
-
-            _logger.Info($"[EmbyIcons] Forcing image regeneration for {items.Count} items across {libraryIds.Count} mapped libraries after cache clear.");
-
-            var refreshOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
-                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllImages = false
-            };
-
-            foreach (var item in items)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    await item.RefreshMetadata(refreshOptions, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _logger.Debug($"[EmbyIcons] Error refreshing image for item '{item.Name}': {ex.Message}");
-                }
-            }
-
-            _logger.Info($"[EmbyIcons] Finished forcing image regeneration for {items.Count} items.");
+        internal void RefreshIconCaches(string iconsFolder)
+        {
+            _iconCacheManager.RefreshCache(iconsFolder);
+            _netVipsIconCacheManager?.RefreshCache(iconsFolder);
         }
 
         public void ClearAllItemDataCaches()
@@ -343,6 +306,7 @@ namespace EmbyIcons
             if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
             if (item is Season && !(options.ShowOverlaysForSeasons)) return false;
             if (item is Series && !options.UseSeriesLiteMode && !options.ShowSeriesIconsIfAllEpisodesHaveLanguage) return false;
+            if (item is BoxSet && !options.UseCollectionLiteMode && !options.ShowCollectionIconsIfAllChildrenHaveLanguage) return false;
 
             return options.AudioIconAlignment != IconAlignment.Disabled ||
                    options.SubtitleIconAlignment != IconAlignment.Disabled ||
@@ -417,77 +381,11 @@ namespace EmbyIcons
                 ? Convert.ToBase64String(item.Id.ToByteArray()).TrimEnd('=')
                 : $"iid_{item.InternalId}";
 
-            sb.Append("ei8_")
+            sb.Append("ei9_")
               .Append(itemIdSegment)
               .Append('_').Append((int)imageType)
-              .Append('v').Append(plugin.ConfigurationVersion)
+              .Append('v').Append(plugin.GetRenderFingerprint(profile))
               .Append('p').Append(Convert.ToBase64String(profile.Id.ToByteArray()).TrimEnd('='));
-
-            int boolFlags1 = 
-                (options.AudioOverlayHorizontal ? 1 : 0) |
-                (options.SubtitleOverlayHorizontal ? 2 : 0) |
-                (options.ChannelOverlayHorizontal ? 4 : 0) |
-                (options.AudioCodecOverlayHorizontal ? 8 : 0) |
-                (options.VideoFormatOverlayHorizontal ? 16 : 0) |
-                (options.VideoCodecOverlayHorizontal ? 32 : 0) |
-                (options.TagOverlayHorizontal ? 64 : 0) |
-                (options.ResolutionOverlayHorizontal ? 128 : 0) |
-                (options.CommunityScoreOverlayHorizontal ? 256 : 0) |
-                (options.AspectRatioOverlayHorizontal ? 512 : 0) |
-                (options.ParentalRatingOverlayHorizontal ? 1024 : 0) |
-                (globalOptions.EnableImageSmoothing ? 2048 : 0) |
-                (options.UseSeriesLiteMode ? 4096 : 0) |
-                (options.UseCollectionLiteMode ? 8192 : 0) |
-                (options.ShowSeriesIconsIfAllEpisodesHaveLanguage ? 16384 : 0) |
-                (options.ShowCollectionIconsIfAllChildrenHaveLanguage ? 32768 : 0);
-
-            int boolFlags2 = 
-                (options.ExcludeSpecialsFromSeriesAggregation ? 1 : 0) |
-                (options.SnapAspectRatioToCommon ? 2 : 0) |
-                (options.SnapFrameRateToCommon ? 4 : 0) |
-                (globalOptions.EnableCollectionProfileLookup ? 8 : 0) |
-                (options.NormalizePosterAspectRatio ? 16 : 0) |
-                (options.NormalizeThumbAspectRatio ? 32 : 0) |
-                (options.NormalizeBannerAspectRatio ? 64 : 0) |
-                (options.NormalizeMusicPosterAspectRatio ? 128 : 0);
-
-            sb.Append('_').Append((int)options.AudioIconAlignment).Append('.').Append(options.AudioIconPriority)
-              .Append('.').Append((int)options.SubtitleIconAlignment).Append('.').Append(options.SubtitleIconPriority)
-              .Append('.').Append((int)options.ChannelIconAlignment).Append('.').Append(options.ChannelIconPriority)
-              .Append('.').Append((int)options.AudioCodecIconAlignment).Append('.').Append(options.AudioCodecIconPriority)
-              .Append('.').Append((int)options.VideoFormatIconAlignment).Append('.').Append(options.VideoFormatIconPriority)
-              .Append('.').Append((int)options.VideoCodecIconAlignment).Append('.').Append(options.VideoCodecIconPriority)
-              .Append('.').Append((int)options.TagIconAlignment).Append('.').Append(options.TagIconPriority)
-              .Append('.').Append((int)options.ResolutionIconAlignment).Append('.').Append(options.ResolutionIconPriority)
-              .Append('.').Append((int)options.CommunityScoreIconAlignment).Append('.').Append(options.CommunityScoreIconPriority)
-              .Append('.').Append((int)options.AspectRatioIconAlignment).Append('.').Append(options.AspectRatioIconPriority)
-              .Append('.').Append((int)options.ParentalRatingIconAlignment).Append('.').Append(options.ParentalRatingIconPriority);
-
-            sb.Append('_').Append(options.IconSize)
-              .Append('.').Append(options.IconSpacing.ToString(StringConstants.PercentFormat))
-              .Append('.').Append(options.TopLeftIconSize.ToString(StringConstants.PercentFormat))
-              .Append('.').Append(options.TopRightIconSize.ToString(StringConstants.PercentFormat))
-              .Append('.').Append(options.BottomLeftIconSize.ToString(StringConstants.PercentFormat))
-              .Append('.').Append(options.BottomRightIconSize.ToString(StringConstants.PercentFormat))
-              .Append('.').Append(globalOptions.JpegQuality)
-              .Append('.').Append((int)globalOptions.OutputFormat)
-              .Append('.').Append(boolFlags1).Append('.').Append(boolFlags2);
-
-            sb.Append('_').Append((int)options.CommunityScoreBackgroundShape)
-              .Append('.').Append(Uri.EscapeDataString(options.CommunityScoreBackgroundColor ?? string.Empty))
-              .Append('.').Append(options.CommunityScoreBackgroundOpacity);
-
-            sb.Append('_').Append(options.EnableTopIconBar ? 1 : 0)
-              .Append('.').Append(options.TopIconBarHeight)
-              .Append('.').Append(Uri.EscapeDataString(options.TopIconBarColor ?? string.Empty))
-              .Append('.').Append(options.TopIconBarOpacity)
-              .Append('.').Append(options.TopIconBarOverlay ? 1 : 0)
-              .Append('.').Append(options.EnableBottomIconBar ? 1 : 0)
-              .Append('.').Append(options.BottomIconBarHeight)
-              .Append('.').Append(Uri.EscapeDataString(options.BottomIconBarColor ?? string.Empty))
-              .Append('.').Append(options.BottomIconBarOpacity)
-              .Append('.').Append(options.BottomIconBarOverlay ? 1 : 0)
-              .Append('.').Append(options.OnlyDrawBarsWhenIconsPresent ? 1 : 0);
 
             if (item is Series series)
             {
@@ -535,6 +433,11 @@ namespace EmbyIcons
 
             sb.Append("_r").Append(item.CommunityRating?.ToString(StringConstants.PercentFormat) ?? "N");
 
+            if (options.FavoriteCountIconAlignment != IconAlignment.Disabled)
+            {
+                sb.Append("_f").Append(GetFavoriteCount(item));
+            }
+
             return sb.ToString();
         }
 
@@ -546,6 +449,8 @@ namespace EmbyIcons
         {
             var plugin = Plugin.Instance;
             if (plugin == null) return;
+
+            TempFileJanitor.ScheduleCleanupFor(outputFile);
 
             if (_activeBackend == RenderBackend.None)
             {
@@ -566,7 +471,8 @@ namespace EmbyIcons
             bool globalLockAcquired = false;
             bool itemLockAcquired = false;
             SemaphoreSlim? itemSemaphore = null;
-            
+            var renderTimer = System.Diagnostics.Stopwatch.StartNew();
+
             try
             {
                 var itemKey = item.Id != Guid.Empty ? item.Id.ToString("N") : $"iid_{item.InternalId}";
@@ -578,15 +484,30 @@ namespace EmbyIcons
 
                 await GlobalConcurrencyLock.WaitAsync(cancellationToken);
                 globalLockAcquired = true;
+                var waitMs = renderTimer.ElapsedMilliseconds;
 
                 item = GetFullItem(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                var dataMs = renderTimer.ElapsedMilliseconds - waitMs;
+
+                if (!RequiresRendering(item, imageType, overlayData, profileOptions))
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] Nothing to draw for '{item.Name}' ({imageType}); using the original image.");
+                    await FileUtils.SafeCopyAsync(inputFile, outputFile, _fileSystem, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
 
                 if (_activeBackend == RenderBackend.NetVips)
                 {
                     await EnhanceImageWithNetVipsAsync(item, inputFile, outputFile, imageType, overlayData, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] Rendered '{item.Name}' ({imageType}) with NetVips in {renderTimer.ElapsedMilliseconds} ms: waiting {waitMs} ms, overlay data {dataMs} ms, image {renderTimer.ElapsedMilliseconds - waitMs - dataMs} ms.");
                     return;
                 }
+
+                var decodeStartMs = renderTimer.ElapsedMilliseconds;
 
                 byte[] inputBytes;
                 using (var inputStream = _fileSystem.GetFileStream(inputFile, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.Read, true))
@@ -604,14 +525,22 @@ namespace EmbyIcons
                     return;
                 }
 
+                using var downscaledBitmap = TryDownscaleForRendering(sourceBitmap, GetMaxRenderDimension(globalOptions));
+                if (downscaledBitmap != null)
+                {
+                    sourceBitmap.Dispose();
+                }
+                var baseBitmap = downscaledBitmap ?? sourceBitmap;
+
                 bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
                 using var normalizedBitmap = isMusicItem
-                    ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? TryNormalizeToSquare(sourceBitmap) : null)
-                    : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? TryNormalizeTo2x3(sourceBitmap)
-                    : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? TryNormalizeToThumb(sourceBitmap)
-                    : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? TryNormalizeToBanner(sourceBitmap)
+                    ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? TryNormalizeToSquare(baseBitmap) : null)
+                    : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? TryNormalizeTo2x3(baseBitmap)
+                    : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? TryNormalizeToThumb(baseBitmap)
+                    : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? TryNormalizeToBanner(baseBitmap)
                     : null;
-                var bitmapToProcess = normalizedBitmap ?? sourceBitmap;
+                var bitmapToProcess = normalizedBitmap ?? baseBitmap;
+                var decodeMs = renderTimer.ElapsedMilliseconds - decodeStartMs;
 
                 string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
@@ -621,6 +550,9 @@ namespace EmbyIcons
                         await _imageOverlayService.ApplyOverlaysToStreamAsync(
                             bitmapToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken, null);
                     }
+
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] Rendered '{item.Name}' ({imageType}, {bitmapToProcess.Width}x{bitmapToProcess.Height}) in {renderTimer.ElapsedMilliseconds} ms: waiting {waitMs} ms, overlay data {dataMs} ms, decode {decodeMs} ms, draw and encode {renderTimer.ElapsedMilliseconds - decodeStartMs - decodeMs} ms.");
 
                     try
                     {
@@ -703,38 +635,24 @@ namespace EmbyIcons
 
             bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
 
-            NetVips.Image? normalized = null;
-            try
-            {
-                using var decoded = NetVips.Image.NewFromBuffer(sourceBytes);
+            using var decoded = NetVips.Image.NewFromBuffer(sourceBytes);
+            using var downscaled = ImageProcessing.Vips.VipsAspectRatioNormalizer.TryDownscale(decoded, GetMaxRenderDimension(globalOptions));
+            var baseImage = downscaled ?? decoded;
 
-                normalized = isMusicItem
-                    ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToSquare(decoded) : null)
-                    : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeTo2x3(decoded)
-                    : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToThumb(decoded)
-                    : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToBanner(decoded)
-                    : null;
-
-                if (normalized != null)
-                {
-                    sourceBytes = normalized.PngsaveBuffer();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug($"[EmbyIcons] NetVips failed to decode/normalize source image for '{item?.Name}': {ex.Message}");
-            }
-            finally
-            {
-                normalized?.Dispose();
-            }
+            using var normalized = isMusicItem
+                ? (imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToSquare(baseImage) : null)
+                : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeTo2x3(baseImage)
+                : (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToThumb(baseImage)
+                : (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio) ? ImageProcessing.Vips.VipsAspectRatioNormalizer.TryNormalizeToBanner(baseImage)
+                : null;
+            var imageToProcess = normalized ?? baseImage;
 
             string tempOutput = outputFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
                 using (var fsOut = new FileStream(tempOutput, FileMode.Create, FileAccess.Write, FileShare.None, 262144, useAsync: true))
                 {
-                    await _netVipsOverlayService!.ApplyOverlaysToStreamAsync(sourceBytes, overlayData, profileOptions, globalOptions, fsOut, cancellationToken).ConfigureAwait(false);
+                    await _netVipsOverlayService!.ApplyOverlaysToStreamAsync(imageToProcess, overlayData, profileOptions, globalOptions, fsOut, cancellationToken).ConfigureAwait(false);
                 }
 
                 try
@@ -802,7 +720,7 @@ namespace EmbyIcons
             if (cropWidth <= 0 || cropHeight <= 0)
                 return null;
 
-            var result = new SKBitmap(cropWidth, cropHeight);
+            var result = new SKBitmap(cropWidth, cropHeight, source.AlphaType == SKAlphaType.Opaque);
             if (result.Handle == IntPtr.Zero || result.GetPixels() == IntPtr.Zero)
             {
                 result.Dispose();
@@ -811,6 +729,51 @@ namespace EmbyIcons
 
             using var canvas = new SKCanvas(result);
             canvas.DrawBitmap(source, SKRect.Create(x, y, cropWidth, cropHeight), SKRect.Create(0, 0, cropWidth, cropHeight));
+            return result;
+        }
+
+        private static bool RequiresRendering(BaseItem item, ImageType imageType, Models.OverlayData overlayData, ProfileSettings profileOptions)
+        {
+            bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
+            bool normalizes = isMusicItem
+                ? imageType == ImageType.Primary && profileOptions.NormalizeMusicPosterAspectRatio
+                : (imageType == ImageType.Primary && profileOptions.NormalizePosterAspectRatio)
+                  || (imageType == ImageType.Thumb && profileOptions.NormalizeThumbAspectRatio)
+                  || (imageType == ImageType.Banner && profileOptions.NormalizeBannerAspectRatio);
+            if (normalizes) return true;
+
+            bool barsAlwaysDrawn = !profileOptions.OnlyDrawBarsWhenIconsPresent && (profileOptions.EnableTopIconBar || profileOptions.EnableBottomIconBar);
+            if (barsAlwaysDrawn) return true;
+
+            return ImageOverlayService.HasVisibleContent(overlayData, profileOptions);
+        }
+
+        private const int MinimumRenderDimension = 250;
+
+        private static int GetMaxRenderDimension(PluginOptions options)
+            => options.MaxRenderDimension <= 0 ? 0 : Math.Max(MinimumRenderDimension, options.MaxRenderDimension);
+
+        private static SKBitmap? TryDownscaleForRendering(SKBitmap source, int maxDimension)
+        {
+            if (maxDimension <= 0) return null;
+
+            int longest = Math.Max(source.Width, source.Height);
+            if (longest <= maxDimension) return null;
+
+            double scale = (double)maxDimension / longest;
+            int width = Math.Max(1, (int)Math.Round(source.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(source.Height * scale));
+
+            var result = new SKBitmap(width, height, source.AlphaType == SKAlphaType.Opaque);
+            if (result.Handle == IntPtr.Zero || result.GetPixels() == IntPtr.Zero)
+            {
+                result.Dispose();
+                return null;
+            }
+
+            using var canvas = new SKCanvas(result);
+            using var paint = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
+            canvas.DrawBitmap(source, SKRect.Create(0, 0, source.Width, source.Height), SKRect.Create(0, 0, width, height), paint);
             return result;
         }
 
@@ -883,6 +846,36 @@ namespace EmbyIcons
         }
 
         public int GetFavoriteCount(BaseItem item)
+        {
+            var cache = _favoriteCountCache;
+            if (item.Id != Guid.Empty && cache.TryGetValue(item.Id, out int cachedCount))
+            {
+                return cachedCount;
+            }
+
+            var count = ComputeFavoriteCount(item);
+
+            if (item.Id != Guid.Empty)
+            {
+                try
+                {
+                    cache.Set(item.Id, count, new MemoryCacheEntryOptions()
+                        .SetSize(1)
+                        .SetSlidingExpiration(TimeSpan.FromHours(6)));
+                }
+                catch (ObjectDisposedException) { }
+            }
+
+            return count;
+        }
+
+        internal void InvalidateFavoriteCount(Guid itemId)
+        {
+            if (itemId == Guid.Empty) return;
+            try { _favoriteCountCache.Remove(itemId); } catch (ObjectDisposedException) { }
+        }
+
+        private int ComputeFavoriteCount(BaseItem item)
         {
             try
             {
