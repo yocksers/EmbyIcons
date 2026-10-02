@@ -72,9 +72,9 @@ namespace EmbyIcons.Services
                         }
                     }
 
-                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     {
-                        Plugin.Instance.Logger.Debug($"[EmbyIcons] MDBList cache pruned. Removed {keysToRemove.Count} expired entries. Current size: {_ratingsCache.Count}");
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] MDBList cache pruned. Removed {keysToRemove.Count} expired entries. Current size: {_ratingsCache.Count}");
                     }
                 }
                 finally
@@ -84,7 +84,7 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
                     Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during MDBList cache cleanup: {ex.Message}");
                 }
@@ -232,9 +232,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Info($"[EmbyIcons] Error fetching MDBList ratings for {tmdbId}: {ex.Message}");
+                    Plugin.Instance?.Logger.Info($"[EmbyIcons] Error fetching MDBList ratings for {tmdbId}: {ex.Message}");
                 }
 
                 try { await StoreAsync(cacheKey, new MDBListRatingData(), ErrorCacheExpiration, CancellationToken.None).ConfigureAwait(false); }

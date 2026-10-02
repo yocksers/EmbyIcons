@@ -104,7 +104,7 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
                 paths = Array.Empty<string>();
             }
 
@@ -230,9 +230,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting rating from provider IDs: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting rating from provider IDs: {ex.Message}");
                 }
             }
             return null;
@@ -254,9 +254,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting rating from properties: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting rating from properties: {ex.Message}");
                 }
             }
             return null;
@@ -293,9 +293,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting from property '{prop.Name}': {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting from property '{prop.Name}': {ex.Message}");
                 }
             }
             return null;
@@ -374,9 +374,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error parsing percentage from '{s}': {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error parsing percentage from '{s}': {ex.Message}");
                 }
             }
             
@@ -399,9 +399,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from properties: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting community rating from properties: {ex.Message}");
                 }
             }
             return null;
@@ -424,9 +424,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from property '{prop.Name}': {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting community rating from property '{prop.Name}': {ex.Message}");
                 }
             }
             return null;
@@ -485,9 +485,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error parsing community rating from '{s}': {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error parsing community rating from '{s}': {ex.Message}");
                 }
             }
             
@@ -698,9 +698,9 @@ namespace EmbyIcons.Services
             {
                 if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
                 {
-                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     {
-                        Plugin.Instance.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
                     }
                     return new OverlayData();
                 }
@@ -1165,9 +1165,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting original language: {ex.Message}");
                 }
             }
 

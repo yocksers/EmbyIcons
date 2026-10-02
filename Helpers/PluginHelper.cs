@@ -1,8 +1,13 @@
+using System.Threading;
 
 namespace EmbyIcons.Helpers
 {
     internal static class PluginHelper
     {
-        public static bool IsDebugLoggingEnabled => Plugin.Instance?.Configuration.EnableDebugLogging ?? false;
+        private static readonly AsyncLocal<bool> _debugLoggingSuppressed = new AsyncLocal<bool>();
+
+        public static bool IsDebugLoggingEnabled => !_debugLoggingSuppressed.Value && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false);
+
+        public static void SuppressDebugLoggingForCurrentFlow() => _debugLoggingSuppressed.Value = true;
     }
 }

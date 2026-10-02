@@ -42,6 +42,13 @@ namespace EmbyIcons
 
         internal static int ItemLockCount => _locks.Count;
 
+        private static long _enhanceCallCount;
+        internal static long EnhanceCallCount => Interlocked.Read(ref _enhanceCallCount);
+
+        private static long _enhanceWorkMs;
+        private static long _enhanceTimedCount;
+        internal static (long WorkMs, long Count) EnhanceTiming => (Interlocked.Read(ref _enhanceWorkMs), Interlocked.Read(ref _enhanceTimedCount));
+
         internal long IconCacheEstimatedBytes => _iconCacheManager.EstimatedCacheBytes + (_netVipsIconCacheManager?.EstimatedCacheBytes ?? 0);
         private readonly EmbyIcons.ImageProcessing.Vips.NetVipsImageOverlayService? _netVipsOverlayService;
 
@@ -223,7 +230,7 @@ namespace EmbyIcons
                 Limit = MAX_EPISODES_TO_CLEAR
             }).Select(ep => ep.Id).ToList();
 
-            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
             {
                 _logger.Debug($"[EmbyIcons] ForceSeriesRefresh identified {episodesInSeries.Count} episodes for series '{seriesId}' to clear from cache.");
             }
@@ -259,7 +266,7 @@ namespace EmbyIcons
                     removed++;
             }
             
-            if (removed > 0 && (Plugin.Instance?.Configuration.EnableDebugLogging ?? false))
+            if (removed > 0 && Helpers.PluginHelper.IsDebugLoggingEnabled)
                 _logger.Debug($"[EmbyIcons] Pruned {removed} stale entries from the series overlay aggregation cache.");
         }
 
@@ -267,7 +274,7 @@ namespace EmbyIcons
         {
             if (seriesId != Guid.Empty && _seriesAggregationCache.TryRemove(seriesId, out _))
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Event handler cleared aggregation cache for series ID: {seriesId}");
             }
         }
@@ -450,6 +457,7 @@ namespace EmbyIcons
             var plugin = Plugin.Instance;
             if (plugin == null) return;
 
+            Interlocked.Increment(ref _enhanceCallCount);
             TempFileJanitor.ScheduleCleanupFor(outputFile);
 
             if (_activeBackend == RenderBackend.None)
@@ -472,6 +480,7 @@ namespace EmbyIcons
             bool itemLockAcquired = false;
             SemaphoreSlim? itemSemaphore = null;
             var renderTimer = System.Diagnostics.Stopwatch.StartNew();
+            long lockWaitMs = -1;
 
             try
             {
@@ -485,6 +494,7 @@ namespace EmbyIcons
                 await GlobalConcurrencyLock.WaitAsync(cancellationToken);
                 globalLockAcquired = true;
                 var waitMs = renderTimer.ElapsedMilliseconds;
+                lockWaitMs = waitMs;
 
                 item = GetFullItem(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
@@ -614,11 +624,17 @@ namespace EmbyIcons
                 
                 if (globalLockAcquired)
                 {
-                    try { GlobalConcurrencyLock.Release(); } 
-                    catch (Exception ex) 
-                    { 
+                    try { GlobalConcurrencyLock.Release(); }
+                    catch (Exception ex)
+                    {
                         _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to release global concurrency lock. Potential deadlock risk.", ex);
                     }
+                }
+
+                if (lockWaitMs >= 0)
+                {
+                    Interlocked.Add(ref _enhanceWorkMs, renderTimer.ElapsedMilliseconds - lockWaitMs);
+                    Interlocked.Increment(ref _enhanceTimedCount);
                 }
             }
         }

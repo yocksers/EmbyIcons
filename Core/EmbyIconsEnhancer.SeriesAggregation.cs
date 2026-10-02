@@ -203,7 +203,7 @@ namespace EmbyIcons
 
             if (!itemList.Any())
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
                 return new AggregatedSeriesResult();
             }
 

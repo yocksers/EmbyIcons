@@ -111,7 +111,7 @@ namespace EmbyIcons
             EnsureEpisodeCacheInitialized();
             _episodeIconCache?.Remove(episodeId);
             _streamHashCache?.Remove(episodeId);
-            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
             {
                 _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
             }

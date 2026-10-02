@@ -266,7 +266,7 @@ namespace EmbyIcons.Services
                         }
                         else
                         {
-                            if (_configuration.EnableDebugLogging)
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                                 _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
                             foundProfile = null;
                         }
@@ -340,7 +340,7 @@ namespace EmbyIcons.Services
                         }
                         else
                         {
-                            if (_configuration.EnableDebugLogging)
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                                 _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
                             foundProfile = null;
                         }

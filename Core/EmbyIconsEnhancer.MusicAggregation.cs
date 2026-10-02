@@ -60,7 +60,7 @@ namespace EmbyIcons
         {
             if (albumId != Guid.Empty && _albumAggregationCache.TryRemove(albumId, out _))
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Cleared album aggregation cache for ID: {albumId}");
             }
         }

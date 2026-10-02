@@ -512,14 +512,14 @@ namespace EmbyIcons
 
                 if (seasonIdToClear != Guid.Empty)
                 {
-                    if (Configuration?.EnableDebugLogging ?? false)
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for season ID {seasonIdToClear}.");
                     enhancer.ClearSeriesAggregationCache(seasonIdToClear);
                 }
 
                 if (seriesIdToClear != Guid.Empty)
                 {
-                    if (Configuration?.EnableDebugLogging ?? false)
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for series ID {seriesIdToClear}.");
                     enhancer.ClearSeriesAggregationCache(seriesIdToClear);
                 }

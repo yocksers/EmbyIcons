@@ -294,8 +294,8 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
-                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language for '{item?.Name}': {ex.Message}");
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting original language for '{item?.Name}': {ex.Message}");
             }
 
             return null;
