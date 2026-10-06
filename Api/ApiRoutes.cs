@@ -18,6 +18,8 @@
         public const string ExportProfiles = "/EmbyIcons/ExportProfiles";
         public const string ImportProfiles = "/EmbyIcons/ImportProfiles";
         public const string ValidateProfileImport = "/EmbyIcons/ValidateProfileImport";
+        public const string TemplateCacheStats = "/EmbyIcons/TemplateCacheStats";
+        public const string ClearTemplateCache = "/EmbyIcons/ClearTemplateCache";
         public const string ItemsByIcon = "/EmbyIcons/ItemsByIcon";
         public const string StaticImage = "/EmbyIcons/StaticImage/{Name}";
     }

@@ -7,8 +7,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
@@ -19,9 +17,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using EmbyIcons.Compat;
 
 namespace EmbyIcons
 {
@@ -63,11 +61,6 @@ namespace EmbyIcons
             }
         }
 
-        private readonly object _renderFingerprintLock = new object();
-        private string? _globalRenderFingerprint;
-        private string? _iconsFolderFingerprint;
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, string> _profileRenderFingerprints = new();
-        private static readonly string PluginBuildVersion = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0";
 
         public EmbyIconsEnhancer Enhancer => _enhancerLazy.Value;
 
@@ -121,9 +114,9 @@ namespace EmbyIcons
 
             _enhancerLazy = new Lazy<EmbyIconsEnhancer>(() =>
             {
-                var imageProcessor = _appHost.Resolve<MediaBrowser.Controller.Drawing.IImageProcessor>();
-                var enhancer = new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem, imageProcessor);
+                var enhancer = new EmbyIconsEnhancer(_libraryManager, _logManager, _fileSystem);
                 EnsurePruningTimerInitialized();
+                enhancer.EnsureTemplateCacheInitialized();
                 return enhancer;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -240,7 +233,7 @@ namespace EmbyIcons
 
                     _logger.Info($"[EmbyIcons] Background migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
                     cancellationToken.ThrowIfCancellationRequested();
-                    SaveCurrentConfiguration();
+                    SaveConfiguration();
 
                     lock (_migrationLock)
                     {
@@ -434,8 +427,49 @@ namespace EmbyIcons
             {
                 Enhancer.InvalidateFavoriteCount(e.Item.Id);
 
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    _logger?.Debug($"[EmbyIcons] Favorite state changed for '{e.Item.Name}'; cleared its cached favorite count.");
+                var item = e.Item;
+                
+                if (item.HasImage(MediaBrowser.Model.Entities.ImageType.Primary))
+                {
+                    try
+                    {
+                        var enhancer = Enhancer;
+                        if (item is Series series)
+                        {
+                            enhancer.ClearSeriesAggregationCache(series.Id);
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            {
+                                _logger?.Debug($"[EmbyIcons] Cleared aggregation cache for series: {series.Name}");
+                            }
+                        }
+                        else if (item is Season season)
+                        {
+                            enhancer.ClearSeriesAggregationCache(season.Id);
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            {
+                                _logger?.Debug($"[EmbyIcons] Cleared aggregation cache for season: {season.Name}");
+                            }
+                        }
+                        
+                        var primaryImage = item.GetImageInfo(MediaBrowser.Model.Entities.ImageType.Primary, 0);
+                        if (primaryImage != null)
+                        {
+                            primaryImage.DateModified = DateTime.UtcNow;
+                        }
+                        
+                        item.DateModified = DateTime.UtcNow;
+                        _libraryManager.UpdateItem(item, item, ItemUpdateType.ImageUpdate);
+                        
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        {
+                            _logger?.Debug($"[EmbyIcons] Triggered image update for: {item.Name}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Debug($"[EmbyIcons] Error triggering image update: {ex.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -474,11 +508,6 @@ namespace EmbyIcons
 
                 enhancer.ClearEpisodeIconCache(e.Item.Id);
 
-                if (e.Item is Movie || e.Item is Episode || e.Item is Series)
-                {
-                    IconManagerService.InvalidateCache();
-                }
-
                 Guid seriesIdToClear = Guid.Empty;
                 Guid seasonIdToClear = Guid.Empty;
 
@@ -512,14 +541,14 @@ namespace EmbyIcons
 
                 if (seasonIdToClear != Guid.Empty)
                 {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    if (Configuration?.EnableDebugLogging ?? false)
                         _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for season ID {seasonIdToClear}.");
                     enhancer.ClearSeriesAggregationCache(seasonIdToClear);
                 }
 
                 if (seriesIdToClear != Guid.Empty)
                 {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    if (Configuration?.EnableDebugLogging ?? false)
                         _logger.Debug($"[EmbyIcons] Change detected for '{e.Item.Name}'; clearing aggregation cache for series ID {seriesIdToClear}.");
                     enhancer.ClearSeriesAggregationCache(seriesIdToClear);
                 }
@@ -552,129 +581,60 @@ namespace EmbyIcons
         public void SaveCurrentConfiguration()
         {
             SaveConfiguration();
-            InvalidateRenderFingerprints();
-        }
+            Helpers.RenderSettingsKey.Invalidate();
 
-        internal string GetRenderFingerprint(IconProfile profile)
-        {
-            var global = GetGlobalRenderFingerprint();
-            return _profileRenderFingerprints.GetOrAdd(profile.Id, _ => ShortHash(global + "|" + SimpleJson.Serialize(profile.Settings)));
-        }
-
-        internal void InvalidateRenderFingerprints()
-        {
-            lock (_renderFingerprintLock)
+            if (_enhancerLazy.IsValueCreated)
             {
-                _globalRenderFingerprint = null;
-                _profileRenderFingerprints.Clear();
+                Enhancer.ClearAllItemDataCaches();
             }
-        }
-
-        private string GetGlobalRenderFingerprint()
-        {
-            var cached = _globalRenderFingerprint;
-            if (cached != null) return cached;
-
-            string? iconsFolderToReload = null;
-            string result;
-
-            lock (_renderFingerprintLock)
-            {
-                if (_globalRenderFingerprint != null) return _globalRenderFingerprint;
-
-                var config = Configuration;
-                var folderFingerprint = ComputeIconsFolderFingerprint(config.IconsFolder);
-                if (_iconsFolderFingerprint != null && !string.Equals(_iconsFolderFingerprint, folderFingerprint, StringComparison.Ordinal))
-                {
-                    iconsFolderToReload = config.IconsFolder ?? string.Empty;
-                }
-                _iconsFolderFingerprint = folderFingerprint;
-
-                result = ShortHash(string.Join("|", new object?[]
-                {
-                    PluginBuildVersion,
-                    config.ImageCacheVersion,
-                    config.IconsFolder,
-                    (int)config.IconLoadingMode,
-                    (int)config.OutputFormat,
-                    config.JpegQuality,
-                    config.MaxRenderDimension,
-                    config.EnableImageSmoothing,
-                    config.EnableCollectionProfileLookup,
-                    config.ForceDisableSkiaSharp,
-                    !string.IsNullOrWhiteSpace(config.MDBListApiKey),
-                    folderFingerprint
-                }));
-                _globalRenderFingerprint = result;
-            }
-
-            if (iconsFolderToReload != null)
-            {
-                _logger.Info("[EmbyIcons] Custom icons folder contents changed; reloading icons.");
-                Enhancer.RefreshIconCaches(iconsFolderToReload);
-            }
-
-            return result;
-        }
-
-        private static string ComputeIconsFolderFingerprint(string? folder)
-        {
-            if (string.IsNullOrWhiteSpace(folder)) return "none";
-
-            try
-            {
-                if (!Directory.Exists(folder)) return "missing";
-
-                var sb = new System.Text.StringBuilder();
-                foreach (var file in Directory.GetFiles(folder).OrderBy(f => f, StringComparer.Ordinal))
-                {
-                    var info = new FileInfo(file);
-                    sb.Append(info.Name).Append(':').Append(info.Length).Append(':').Append(info.LastWriteTimeUtc.Ticks).Append(';');
-                }
-
-                return ShortHash(sb.ToString());
-            }
-            catch
-            {
-                return "unreadable";
-            }
-        }
-
-        private static string ShortHash(string value)
-        {
-            using var md5 = System.Security.Cryptography.MD5.Create();
-            var hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value));
-            return BitConverter.ToString(hash, 0, 8).Replace("-", "").ToLowerInvariant();
         }
 
         public override void UpdateConfiguration(BasePluginConfiguration configuration)
         {
             var newOptions = (PluginOptions)configuration;
+            var oldOptions = JsonSerializer.Deserialize<PluginOptions>(JsonSerializer.Serialize(Configuration));
 
             _logger.Info("[EmbyIcons] Saving new configuration.");
 
-            newOptions.ImageCacheVersion = Configuration.ImageCacheVersion;
+            newOptions.PersistedVersion = Configuration.PersistedVersion;
             base.UpdateConfiguration(newOptions);
-            InvalidateRenderFingerprints();
+            Helpers.RenderSettingsKey.Invalidate();
 
-            Enhancer.ClearAllItemDataCaches();
-            IconManagerService.InvalidateCache();
-            var previousProfileManager = _profileManagerLazy;
-            _profileManagerLazy = new Lazy<ProfileManagerService>(
-                () => new ProfileManagerService(_libraryManager, _logger, newOptions),
-                LazyThreadSafetyMode.ExecutionAndPublication);
-
-            if (previousProfileManager != null && previousProfileManager.IsValueCreated)
+            if (oldOptions != null)
             {
-                var retired = previousProfileManager.Value;
-                _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ =>
+                if (oldOptions.EnableIconTemplateCaching != newOptions.EnableIconTemplateCaching)
                 {
-                    try { retired.Dispose(); }
-                    catch (Exception ex) { _logger.Debug($"[EmbyIcons] Error disposing previous profile manager: {ex.Message}"); }
-                }, TaskScheduler.Default);
+                    _logger.Info($"[EmbyIcons] Template caching setting changed to: {newOptions.EnableIconTemplateCaching}");
+                    Enhancer.EnsureTemplateCacheInitialized();
+                }
             }
 
-            _logger.Info("[EmbyIcons] Configuration saved. Posters affected by the changes will be redrawn as they are viewed.");
+            bool profileLookupChanged = oldOptions == null || Helpers.SettingsChangeAnalyzer.ProfileLookupChanged(oldOptions, newOptions);
+            bool itemDataChanged = profileLookupChanged || Helpers.SettingsChangeAnalyzer.ItemDataChanged(oldOptions!, newOptions);
+
+            if (itemDataChanged)
+            {
+                Enhancer.ClearAllItemDataCaches();
+            }
+
+            IconManagerService.InvalidateCache();
+
+            if (profileLookupChanged || !_profileManagerLazy.IsValueCreated)
+            {
+                if (_profileManagerLazy.IsValueCreated)
+                {
+                    ProfileManager.InvalidateLibraryCache();
+                }
+                _profileManagerLazy = new Lazy<ProfileManagerService>(
+                    () => new ProfileManagerService(_libraryManager, _logger, newOptions),
+                    LazyThreadSafetyMode.ExecutionAndPublication);
+            }
+            else
+            {
+                ProfileManager.UseConfiguration(newOptions);
+            }
+
+            _logger.Info("[EmbyIcons] Configuration saved. Only images whose look is affected by the changes will be redrawn as they are viewed.");
         }
 
 

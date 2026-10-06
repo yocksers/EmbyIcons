@@ -1,6 +1,5 @@
 ﻿using MediaBrowser.Model.Logging;
 using SkiaSharp;
-using System.IO;
 using System.Reflection;
 
 namespace EmbyIcons.Helpers
@@ -31,25 +30,8 @@ namespace EmbyIcons.Helpers
                     }
                     else
                     {
-                        byte[] fontBytes;
-                        using (var ms = new MemoryStream())
-                        {
-                            stream.CopyTo(ms);
-                            fontBytes = ms.ToArray();
-                        }
-
-                        using var fontData = SKData.CreateCopy(fontBytes);
-                        _typeface = fontData != null ? SKTypeface.FromData(fontData) : null;
-
-                        if (_typeface != null)
-                        {
-                            logger?.Info("[EmbyIcons] Successfully loaded embedded font.");
-                        }
-                        else
-                        {
-                            logger?.Warn("[EmbyIcons] Embedded font could not be loaded. Falling back to system font.");
-                            _typeface = SKTypeface.FromFamilyName("sans-serif", SKFontStyle.Bold) ?? SKTypeface.CreateDefault();
-                        }
+                        logger?.Info("[EmbyIcons] Successfully loaded embedded font.");
+                        _typeface = SKTypeface.FromStream(stream);
                     }
                 }
                 catch (System.Exception ex)

@@ -9,10 +9,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
@@ -34,7 +31,6 @@ namespace EmbyIcons
             public string? AudioBitRate { get; init; }
             public string? BitDepth { get; init; }
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
-            public string CombinedTracksHashShort { get; init; } = "";
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
         }
 
@@ -60,288 +56,217 @@ namespace EmbyIcons
         {
             if (albumId != Guid.Empty && _albumAggregationCache.TryRemove(albumId, out _))
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                     _logger.Debug($"[EmbyIcons] Cleared album aggregation cache for ID: {albumId}");
             }
         }
 
         internal AggregatedAlbumResult GetOrBuildAggregatedDataForAlbum(BaseItem parent, ProfileSettings profileOptions)
         {
-            if (TryGetCachedAlbumAggregate(parent, out var cachedResult))
+            if (parent.Id == Guid.Empty)
+                return new AggregatedAlbumResult();
+
+            if (_albumAggregationCache.TryGetValue(parent.Id, out var cachedResult))
+            {
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    _logger.Debug($"[EmbyIcons] Using cached album aggregation for '{parent.Name}' ({parent.Id}).");
                 return cachedResult;
+            }
 
             using (_albumAggregationLocks.Lock(parent.Id))
             {
                 if (_albumAggregationCache.TryGetValue(parent.Id, out cachedResult))
                     return cachedResult;
 
-                return BuildAggregatedDataForAlbum(parent, profileOptions);
-            }
-        }
+                bool useLiteMode = profileOptions.UseMusicAlbumLiteMode;
 
-        internal async Task<AggregatedAlbumResult> GetOrBuildAggregatedDataForAlbumAsync(BaseItem parent, ProfileSettings profileOptions, CancellationToken cancellationToken)
-        {
-            if (TryGetCachedAlbumAggregate(parent, out var cachedResult))
-                return cachedResult;
-
-            using (await _albumAggregationLocks.LockAsync(parent.Id, cancellationToken).ConfigureAwait(false))
-            {
-                if (_albumAggregationCache.TryGetValue(parent.Id, out cachedResult))
-                    return cachedResult;
-
-                return BuildAggregatedDataForAlbum(parent, profileOptions);
-            }
-        }
-
-        private bool TryGetCachedAlbumAggregate(BaseItem parent, out AggregatedAlbumResult result)
-        {
-            if (parent.Id == Guid.Empty)
-            {
-                result = new AggregatedAlbumResult();
-                return true;
-            }
-
-            if (_albumAggregationCache.TryGetValue(parent.Id, out result))
-            {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    _logger.Debug($"[EmbyIcons] Using cached album aggregation for '{parent.Name}' ({parent.Id}).");
-                return true;
-            }
-
-            return false;
-        }
-
-        private AggregatedAlbumResult BuildAggregatedDataForAlbum(BaseItem parent, ProfileSettings profileOptions)
-        {
-            bool useLiteMode = profileOptions.UseMusicAlbumLiteMode;
-
-            var query = new InternalItemsQuery
-            {
-                Parent = parent,
-                Recursive = true,
-                IncludeItemTypes = new[] { "Audio" },
-                Limit = useLiteMode ? 1 : null,
-                OrderBy = useLiteMode
-                    ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-                    : Array.Empty<(string, SortOrder)>()
-            };
-
-            var itemList = _libraryManager.GetItemList(query).ToList();
-
-            if (!itemList.Any())
-            {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    _logger.Debug($"[EmbyIcons] No tracks found for '{parent.Name}'. Returning empty result without caching.");
-                return new AggregatedAlbumResult();
-            }
-
-            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                _logger.Debug($"[EmbyIcons] Aggregating {itemList.Count} track(s) for '{parent.Name}'. LiteMode: {useLiteMode}.");
-
-            bool checkAudioLangs   = profileOptions.AudioIconAlignment       != IconAlignment.Disabled;
-            bool checkAudioCodecs  = profileOptions.AudioCodecIconAlignment  != IconAlignment.Disabled;
-            bool checkChannels     = profileOptions.ChannelIconAlignment      != IconAlignment.Disabled;
-            bool checkSampleRate   = profileOptions.SampleRateIconAlignment   != IconAlignment.Disabled;
-            bool checkAudioBitRate = profileOptions.AudioBitRateIconAlignment != IconAlignment.Disabled;
-            bool checkBitDepth     = profileOptions.BitDepthIconAlignment     != IconAlignment.Disabled;
-
-            var firstItem = itemList[0];
-            var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
-            var primaryAudio = firstStreams
-                .Where(s => s.Type == MediaStreamType.Audio)
-                .OrderByDescending(s => s.Channels ?? 0)
-                .FirstOrDefault();
-
-            var allAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (checkAudioLangs && primaryAudio != null)
-            {
-                var lang = !string.IsNullOrEmpty(primaryAudio.DisplayLanguage) ? primaryAudio.DisplayLanguage : primaryAudio.Language;
-                if (!string.IsNullOrEmpty(lang)) allAudioLangs.Add(LanguageHelper.NormalizeLangCode(lang));
-            }
-
-            var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (checkAudioCodecs)
-            {
-                foreach (var s in firstStreams.Where(s => s.Type == MediaStreamType.Audio))
+                var query = new InternalItemsQuery
                 {
-                    var c = MediaStreamHelper.GetAudioCodecIconName(s);
-                    if (c != null) commonAudioCodecs.Add(c);
+                    Parent = parent,
+                    Recursive = true,
+                    IncludeItemTypes = new[] { "Audio" },
+                    Limit = useLiteMode ? 1 : null,
+                    OrderBy = useLiteMode
+                        ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+                        : Array.Empty<(string, SortOrder)>()
+                };
+
+                var itemList = _libraryManager.GetItemList(query).ToList();
+
+                if (!itemList.Any())
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _logger.Debug($"[EmbyIcons] No tracks found for '{parent.Name}'. Returning empty result without caching.");
+                    return new AggregatedAlbumResult();
                 }
-            }
 
-            string? commonChannelType  = checkChannels     && primaryAudio != null ? MediaStreamHelper.GetChannelIconName(primaryAudio)      : null;
-            string? commonSampleRate   = checkSampleRate   && primaryAudio != null ? MediaStreamHelper.GetSampleRateIconName(primaryAudio)   : null;
-            string? commonAudioBitRate = checkAudioBitRate && primaryAudio != null ? MediaStreamHelper.GetAudioBitRateIconName(primaryAudio) : null;
-            string? commonBitDepth     = checkBitDepth     && primaryAudio != null ? MediaStreamHelper.GetBitDepthIconName(primaryAudio)     : null;
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    _logger.Debug($"[EmbyIcons] Aggregating {itemList.Count} track(s) for '{parent.Name}'. LiteMode: {useLiteMode}.");
 
-            var itemHashes = new List<string>(itemList.Count)
-            {
-                $"{firstItem.Id}:{MediaStreamHelper.GetItemMediaStreamHash(firstItem, firstStreams)}"
-            };
+                bool checkAudioLangs   = profileOptions.AudioIconAlignment       != IconAlignment.Disabled;
+                bool checkAudioCodecs  = profileOptions.AudioCodecIconAlignment  != IconAlignment.Disabled;
+                bool checkChannels     = profileOptions.ChannelIconAlignment      != IconAlignment.Disabled;
+                bool checkSampleRate   = profileOptions.SampleRateIconAlignment   != IconAlignment.Disabled;
+                bool checkAudioBitRate = profileOptions.AudioBitRateIconAlignment != IconAlignment.Disabled;
+                bool checkBitDepth     = profileOptions.BitDepthIconAlignment     != IconAlignment.Disabled;
 
-            int processedCount = 1;
-            for (int i = 1; i < itemList.Count; i++)
-            {
-                bool allCommonExhausted =
-                    (!checkAudioCodecs  || commonAudioCodecs.Count == 0) &&
-                    (!checkChannels     || commonChannelType  == null) &&
-                    (!checkSampleRate   || commonSampleRate   == null) &&
-                    (!checkAudioBitRate || commonAudioBitRate == null) &&
-                    (!checkBitDepth     || commonBitDepth     == null);
-
-                if (allCommonExhausted && !checkAudioLangs)
-                    break;
-
-                processedCount++;
-
-                var trackItem = itemList[i];
-                var streams = trackItem.GetMediaStreams() ?? new List<MediaStream>();
-                var trackPrimary = streams
+                var firstItem = itemList[0];
+                var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
+                var primaryAudio = firstStreams
                     .Where(s => s.Type == MediaStreamType.Audio)
                     .OrderByDescending(s => s.Channels ?? 0)
                     .FirstOrDefault();
 
-                if (checkAudioLangs && trackPrimary != null)
+                var allAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (checkAudioLangs && primaryAudio != null)
                 {
-                    var lang = !string.IsNullOrEmpty(trackPrimary.DisplayLanguage) ? trackPrimary.DisplayLanguage : trackPrimary.Language;
+                    var lang = !string.IsNullOrEmpty(primaryAudio.DisplayLanguage) ? primaryAudio.DisplayLanguage : primaryAudio.Language;
                     if (!string.IsNullOrEmpty(lang)) allAudioLangs.Add(LanguageHelper.NormalizeLangCode(lang));
                 }
 
-                if (checkAudioCodecs && commonAudioCodecs.Any())
+                var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (checkAudioCodecs)
                 {
-                    var trackCodecs = streams.Where(s => s.Type == MediaStreamType.Audio)
-                        .Select(MediaStreamHelper.GetAudioCodecIconName)
-                        .Where(c => c != null).Select(c => c!);
-                    commonAudioCodecs.IntersectWith(trackCodecs);
-                }
-
-                if (checkChannels && commonChannelType != null)
-                {
-                    var current = trackPrimary != null ? MediaStreamHelper.GetChannelIconName(trackPrimary) : null;
-                    if (commonChannelType != current) commonChannelType = null;
-                }
-
-                if (checkSampleRate && commonSampleRate != null)
-                {
-                    var current = trackPrimary != null ? MediaStreamHelper.GetSampleRateIconName(trackPrimary) : null;
-                    if (commonSampleRate != current) commonSampleRate = null;
-                }
-
-                if (checkAudioBitRate && commonAudioBitRate != null)
-                {
-                    var current = trackPrimary != null ? MediaStreamHelper.GetAudioBitRateIconName(trackPrimary) : null;
-                    if (commonAudioBitRate != current) commonAudioBitRate = null;
-                }
-
-                if (checkBitDepth && commonBitDepth != null)
-                {
-                    var current = trackPrimary != null ? MediaStreamHelper.GetBitDepthIconName(trackPrimary) : null;
-                    if (commonBitDepth != current) commonBitDepth = null;
-                }
-
-                itemHashes.Add($"{trackItem.Id}:{MediaStreamHelper.GetItemMediaStreamHash(trackItem, streams)}");
-            }
-
-            for (int i = processedCount; i < itemList.Count; i++)
-            {
-                var skipped = itemList[i];
-                itemHashes.Add($"{skipped.Id}:{skipped.DateModified.Ticks}");
-            }
-
-            var filenameBasedIconsList = new List<FilenameBasedIconData>();
-            if (profileOptions.FilenameBasedIcons.Any())
-            {
-                var uniqueIcons = new Dictionary<string, FilenameBasedIconData>();
-                var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                if (!string.IsNullOrEmpty(parent.Path))
-                    allPaths.Add(parent.Path.ToLowerInvariant());
-
-                foreach (var trackItem in itemList)
-                {
-                    if (!string.IsNullOrEmpty(trackItem.Path))
-                        allPaths.Add(trackItem.Path.ToLowerInvariant());
-                }
-
-                bool isAlbum  = parent is MusicAlbum;
-                bool isArtist = parent is MusicArtist;
-
-                foreach (var path in allPaths)
-                {
-                    foreach (var mapping in profileOptions.FilenameBasedIcons)
+                    foreach (var s in firstStreams.Where(s => s.Type == MediaStreamType.Audio))
                     {
-                        bool shouldApply =
-                            (isAlbum  && (mapping.ApplyToAlbums || mapping.ApplyToTracks)) ||
-                            (isArtist && (mapping.ApplyToArtists || mapping.ApplyToAlbums || mapping.ApplyToTracks));
+                        var c = MediaStreamHelper.GetAudioCodecIconName(s);
+                        if (c != null) commonAudioCodecs.Add(c);
+                    }
+                }
 
-                        if (shouldApply &&
-                            !string.IsNullOrWhiteSpace(mapping.Keyword) &&
-                            !string.IsNullOrWhiteSpace(mapping.IconName) &&
-                            mapping.IconAlignment != IconAlignment.Disabled &&
-                            path.Contains(mapping.Keyword.ToLowerInvariant()))
+                string? commonChannelType  = checkChannels     && primaryAudio != null ? MediaStreamHelper.GetChannelIconName(primaryAudio)      : null;
+                string? commonSampleRate   = checkSampleRate   && primaryAudio != null ? MediaStreamHelper.GetSampleRateIconName(primaryAudio)   : null;
+                string? commonAudioBitRate = checkAudioBitRate && primaryAudio != null ? MediaStreamHelper.GetAudioBitRateIconName(primaryAudio) : null;
+                string? commonBitDepth     = checkBitDepth     && primaryAudio != null ? MediaStreamHelper.GetBitDepthIconName(primaryAudio)     : null;
+
+                for (int i = 1; i < itemList.Count; i++)
+                {
+                    bool allCommonExhausted =
+                        (!checkAudioCodecs  || commonAudioCodecs.Count == 0) &&
+                        (!checkChannels     || commonChannelType  == null) &&
+                        (!checkSampleRate   || commonSampleRate   == null) &&
+                        (!checkAudioBitRate || commonAudioBitRate == null) &&
+                        (!checkBitDepth     || commonBitDepth     == null);
+
+                    if (allCommonExhausted && !checkAudioLangs)
+                        break;
+
+                    var trackItem = itemList[i];
+                    var streams = trackItem.GetMediaStreams() ?? new List<MediaStream>();
+                    var trackPrimary = streams
+                        .Where(s => s.Type == MediaStreamType.Audio)
+                        .OrderByDescending(s => s.Channels ?? 0)
+                        .FirstOrDefault();
+
+                    if (checkAudioLangs && trackPrimary != null)
+                    {
+                        var lang = !string.IsNullOrEmpty(trackPrimary.DisplayLanguage) ? trackPrimary.DisplayLanguage : trackPrimary.Language;
+                        if (!string.IsNullOrEmpty(lang)) allAudioLangs.Add(LanguageHelper.NormalizeLangCode(lang));
+                    }
+
+                    if (checkAudioCodecs && commonAudioCodecs.Any())
+                    {
+                        var trackCodecs = streams.Where(s => s.Type == MediaStreamType.Audio)
+                            .Select(MediaStreamHelper.GetAudioCodecIconName)
+                            .Where(c => c != null).Select(c => c!);
+                        commonAudioCodecs.IntersectWith(trackCodecs);
+                    }
+
+                    if (checkChannels && commonChannelType != null)
+                    {
+                        var current = trackPrimary != null ? MediaStreamHelper.GetChannelIconName(trackPrimary) : null;
+                        if (commonChannelType != current) commonChannelType = null;
+                    }
+
+                    if (checkSampleRate && commonSampleRate != null)
+                    {
+                        var current = trackPrimary != null ? MediaStreamHelper.GetSampleRateIconName(trackPrimary) : null;
+                        if (commonSampleRate != current) commonSampleRate = null;
+                    }
+
+                    if (checkAudioBitRate && commonAudioBitRate != null)
+                    {
+                        var current = trackPrimary != null ? MediaStreamHelper.GetAudioBitRateIconName(trackPrimary) : null;
+                        if (commonAudioBitRate != current) commonAudioBitRate = null;
+                    }
+
+                    if (checkBitDepth && commonBitDepth != null)
+                    {
+                        var current = trackPrimary != null ? MediaStreamHelper.GetBitDepthIconName(trackPrimary) : null;
+                        if (commonBitDepth != current) commonBitDepth = null;
+                    }
+                }
+
+                // Filename-based icons from album/artist path and track paths
+                var filenameBasedIconsList = new List<FilenameBasedIconData>();
+                if (profileOptions.FilenameBasedIcons.Any())
+                {
+                    var uniqueIcons = new Dictionary<string, FilenameBasedIconData>();
+                    var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    if (!string.IsNullOrEmpty(parent.Path))
+                        allPaths.Add(parent.Path.ToLowerInvariant());
+
+                    foreach (var trackItem in itemList)
+                    {
+                        if (!string.IsNullOrEmpty(trackItem.Path))
+                            allPaths.Add(trackItem.Path.ToLowerInvariant());
+                    }
+
+                    bool isAlbum  = parent is MusicAlbum;
+                    bool isArtist = parent is MusicArtist;
+
+                    foreach (var path in allPaths)
+                    {
+                        foreach (var mapping in profileOptions.FilenameBasedIcons)
                         {
-                            var iconKey = $"{mapping.IconName.ToLowerInvariant()}|{mapping.IconAlignment}|{mapping.Priority}|{mapping.HorizontalLayout}";
-                            if (!uniqueIcons.ContainsKey(iconKey))
+                            bool shouldApply =
+                                (isAlbum  && (mapping.ApplyToAlbums || mapping.ApplyToTracks)) ||
+                                (isArtist && (mapping.ApplyToArtists || mapping.ApplyToAlbums || mapping.ApplyToTracks));
+
+                            if (shouldApply &&
+                                !string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                                !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                                mapping.IconAlignment != IconAlignment.Disabled &&
+                                path.Contains(mapping.Keyword.ToLowerInvariant()))
                             {
-                                uniqueIcons[iconKey] = new FilenameBasedIconData
+                                var iconKey = $"{mapping.IconName.ToLowerInvariant()}|{mapping.IconAlignment}|{mapping.Priority}|{mapping.HorizontalLayout}";
+                                if (!uniqueIcons.ContainsKey(iconKey))
                                 {
-                                    IconName         = mapping.IconName.ToLowerInvariant(),
-                                    Alignment        = mapping.IconAlignment,
-                                    Priority         = mapping.Priority,
-                                    HorizontalLayout = mapping.HorizontalLayout
-                                };
+                                    uniqueIcons[iconKey] = new FilenameBasedIconData
+                                    {
+                                        IconName         = mapping.IconName.ToLowerInvariant(),
+                                        Alignment        = mapping.IconAlignment,
+                                        Priority         = mapping.Priority,
+                                        HorizontalLayout = mapping.HorizontalLayout
+                                    };
+                                }
                             }
                         }
                     }
+
+                    filenameBasedIconsList = uniqueIcons.Values.ToList();
                 }
 
-                filenameBasedIconsList = uniqueIcons.Values.ToList();
-            }
-
-            byte[] hashBytes;
-            using (var md5 = MD5.Create())
-            {
-                var encoding = Encoding.UTF8;
-                var separator = encoding.GetBytes(";");
-                var orderedHashes = itemHashes.OrderBy(h => h).ToList();
-
-                for (int i = 0; i < orderedHashes.Count; i++)
+                var result = new AggregatedAlbumResult
                 {
-                    var bytes = encoding.GetBytes(orderedHashes[i]);
-                    if (i < orderedHashes.Count - 1)
-                    {
-                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                        md5.TransformBlock(separator, 0, separator.Length, null, 0);
-                    }
-                    else
-                    {
-                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                        md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-                    }
-                }
+                    Timestamp               = DateTime.UtcNow,
+                    AudioLangs              = checkAudioLangs   ? allAudioLangs      : new HashSet<string>(),
+                    AudioCodecs             = checkAudioCodecs  ? commonAudioCodecs  : new HashSet<string>(),
+                    ChannelType             = checkChannels     ? commonChannelType  : null,
+                    SampleRate              = checkSampleRate   ? commonSampleRate   : null,
+                    AudioBitRate            = checkAudioBitRate ? commonAudioBitRate : null,
+                    BitDepth                = checkBitDepth     ? commonBitDepth     : null,
+                    FilenameBasedIcons      = filenameBasedIconsList
+                };
 
-                hashBytes = md5.Hash!;
+                _albumAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
+
+                if (Interlocked.Increment(ref _albumAdditionsCounter) % ALBUM_CACHE_SIZE_CHECK_FREQUENCY == 0)
+                    PruneAlbumAggregationCacheWithLimit();
+
+                return result;
             }
-
-            var result = new AggregatedAlbumResult
-            {
-                Timestamp               = DateTime.UtcNow,
-                AudioLangs              = checkAudioLangs   ? allAudioLangs      : new HashSet<string>(),
-                AudioCodecs             = checkAudioCodecs  ? commonAudioCodecs  : new HashSet<string>(),
-                ChannelType             = checkChannels     ? commonChannelType  : null,
-                SampleRate              = checkSampleRate   ? commonSampleRate   : null,
-                AudioBitRate            = checkAudioBitRate ? commonAudioBitRate : null,
-                BitDepth                = checkBitDepth     ? commonBitDepth     : null,
-                FilenameBasedIcons      = filenameBasedIconsList,
-                CombinedTracksHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
-            };
-
-            _albumAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-
-            if (Interlocked.Increment(ref _albumAdditionsCounter) % ALBUM_CACHE_SIZE_CHECK_FREQUENCY == 0)
-                PruneAlbumAggregationCacheWithLimit();
-
-            return result;
         }
     }
 }

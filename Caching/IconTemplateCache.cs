@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using EmbyIcons.Configuration;
-using EmbyIcons.Models;
 using MediaBrowser.Model.Logging;
 using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;

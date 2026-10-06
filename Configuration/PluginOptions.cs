@@ -59,17 +59,18 @@ namespace EmbyIcons.Configuration
 
     public class PluginOptions : BasePluginConfiguration
     {
-        public string ImageCacheVersion { get; set; } = string.Empty;
+        public string PersistedVersion { get; set; } = "1.0.0";
         public string IconsFolder { get; set; } = string.Empty;
 
         public IconLoadingMode IconLoadingMode { get; set; } = IconLoadingMode.Hybrid;
         public bool EnableDebugLogging { get; set; } = false;
         public bool EnableCollectionProfileLookup { get; set; } = true;
+        public bool EnableIconTemplateCaching { get; set; } = true;
 
         public OutputFormat OutputFormat { get; set; } = OutputFormat.Auto;
 
         public int JpegQuality { get; set; } = 75;
-        public int MaxRenderDimension { get; set; } = 3000;
+        public int MaxRenderDimension { get; set; } = 1500;
         public bool EnableImageSmoothing { get; set; } = false;
         public bool ShowAdvancedOptions { get; set; } = false;
 
@@ -85,9 +86,10 @@ namespace EmbyIcons.Configuration
         public int EpisodeCacheSlidingExpirationHours { get; set; } = 6;
         public int CachePruningIntervalHours { get; set; } = 6;
         public int CacheMaintenanceIntervalHours { get; set; } = 1;
-        public double GlobalConcurrencyMultiplier { get; set; } = 0.75;
+        public double GlobalConcurrencyMultiplier { get; set; } = 0.75; // Multiplied by processor count
         public bool ForceDisableSkiaSharp { get; set; } = false;
         public string MDBListApiKey { get; set; } = string.Empty;
+        public bool EnableMdbListDiskCache { get; set; } = true;
         
         #endregion
 

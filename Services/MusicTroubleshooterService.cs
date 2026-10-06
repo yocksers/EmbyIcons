@@ -171,7 +171,6 @@ namespace EmbyIcons.Services
 
             if (!tracks.Any()) return response;
 
-            var trackStreams = tracks.Select(t => t.GetMediaStreams() ?? new List<MediaStream>()).ToList();
             var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
 
             foreach (var checkKey in activeChecks)
@@ -181,9 +180,10 @@ namespace EmbyIcons.Services
                 var iconSet = availableIcons.TryGetValue(iconTypeKey, out var s) ? s : new HashSet<string>();
 
                 var allValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var streams in trackStreams)
+                foreach (var track in tracks)
                 {
-                    allValues.UnionWith(GetTrackValues(checkKey, streams));
+                    var trackValues = GetTrackValues(checkKey, track);
+                    allValues.UnionWith(trackValues);
                 }
 
                 foreach (var value in allValues.OrderBy(v => v))
@@ -217,86 +217,76 @@ namespace EmbyIcons.Services
             bool runAllChecks,
             Dictionary<string, HashSet<string>> availableIcons)
         {
-            var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
-            var checksToRun = activeChecks.Where(c => CheckMeta.ContainsKey(c)).ToList();
-
-            var iconSets = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            var missingByCheck = new Dictionary<string, Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>>(StringComparer.OrdinalIgnoreCase);
-            var coveredByCheck = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var checkKey in checksToRun)
+            var response = new MusicTroubleshooterResponse
             {
-                var iconTypeKey = CheckMeta[checkKey].IconTypeKey;
-                iconSets[checkKey] = availableIcons.TryGetValue(iconTypeKey, out var set) ? set : new HashSet<string>();
-                missingByCheck[checkKey] = new Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>(StringComparer.OrdinalIgnoreCase);
-                coveredByCheck[checkKey] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                IsSingleAlbumScan = false
+            };
+
+            var activeChecks = runAllChecks ? AllCheckNames : AllCheckNames.Where(c => requestedChecks.Contains(c)).ToList();
+
+            var checkStates = new List<(string CheckKey, string DisplayName, HashSet<string> IconSet, Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)> ValueCounts, HashSet<string> Covered)>();
+            foreach (var checkKey in activeChecks)
+            {
+                if (!CheckMeta.TryGetValue(checkKey, out var meta)) continue;
+                var (displayName, iconTypeKey) = meta;
+                var iconSet = availableIcons.TryGetValue(iconTypeKey, out var s) ? s : new HashSet<string>();
+                checkStates.Add((checkKey, displayName, iconSet,
+                    new Dictionary<string, (int Count, List<AffectedTrackInfo> Samples)>(StringComparer.OrdinalIgnoreCase),
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
             }
 
-            InternalItemsQuery CreateTrackQuery() => new InternalItemsQuery
+            var tracks = LibraryItemPager.EnumeratePages(_libraryManager, () => new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { "Audio" },
                 IsVirtualItem = false,
                 Recursive = true
-            };
+            }, 500, 50000).SelectMany(page => page).OfType<Audio>();
 
-            int totalTracks = 0;
-            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateTrackQuery, 2000))
+            foreach (var track in tracks)
             {
-                if (item is not Audio track) continue;
-                totalTracks++;
+                response.TotalTracksScanned++;
 
-                var streams = track.GetMediaStreams() ?? new List<MediaStream>();
-
-                foreach (var checkKey in checksToRun)
+                foreach (var state in checkStates)
                 {
-                    var iconSet = iconSets[checkKey];
-                    var valueCounts = missingByCheck[checkKey];
-
-                    foreach (var value in GetTrackValues(checkKey, streams))
+                    var values = GetTrackValues(state.CheckKey, track);
+                    foreach (var value in values)
                     {
-                        if (iconSet.Contains(value))
+                        if (state.IconSet.Contains(value))
                         {
-                            coveredByCheck[checkKey].Add(value);
+                            state.Covered.Add(value);
                             continue;
                         }
 
-                        if (!valueCounts.TryGetValue(value, out var entry))
+                        if (!state.ValueCounts.TryGetValue(value, out var entry))
                         {
                             entry = (0, new List<AffectedTrackInfo>());
+                            state.ValueCounts[value] = entry;
                         }
 
-                        if (entry.Samples.Count < 3)
+                        var newCount = entry.Count + 1;
+                        var samples = entry.Samples;
+                        if (samples.Count < 3)
                         {
-                            entry.Samples.Add(new AffectedTrackInfo
+                            samples.Add(new AffectedTrackInfo
                             {
                                 Name      = track.Name,
                                 Id        = track.Id.ToString(),
                                 AlbumName = track.Album
                             });
                         }
-
-                        valueCounts[value] = (entry.Count + 1, entry.Samples);
+                        state.ValueCounts[value] = (newCount, samples);
                     }
                 }
             }
 
-            var response = new MusicTroubleshooterResponse
+            foreach (var state in checkStates)
             {
-                IsSingleAlbumScan = false,
-                TotalTracksScanned = totalTracks
-            };
-
-            foreach (var checkKey in checksToRun)
-            {
-                var valueCounts = missingByCheck[checkKey];
-                var covered = coveredByCheck[checkKey].OrderBy(v => v).ToList();
-
-                if (valueCounts.Any() || covered.Any())
+                if (state.ValueCounts.Any() || state.Covered.Any())
                 {
                     response.LibraryGroups.Add(new MusicLibraryCheckGroup
                     {
-                        CheckName = CheckMeta[checkKey].DisplayName,
-                        Missing = valueCounts
+                        CheckName = state.DisplayName,
+                        Missing = state.ValueCounts
                             .OrderByDescending(kvp => kvp.Value.Count)
                             .Select(kvp => new MissingMusicIconEntry
                             {
@@ -304,7 +294,7 @@ namespace EmbyIcons.Services
                                 TrackCount  = kvp.Value.Count,
                                 SampleTracks = kvp.Value.Samples
                             }).ToList(),
-                        Covered = covered
+                        Covered = state.Covered.OrderBy(v => v).ToList()
                     });
                 }
             }
@@ -312,8 +302,9 @@ namespace EmbyIcons.Services
             return response;
         }
 
-        private static List<string> GetTrackValues(string checkKey, List<MediaStream> streams)
+        private static List<string> GetTrackValues(string checkKey, Audio track)
         {
+            var streams = track.GetMediaStreams() ?? new List<MediaStream>();
             var primaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio)
                                       .OrderByDescending(s => s.Channels)
                                       .FirstOrDefault();

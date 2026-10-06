@@ -15,7 +15,7 @@ namespace EmbyIcons.Services
     {
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger _logger;
-        private readonly PluginOptions _configuration;
+        private volatile PluginOptions _configuration;
 
         private volatile Trie<string>? _libraryPathTrie;
         private readonly SemaphoreSlim _libraryPathTrieSemaphore = new SemaphoreSlim(1, 1);
@@ -38,6 +38,11 @@ namespace EmbyIcons.Services
             
             var maintenanceInterval = TimeSpan.FromHours(Math.Max(0.5, configuration.CacheMaintenanceIntervalHours));
             _cacheMaintenanceTimer = new Timer(_ => CompactCaches(), null, maintenanceInterval, maintenanceInterval);
+        }
+
+        public void UseConfiguration(PluginOptions configuration)
+        {
+            _configuration = configuration;
         }
 
         public void InvalidateLibraryCache()
@@ -266,7 +271,7 @@ namespace EmbyIcons.Services
                         }
                         else
                         {
-                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            if (_configuration.EnableDebugLogging)
                                 _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
                             foundProfile = null;
                         }
@@ -340,7 +345,7 @@ namespace EmbyIcons.Services
                         }
                         else
                         {
-                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            if (_configuration.EnableDebugLogging)
                                 _logger.Warn($"[EmbyIcons] Collection '{boxSet.Name}' (ID: {boxSet.Id}) is empty. Cannot determine library profile.");
                             foundProfile = null;
                         }

@@ -9,10 +9,7 @@ using MediaBrowser.Model.Querying;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
@@ -43,7 +40,6 @@ namespace EmbyIcons
             public HashSet<string> AspectRatios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public HashSet<string> SourceIcons { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
-            public string CombinedEpisodesHashShort { get; init; } = "";
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
         }
 
@@ -72,474 +68,411 @@ namespace EmbyIcons
 
         internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
-            if (TryGetCachedSeriesAggregate(parent, out var cachedResult))
+            if (parent.Id == Guid.Empty)
+            {
+                _logger.Warn($"[EmbyIcons] Attempted to aggregate data for a parent item with an empty ID: {parent.Name}. Returning empty result.");
+                return new AggregatedSeriesResult();
+            }
+
+            if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult))
+            {
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
+                    _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
                 return cachedResult;
+            }
 
             using (_aggregationLocks.Lock(parent.Id))
             {
                 if (_seriesAggregationCache.TryGetValue(parent.Id, out cachedResult))
-                    return cachedResult;
-
-                return BuildAggregatedDataForParent(parent, profileOptions, globalOptions);
-            }
-        }
-
-        internal async Task<AggregatedSeriesResult> GetOrBuildAggregatedDataForParentAsync(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
-        {
-            if (TryGetCachedSeriesAggregate(parent, out var cachedResult))
-                return cachedResult;
-
-            using (await _aggregationLocks.LockAsync(parent.Id, cancellationToken).ConfigureAwait(false))
-            {
-                if (_seriesAggregationCache.TryGetValue(parent.Id, out cachedResult))
-                    return cachedResult;
-
-                return BuildAggregatedDataForParent(parent, profileOptions, globalOptions);
-            }
-        }
-
-        private bool TryGetCachedSeriesAggregate(BaseItem parent, out AggregatedSeriesResult result)
-        {
-            if (parent.Id == Guid.Empty)
-            {
-                _logger.Warn($"[EmbyIcons] Attempted to aggregate data for a parent item with an empty ID: {parent.Name}. Returning empty result.");
-                result = new AggregatedSeriesResult();
-                return true;
-            }
-
-            if (_seriesAggregationCache.TryGetValue(parent.Id, out result))
-            {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
-                return true;
-            }
-
-            return false;
-        }
-
-        private AggregatedSeriesResult BuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
-        {
-            bool useLiteMode;
-            InternalItemsQuery? query = null;
-            List<BaseItem>? preBuiltItemList = null;
-
-            if (parent is Series)
-            {
-                useLiteMode = profileOptions.UseSeriesLiteMode;
-                query = new InternalItemsQuery
-                {
-                    Parent = parent,
-                    Recursive = true,
-                    IncludeItemTypes = new[] { Configuration.Constants.Episode },
-                    Limit = useLiteMode ? 1 : null,
-                    OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
-                };
-            }
-            else if (parent is Season)
-            {
-                useLiteMode = profileOptions.UseSeriesLiteMode;
-                query = new InternalItemsQuery
-                {
-                    Parent = parent,
-                    Recursive = true,
-                    IncludeItemTypes = new[] { Configuration.Constants.Episode },
-                    Limit = useLiteMode ? 1 : null,
-                    OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
-                };
-            }
-            else if (parent is BoxSet boxSet)
-            {
-                useLiteMode = profileOptions.UseCollectionLiteMode;
-
-                var sortOrder = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>();
-                int? limitPerType = useLiteMode ? 1 : null;
-
-                var movieItems = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    CollectionIds = new[] { boxSet.InternalId },
-                    IncludeItemTypes = new[] { "Movie" },
-                    IsVirtualItem = false,
-                    Limit = limitPerType,
-                    OrderBy = sortOrder
-                });
-
-                var seriesInCollection = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    CollectionIds = new[] { boxSet.InternalId },
-                    IncludeItemTypes = new[] { "Series" }
-                });
-
-                var episodeItems = new List<BaseItem>();
-                if (seriesInCollection.Any())
-                {
-                    var seriesInternalIds = seriesInCollection.Select(s => s.InternalId).ToArray();
-                    episodeItems = _libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        AncestorIds = seriesInternalIds,
-                        IncludeItemTypes = new[] { "Episode" },
-                        IsVirtualItem = false,
-                        Recursive = true,
-                        Limit = limitPerType,
-                        OrderBy = sortOrder
-                    }).ToList();
-                }
-
-                preBuiltItemList = movieItems.Concat(episodeItems).ToList();
-            }
-            else
-            {
-                return new AggregatedSeriesResult();
-            }
-
-            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                _logger.Debug($"[EmbyIcons] No valid cache found. Aggregating data for '{parent.Name}' ({parent.Id}). LiteMode: {useLiteMode}.");
-
-            var itemList = preBuiltItemList ?? _libraryManager.GetItemList(query!).ToList();
-
-            if (parent is Series && profileOptions.ExcludeSpecialsFromSeriesAggregation)
-            {
-                itemList = itemList.Where(ep => (ep.Parent as Season)?.IndexNumber != 0).ToList();
-            }
-
-            if (!itemList.Any())
-            {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
-                return new AggregatedSeriesResult();
-            }
-
-            bool checkAudioLangs = profileOptions.AudioIconAlignment != IconAlignment.Disabled;
-            bool checkSubLangs = profileOptions.SubtitleIconAlignment != IconAlignment.Disabled;
-            bool checkAudioCodecs = profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled;
-            bool checkVideoCodecs = profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled;
-            bool checkChannels = profileOptions.ChannelIconAlignment != IconAlignment.Disabled;
-            bool checkAspectRatio = profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled;
-            bool checkResolution = profileOptions.ResolutionIconAlignment != IconAlignment.Disabled;
-            bool checkVideoFormat = profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled;
-
-            var firstItem = itemList[0];
-            var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
-            var firstVideoStream = MediaStreamHelper.GetPrimaryVideoStream(firstStreams);
-
-            var commonAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (checkAudioLangs)
-            {
-                foreach (var stream in firstStreams)
-                {
-                    if (stream.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.DisplayLanguage))
-                    {
-                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
-                        commonAudioLangs.Add(lang);
-                    }
-                }
-            }
-
-            var commonSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (checkSubLangs)
-            {
-                foreach (var stream in firstStreams)
-                {
-                    if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
-                    {
-                        var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
-                        commonSubtitleLangs.Add(lang);
-                    }
-                }
-            }
-
-            var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var commonVideoCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (checkAudioCodecs)
-            {
-                foreach (var stream in firstStreams)
-                {
-                    if (stream.Type == MediaStreamType.Audio)
-                    {
-                        var codec = MediaStreamHelper.GetAudioCodecIconName(stream);
-                        if (codec != null) commonAudioCodecs.Add(codec);
-                    }
-                }
-            }
-            if (checkVideoCodecs)
-            {
-                foreach (var stream in firstStreams)
-                {
-                    if (stream.Type == MediaStreamType.Video)
-                    {
-                        var codec = MediaStreamHelper.GetVideoCodecIconName(stream);
-                        if (codec != null) commonVideoCodecs.Add(codec);
-                    }
-                }
-            }
-
-            string? commonChannelType = null;
-            if (checkChannels)
-            {
-                var primaryAudioStream = firstStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
-                commonChannelType = primaryAudioStream != null ? MediaStreamHelper.GetChannelIconName(primaryAudioStream) : null;
-            }
-
-            string? commonAspectRatio = checkAspectRatio ? MediaStreamHelper.GetAspectRatioIconName(firstVideoStream, profileOptions.SnapAspectRatioToCommon) : null;
-
-            List<string> knownResolutionKeys = new List<string>();
-            string? commonResolution = null;
-            if (checkResolution)
-            {
-                var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
-                var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
-                knownResolutionKeys = globalOptions.IconLoadingMode switch
-                {
-                    IconLoadingMode.CustomOnly => customResolutionKeys,
-                    IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
-                    _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
-                };
-                commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys);
-            }
-
-            var processedStreams = checkVideoFormat ? new List<List<MediaStream>>(itemList.Count) : null;
-            processedStreams?.Add(firstStreams);
-            var itemHashes = new List<string>(itemList.Count) { $"{firstItem.Id}:{MediaStreamHelper.GetItemMediaStreamHash(firstItem, firstStreams)}" };
-
-            int processedCount = 1;
-            for (int i = 1; i < itemList.Count; i++)
-            {
-                bool allCommonExhausted =
-                    (!checkAudioLangs || commonAudioLangs.Count == 0) &&
-                    (!checkSubLangs || commonSubtitleLangs.Count == 0) &&
-                    (!checkAudioCodecs || commonAudioCodecs.Count == 0) &&
-                    (!checkVideoCodecs || commonVideoCodecs.Count == 0) &&
-                    (!checkChannels || commonChannelType == null) &&
-                    (!checkAspectRatio || commonAspectRatio == null) &&
-                    (!checkResolution || commonResolution == null);
-
-                if (allCommonExhausted)
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _logger.Debug($"[EmbyIcons] Early exit from aggregation for '{parent.Name}' after {i} of {itemList.Count} items; no remaining properties can change.");
-                    break;
+                        _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
+                    return cachedResult;
                 }
 
-                processedCount++;
-
-                var item = itemList[i];
-                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                processedStreams?.Add(streams);
-                var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
-
-                if (checkAudioLangs)
-                {
-                    var currentAudioLangs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
-                    if (commonAudioLangs.Count > 0) commonAudioLangs.IntersectWith(currentAudioLangs);
-                }
-
-                if (checkSubLangs)
-                {
-                    var currentSubtitleLangs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
-                    if (commonSubtitleLangs.Count > 0) commonSubtitleLangs.IntersectWith(currentSubtitleLangs);
-                }
-
-                if (checkAudioCodecs && commonAudioCodecs.Any()) commonAudioCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(name => name != null).Select(name => name!));
-                if (checkVideoCodecs && commonVideoCodecs.Any()) commonVideoCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(name => name != null).Select(name => name!));
-
-                if (checkChannels && commonChannelType != null)
-                {
-                    var currentPrimaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
-                    if (commonChannelType != (currentPrimaryAudio != null ? MediaStreamHelper.GetChannelIconName(currentPrimaryAudio) : null)) commonChannelType = null;
-                }
-
-                if (checkAspectRatio && commonAspectRatio != null)
-                {
-                    var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream, profileOptions.SnapAspectRatioToCommon);
-                    if (commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
-                }
-
-                if (checkResolution && commonResolution != null)
-                {
-                    var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
-                    if (commonResolution != currentRes) commonResolution = null;
-                }
-
-                itemHashes.Add($"{item.Id}:{MediaStreamHelper.GetItemMediaStreamHash(item, streams)}");
-            }
-
-            for (int i = processedCount; i < itemList.Count; i++)
-            {
-                var skipped = itemList[i];
-                itemHashes.Add($"{skipped.Id}:{skipped.DateModified.Ticks}");
-            }
-
-            var finalAudioLangs = checkAudioLangs ? commonAudioLangs : new HashSet<string>();
-            var finalSubtitleLangs = checkSubLangs ? commonSubtitleLangs : new HashSet<string>();
-
-            var finalAudioCodecs = checkAudioCodecs ? commonAudioCodecs : new HashSet<string>();
-            var finalVideoCodecs = checkVideoCodecs ? commonVideoCodecs : new HashSet<string>();
-            var finalChannelTypes = (checkChannels && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
-            var finalResolutions = (checkResolution && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
-            var finalAspectRatios = (checkAspectRatio && commonAspectRatio != null) ? new HashSet<string> { commonAspectRatio } : new HashSet<string>();
-
-            var finalVideoFormats = new HashSet<string>();
-            if (checkVideoFormat && itemList.Any())
-            {
-                var fetched = processedStreams!;
-                var hdrStates = new List<string?>(itemList.Count);
-                for (int k = 0; k < fetched.Count; k++)
-                    hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], fetched[k]));
-                for (int k = fetched.Count; k < itemList.Count; k++)
-                {
-                    var s = itemList[k].GetMediaStreams() ?? new List<MediaStream>();
-                    hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], s));
-                }
-
-                if (!hdrStates.Contains(null))
-                {
-                    var distinctFormats = hdrStates.Where(s => s != null).Distinct().ToList();
-                    if (distinctFormats.Count > 1)
-                    {
-                        finalVideoFormats.Add("hdr");
-                    }
-                    else if (distinctFormats.Count == 1)
-                    {
-                        finalVideoFormats.Add(distinctFormats.First()!);
-                    }
-                }
-            }
-
-            var finalSourceIcons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            var filenameBasedIconsList = new List<FilenameBasedIconData>();
-            if (profileOptions.FilenameBasedIcons.Any())
-            {
-                var uniqueIcons = new Dictionary<string, FilenameBasedIconData>();
-                var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                bool checkParentPath = false;
-                bool checkEpisodePaths = false;
+                bool useLiteMode;
+                InternalItemsQuery? query = null;
+                List<BaseItem>? preBuiltItemList = null;
 
                 if (parent is Series)
                 {
-                    checkParentPath = true;
-                    checkEpisodePaths = true;
+                    useLiteMode = profileOptions.UseSeriesLiteMode;
+                    query = new InternalItemsQuery
+                    {
+                        Parent = parent,
+                        Recursive = true,
+                        IncludeItemTypes = new[] { Configuration.Constants.Episode },
+                        Limit = useLiteMode ? 1 : null,
+                        OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
+                    };
                 }
                 else if (parent is Season)
                 {
-                    checkParentPath = true;
-                    checkEpisodePaths = true;
-                }
-
-                if (checkParentPath && !string.IsNullOrEmpty(parent.Path))
-                {
-                    allPaths.Add(parent.Path.ToLowerInvariant());
-                }
-
-                if (checkEpisodePaths)
-                {
-                    foreach (var item in itemList)
+                    useLiteMode = profileOptions.UseSeriesLiteMode;
+                    query = new InternalItemsQuery
                     {
-                        if (!string.IsNullOrEmpty(item.Path))
+                        Parent = parent,
+                        Recursive = true,
+                        IncludeItemTypes = new[] { Configuration.Constants.Episode },
+                        Limit = useLiteMode ? 1 : null,
+                        OrderBy = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>()
+                    };
+                }
+                else if (parent is BoxSet boxSet)
+                {
+                    useLiteMode = profileOptions.UseCollectionLiteMode;
+
+                    var sortOrder = useLiteMode ? new[] { (ItemSortBy.SortName, SortOrder.Ascending) } : Array.Empty<(string, SortOrder)>();
+                    int? limitPerType = useLiteMode ? 1 : null;
+
+                    var movieItems = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        CollectionIds = new[] { boxSet.InternalId },
+                        IncludeItemTypes = new[] { "Movie" },
+                        IsVirtualItem = false,
+                        Limit = limitPerType,
+                        OrderBy = sortOrder
+                    });
+
+                    var seriesInCollection = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        CollectionIds = new[] { boxSet.InternalId },
+                        IncludeItemTypes = new[] { "Series" }
+                    });
+
+                    var episodeItems = new List<BaseItem>();
+                    if (seriesInCollection.Any())
+                    {
+                        var seriesInternalIds = seriesInCollection.Select(s => s.InternalId).ToArray();
+                        episodeItems = _libraryManager.GetItemList(new InternalItemsQuery
                         {
-                            allPaths.Add(item.Path.ToLowerInvariant());
+                            AncestorIds = seriesInternalIds,
+                            IncludeItemTypes = new[] { "Episode" },
+                            IsVirtualItem = false,
+                            Recursive = true,
+                            Limit = limitPerType,
+                            OrderBy = sortOrder
+                        }).ToList();
+                    }
+
+                    preBuiltItemList = movieItems.Concat(episodeItems).ToList();
+                }
+                else
+                {
+                    return new AggregatedSeriesResult();
+                }
+
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    _logger.Debug($"[EmbyIcons] No valid cache found. Aggregating data for '{parent.Name}' ({parent.Id}). LiteMode: {useLiteMode}.");
+
+                var itemList = preBuiltItemList ?? _libraryManager.GetItemList(query!).ToList();
+
+                if (parent is Series && profileOptions.ExcludeSpecialsFromSeriesAggregation)
+                {
+                    itemList = itemList.Where(ep => (ep.Parent as Season)?.IndexNumber != 0).ToList();
+                }
+
+                if (!itemList.Any())
+                {
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _logger.Debug($"[EmbyIcons] No child items found for '{parent.Name}'. Returning temporary empty result without caching.");
+                    return new AggregatedSeriesResult();
+                }
+
+                bool checkAudioLangs = profileOptions.AudioIconAlignment != IconAlignment.Disabled;
+                bool checkSubLangs = profileOptions.SubtitleIconAlignment != IconAlignment.Disabled;
+                bool checkAudioCodecs = profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled;
+                bool checkVideoCodecs = profileOptions.VideoCodecIconAlignment != IconAlignment.Disabled;
+                bool checkChannels = profileOptions.ChannelIconAlignment != IconAlignment.Disabled;
+                bool checkAspectRatio = profileOptions.AspectRatioIconAlignment != IconAlignment.Disabled;
+                bool checkResolution = profileOptions.ResolutionIconAlignment != IconAlignment.Disabled;
+                bool checkVideoFormat = profileOptions.VideoFormatIconAlignment != IconAlignment.Disabled;
+
+                var firstItem = itemList[0];
+                var firstStreams = firstItem.GetMediaStreams() ?? new List<MediaStream>();
+                var firstVideoStream = MediaStreamHelper.GetPrimaryVideoStream(firstStreams);
+
+                var commonAudioLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (checkAudioLangs)
+                {
+                    foreach (var stream in firstStreams)
+                    {
+                        if (stream.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                        {
+                            var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                            commonAudioLangs.Add(lang);
                         }
                     }
                 }
 
-                foreach (var path in allPaths)
+                var commonSubtitleLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (checkSubLangs)
                 {
-                    foreach (var mapping in profileOptions.FilenameBasedIcons)
+                    foreach (var stream in firstStreams)
                     {
-                        bool shouldApply = false;
+                        if (stream.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(stream.DisplayLanguage))
+                        {
+                            var lang = LanguageHelper.NormalizeLangCode(stream.DisplayLanguage);
+                            commonSubtitleLangs.Add(lang);
+                        }
+                    }
+                }
 
-                        if (parent is Series && mapping.ApplyToSeries)
+                var commonAudioCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var commonVideoCodecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (checkAudioCodecs)
+                {
+                    foreach (var stream in firstStreams)
+                    {
+                        if (stream.Type == MediaStreamType.Audio)
                         {
-                            shouldApply = true;
+                            var codec = MediaStreamHelper.GetAudioCodecIconName(stream);
+                            if (codec != null) commonAudioCodecs.Add(codec);
                         }
-                        else if (parent is Series && mapping.ApplyToEpisodes && checkEpisodePaths)
+                    }
+                }
+                if (checkVideoCodecs)
+                {
+                    foreach (var stream in firstStreams)
+                    {
+                        if (stream.Type == MediaStreamType.Video)
                         {
-                            shouldApply = true;
+                            var codec = MediaStreamHelper.GetVideoCodecIconName(stream);
+                            if (codec != null) commonVideoCodecs.Add(codec);
                         }
-                        else if (parent is Season && mapping.ApplyToSeasons)
-                        {
-                            shouldApply = true;
-                        }
-                        else if (parent is Season && mapping.ApplyToEpisodes && checkEpisodePaths)
-                        {
-                            shouldApply = true;
-                        }
+                    }
+                }
 
-                        if (shouldApply &&
-                            !string.IsNullOrWhiteSpace(mapping.Keyword) &&
-                            !string.IsNullOrWhiteSpace(mapping.IconName) &&
-                            mapping.IconAlignment != IconAlignment.Disabled &&
-                            path.Contains(mapping.Keyword.ToLowerInvariant()))
+                string? commonChannelType = null;
+                if (checkChannels)
+                {
+                    var primaryAudioStream = firstStreams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
+                    commonChannelType = primaryAudioStream != null ? MediaStreamHelper.GetChannelIconName(primaryAudioStream) : null;
+                }
+
+                string? commonAspectRatio = checkAspectRatio ? MediaStreamHelper.GetAspectRatioIconName(firstVideoStream, profileOptions.SnapAspectRatioToCommon) : null;
+
+                List<string> knownResolutionKeys = new List<string>();
+                string? commonResolution = null;
+                if (checkResolution)
+                {
+                    var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+                    var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+                    knownResolutionKeys = globalOptions.IconLoadingMode switch
+                    {
+                        IconLoadingMode.CustomOnly => customResolutionKeys,
+                        IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                        _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+                    };
+                    commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys);
+                }
+
+                var processedStreams = checkVideoFormat ? new List<List<MediaStream>>(itemList.Count) : null;
+                processedStreams?.Add(firstStreams);
+                for (int i = 1; i < itemList.Count; i++)
+                {
+                    bool allCommonExhausted =
+                        (!checkAudioLangs || commonAudioLangs.Count == 0) &&
+                        (!checkSubLangs || commonSubtitleLangs.Count == 0) &&
+                        (!checkAudioCodecs || commonAudioCodecs.Count == 0) &&
+                        (!checkVideoCodecs || commonVideoCodecs.Count == 0) &&
+                        (!checkChannels || commonChannelType == null) &&
+                        (!checkAspectRatio || commonAspectRatio == null) &&
+                        (!checkResolution || commonResolution == null);
+
+                    if (allCommonExhausted)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _logger.Debug($"[EmbyIcons] Early exit from aggregation for '{parent.Name}' after {i} of {itemList.Count} items; no remaining properties can change.");
+                        break;
+                    }
+
+                    var item = itemList[i];
+                    var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+                    processedStreams?.Add(streams);
+                    var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
+
+                    if (checkAudioLangs)
+                    {
+                        var currentAudioLangs = streams.Where(s => s.Type == MediaStreamType.Audio && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        if (commonAudioLangs.Count > 0) commonAudioLangs.IntersectWith(currentAudioLangs);
+                    }
+
+                    if (checkSubLangs)
+                    {
+                        var currentSubtitleLangs = streams.Where(s => s.Type == MediaStreamType.Subtitle && !string.IsNullOrEmpty(s.DisplayLanguage)).Select(s => LanguageHelper.NormalizeLangCode(s.DisplayLanguage));
+                        if (commonSubtitleLangs.Count > 0) commonSubtitleLangs.IntersectWith(currentSubtitleLangs);
+                    }
+
+                    if (checkAudioCodecs && commonAudioCodecs.Any()) commonAudioCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Audio).Select(MediaStreamHelper.GetAudioCodecIconName).Where(name => name != null).Select(name => name!));
+                    if (checkVideoCodecs && commonVideoCodecs.Any()) commonVideoCodecs.IntersectWith(streams.Where(s => s.Type == MediaStreamType.Video).Select(MediaStreamHelper.GetVideoCodecIconName).Where(name => name != null).Select(name => name!));
+
+                    if (checkChannels && commonChannelType != null)
+                    {
+                        var currentPrimaryAudio = streams.Where(s => s.Type == MediaStreamType.Audio).OrderByDescending(s => s.Channels ?? 0).FirstOrDefault();
+                        if (commonChannelType != (currentPrimaryAudio != null ? MediaStreamHelper.GetChannelIconName(currentPrimaryAudio) : null)) commonChannelType = null;
+                    }
+
+                    if (checkAspectRatio && commonAspectRatio != null)
+                    {
+                        var currentAspectRatio = MediaStreamHelper.GetAspectRatioIconName(videoStream, profileOptions.SnapAspectRatioToCommon);
+                        if (commonAspectRatio != currentAspectRatio) commonAspectRatio = null;
+                    }
+
+                    if (checkResolution && commonResolution != null)
+                    {
+                        var currentRes = MediaStreamHelper.GetResolutionIconNameFromStream(videoStream, knownResolutionKeys);
+                        if (commonResolution != currentRes) commonResolution = null;
+                    }
+                }
+
+                var finalAudioLangs = checkAudioLangs ? commonAudioLangs : new HashSet<string>();
+                var finalSubtitleLangs = checkSubLangs ? commonSubtitleLangs : new HashSet<string>();
+
+                var finalAudioCodecs = checkAudioCodecs ? commonAudioCodecs : new HashSet<string>();
+                var finalVideoCodecs = checkVideoCodecs ? commonVideoCodecs : new HashSet<string>();
+                var finalChannelTypes = (checkChannels && commonChannelType != null) ? new HashSet<string> { commonChannelType } : new HashSet<string>();
+                var finalResolutions = (checkResolution && commonResolution != null) ? new HashSet<string> { commonResolution } : new HashSet<string>();
+                var finalAspectRatios = (checkAspectRatio && commonAspectRatio != null) ? new HashSet<string> { commonAspectRatio } : new HashSet<string>();
+
+                var finalVideoFormats = new HashSet<string>();
+                if (checkVideoFormat && itemList.Any())
+                {
+                    var fetched = processedStreams!;
+                    var hdrStates = new List<string?>(itemList.Count);
+                    for (int k = 0; k < fetched.Count; k++)
+                        hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], fetched[k]));
+                    for (int k = fetched.Count; k < itemList.Count; k++)
+                    {
+                        var s = itemList[k].GetMediaStreams() ?? new List<MediaStream>();
+                        hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], s));
+                    }
+
+                    if (!hdrStates.Contains(null))
+                    {
+                        var distinctFormats = hdrStates.Where(s => s != null).Distinct().ToList();
+                        if (distinctFormats.Count > 1)
                         {
-                            var iconKey = $"{mapping.IconName.ToLowerInvariant()}|{mapping.IconAlignment}|{mapping.Priority}|{mapping.HorizontalLayout}";
-                            if (!uniqueIcons.ContainsKey(iconKey))
+                            finalVideoFormats.Add("hdr");
+                        }
+                        else if (distinctFormats.Count == 1)
+                        {
+                            finalVideoFormats.Add(distinctFormats.First()!);
+                        }
+                    }
+                }
+
+                var finalSourceIcons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var filenameBasedIconsList = new List<FilenameBasedIconData>();
+                if (profileOptions.FilenameBasedIcons.Any())
+                {
+                    var uniqueIcons = new Dictionary<string, FilenameBasedIconData>();
+                    var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    bool checkParentPath = false;
+                    bool checkEpisodePaths = false;
+
+                    if (parent is Series)
+                    {
+                        checkParentPath = true;
+                        checkEpisodePaths = true;
+                    }
+                    else if (parent is Season)
+                    {
+                        checkParentPath = true;
+                        checkEpisodePaths = true;
+                    }
+
+                    if (checkParentPath && !string.IsNullOrEmpty(parent.Path))
+                    {
+                        allPaths.Add(parent.Path.ToLowerInvariant());
+                    }
+
+                    if (checkEpisodePaths)
+                    {
+                        foreach (var item in itemList)
+                        {
+                            if (!string.IsNullOrEmpty(item.Path))
                             {
-                                uniqueIcons[iconKey] = new FilenameBasedIconData
-                                {
-                                    IconName = mapping.IconName.ToLowerInvariant(),
-                                    Alignment = mapping.IconAlignment,
-                                    Priority = mapping.Priority,
-                                    HorizontalLayout = mapping.HorizontalLayout
-                                };
+                                allPaths.Add(item.Path.ToLowerInvariant());
                             }
                         }
                     }
+
+                    foreach (var path in allPaths)
+                    {
+                        foreach (var mapping in profileOptions.FilenameBasedIcons)
+                        {
+                            bool shouldApply = false;
+
+                            if (parent is Series && mapping.ApplyToSeries)
+                            {
+                                shouldApply = true;
+                            }
+                            else if (parent is Series && mapping.ApplyToEpisodes && checkEpisodePaths)
+                            {
+                                shouldApply = true;
+                            }
+                            else if (parent is Season && mapping.ApplyToSeasons)
+                            {
+                                shouldApply = true;
+                            }
+                            else if (parent is Season && mapping.ApplyToEpisodes && checkEpisodePaths)
+                            {
+                                shouldApply = true;
+                            }
+
+                            if (shouldApply &&
+                                !string.IsNullOrWhiteSpace(mapping.Keyword) &&
+                                !string.IsNullOrWhiteSpace(mapping.IconName) &&
+                                mapping.IconAlignment != IconAlignment.Disabled &&
+                                path.Contains(mapping.Keyword.ToLowerInvariant()))
+                            {
+                                var iconKey = $"{mapping.IconName.ToLowerInvariant()}|{mapping.IconAlignment}|{mapping.Priority}|{mapping.HorizontalLayout}";
+                                if (!uniqueIcons.ContainsKey(iconKey))
+                                {
+                                    uniqueIcons[iconKey] = new FilenameBasedIconData
+                                    {
+                                        IconName = mapping.IconName.ToLowerInvariant(),
+                                        Alignment = mapping.IconAlignment,
+                                        Priority = mapping.Priority,
+                                        HorizontalLayout = mapping.HorizontalLayout
+                                    };
+                                }
+                            }
+                        }
+                    }
+
+                    filenameBasedIconsList = uniqueIcons.Values.ToList();
                 }
 
-                filenameBasedIconsList = uniqueIcons.Values.ToList();
-            }
-
-            byte[] hashBytes;
-            using (var md5 = MD5.Create())
-            {
-                var encoding = Encoding.UTF8;
-                var separator = encoding.GetBytes(";");
-                var orderedHashes = itemHashes.OrderBy(h => h).ToList();
-
-                for (int i = 0; i < orderedHashes.Count; i++)
+                var result = new AggregatedSeriesResult
                 {
-                    var bytes = encoding.GetBytes(orderedHashes[i]);
-                    if (i < orderedHashes.Count - 1)
-                    {
-                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                        md5.TransformBlock(separator, 0, separator.Length, null, 0);
-                    }
-                    else
-                    {
-                        md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
-                        md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-                    }
+                    Timestamp = DateTime.UtcNow,
+                    AudioLangs = finalAudioLangs,
+                    SubtitleLangs = finalSubtitleLangs,
+                    ChannelTypes = finalChannelTypes,
+                    AudioCodecs = finalAudioCodecs,
+                    VideoCodecs = finalVideoCodecs,
+                    Resolutions = finalResolutions,
+                    VideoFormats = finalVideoFormats,
+                    AspectRatios = finalAspectRatios,
+                    SourceIcons = finalSourceIcons,
+                    FilenameBasedIcons = filenameBasedIconsList
+                };
+
+                _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
+                if (parent.InternalId > 0)
+                {
+                    _aggregatedParentIds[parent.InternalId] = parent.Id;
                 }
 
-                hashBytes = md5.Hash!;
+                if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
+                {
+                    PruneSeriesAggregationCacheWithLimit();
+                }
+
+                return result;
             }
-
-            var result = new AggregatedSeriesResult
-            {
-                Timestamp = DateTime.UtcNow,
-                AudioLangs = finalAudioLangs,
-                SubtitleLangs = finalSubtitleLangs,
-                ChannelTypes = finalChannelTypes,
-                AudioCodecs = finalAudioCodecs,
-                VideoCodecs = finalVideoCodecs,
-                Resolutions = finalResolutions,
-                VideoFormats = finalVideoFormats,
-                AspectRatios = finalAspectRatios,
-                SourceIcons = finalSourceIcons,
-                FilenameBasedIcons = filenameBasedIconsList,
-                CombinedEpisodesHashShort = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8)
-            };
-
-            _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-            if (parent.InternalId > 0)
-            {
-                _aggregatedParentIds[parent.InternalId] = parent.Id;
-            }
-
-            if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
-            {
-                PruneSeriesAggregationCacheWithLimit();
-            }
-
-            return result;
         }
     }
 }

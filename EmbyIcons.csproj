@@ -6,11 +6,11 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.61.0.2</Version>
-		<AssemblyVersion>5.61.0.2</AssemblyVersion>
-		<FileVersion>5.61.0.2</FileVersion>
+		<Version>5.61.1.4</Version>
+		<AssemblyVersion>5.61.1.4</AssemblyVersion>
+		<FileVersion>5.61.1.4</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<DefaultItemExcludes>$(DefaultItemExcludes);CoverArt\**</DefaultItemExcludes>
+		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -156,9 +156,10 @@
 	<ItemGroup>
 		<PackageReference Include="MediaBrowser.Common" Version="4.9.1.90" PrivateAssets="all" ExcludeAssets="runtime" />
 		<PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" PrivateAssets="all" ExcludeAssets="runtime" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.3" PrivateAssets="all" ExcludeAssets="runtime" />
 		<PackageReference Include="SkiaSharp" Version="2.88.6" PrivateAssets="all" ExcludeAssets="runtime" />
-		<PackageReference Include="NetVips" Version="2.4.1" PrivateAssets="all" ExcludeAssets="runtime" />
 		<PackageReference Include="System.Memory" Version="4.6.3" PrivateAssets="all" ExcludeAssets="runtime" />
+		<PackageReference Include="System.Text.Json" Version="6.0.10" PrivateAssets="all" ExcludeAssets="runtime" />
 	</ItemGroup>
 
 </Project>

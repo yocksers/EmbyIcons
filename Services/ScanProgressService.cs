@@ -41,7 +41,7 @@ namespace EmbyIcons.Services
                 {
                     if (t.IsCanceled) return;
                     ((ICollection<KeyValuePair<string, ScanProgress>>)_progressCache).Remove(new KeyValuePair<string, ScanProgress>(scanType, progress));
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                     {
                         Plugin.Instance?.Logger.Debug($"[EmbyIcons] Auto-cleared completed scan progress: {scanType}");
                     }

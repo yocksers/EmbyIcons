@@ -104,7 +104,7 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false) _enhancer.Logger.Debug($"[EmbyIcons] Failed to query movie versions for provider id {cacheKey}: {ex.Message}");
                 paths = Array.Empty<string>();
             }
 
@@ -230,9 +230,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting rating from provider IDs: {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting rating from provider IDs: {ex.Message}");
                 }
             }
             return null;
@@ -254,9 +254,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting rating from properties: {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting rating from properties: {ex.Message}");
                 }
             }
             return null;
@@ -293,9 +293,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting from property '{prop.Name}': {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting from property '{prop.Name}': {ex.Message}");
                 }
             }
             return null;
@@ -374,9 +374,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error parsing percentage from '{s}': {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error parsing percentage from '{s}': {ex.Message}");
                 }
             }
             
@@ -399,9 +399,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting community rating from properties: {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from properties: {ex.Message}");
                 }
             }
             return null;
@@ -424,9 +424,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting community rating from property '{prop.Name}': {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting community rating from property '{prop.Name}': {ex.Message}");
                 }
             }
             return null;
@@ -485,97 +485,61 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error parsing community rating from '{s}': {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error parsing community rating from '{s}': {ex.Message}");
                 }
             }
             
             return null;
         }
 
-        private static bool TagMappingAppliesTo(TagIconMapping mapping, BaseItem item) => item switch
-        {
-            Series => mapping.ApplyToSeries,
-            Season => mapping.ApplyToSeasons,
-            BoxSet => mapping.ApplyToMovies || mapping.ApplyToSeries,
-            Movie => mapping.ApplyToMovies,
-            Episode => mapping.ApplyToEpisodes,
-            Audio => mapping.ApplyToTracks,
-            MusicAlbum => mapping.ApplyToAlbums,
-            MusicArtist => mapping.ApplyToArtists,
-            _ => true
-        };
-
-        private static void PopulateTagData(BaseItem item, ProfileSettings profileOptions, HashSet<string> tags, List<FilenameBasedIconData> tagBasedIcons)
-        {
-            if (item.Tags == null || item.Tags.Length == 0) return;
-
-            bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
-
-            foreach (var tag in item.Tags)
-            {
-                var nt = NormalizeTag(tag);
-                if (string.IsNullOrEmpty(nt)) continue;
-
-                bool mappedAtLeastOnce = false;
-                if (hasTagMappings)
-                {
-                    foreach (var mapping in profileOptions.TagBasedIcons)
-                    {
-                        if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
-                            continue;
-                        if (TagMappingAppliesTo(mapping, item) && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
-                        {
-                            tagBasedIcons.Add(new FilenameBasedIconData
-                            {
-                                IconName = nt,
-                                Alignment = mapping.IconAlignment,
-                                Priority = mapping.Priority,
-                                HorizontalLayout = mapping.HorizontalLayout
-                            });
-                            mappedAtLeastOnce = true;
-                        }
-                    }
-                }
-
-                if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
-                {
-                    tags.Add(nt);
-                }
-            }
-        }
-
-        private async Task ApplyMdbListRatingsAsync(BaseItem item, ProfileSettings profileOptions, OverlayData overlayData, CancellationToken cancellationToken)
-        {
-            if (profileOptions.PopcornScoreIconAlignment == IconAlignment.Disabled && profileOptions.MyAnimeListScoreIconAlignment == IconAlignment.Disabled)
-                return;
-
-            try
-            {
-                var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(apiKey)) return;
-
-                var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
-                if (mdbData != null)
-                {
-                    overlayData.PopcornRating = mdbData.PopcornScore;
-                    overlayData.PopcornVotes = mdbData.PopcornVotes;
-                    overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
-                }
-            }
-            catch (Exception ex)
-            {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for '{item.Name}': {ex.Message}");
-            }
-        }
-
         private OverlayData CreateOverlayDataFromAggregate(EmbyIconsEnhancer.AggregatedSeriesResult aggResult, BaseItem item, ProfileSettings profileOptions)
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
-            PopulateTagData(item, profileOptions, tags, tagBasedIcons);
+
+            if (item.Tags != null && item.Tags.Length > 0)
+            {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isSeries = item is Series;
+                bool isSeason = item is Season;
+
+                foreach (var tag in item.Tags)
+                {
+                    var nt = NormalizeTag(tag);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isSeries ? mapping.ApplyToSeries
+                                             : isSeason ? mapping.ApplyToSeasons
+                                             : mapping.ApplyToMovies || mapping.ApplyToSeries;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName = nt,
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                    {
+                        tags.Add(nt);
+                    }
+                }
+            }
 
             float? currentCommunityRating = null;
             if (item.CommunityRating.HasValue)
@@ -615,11 +579,6 @@ namespace EmbyIcons.Services
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
 
-            if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
-            {
-                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
-            }
-
             if (profileOptions?.SeriesStatusIconAlignment != IconAlignment.Disabled && item is Series series)
             {
                 data.SeriesStatusIconName = MediaStreamHelper.GetSeriesStatusIconName(series);
@@ -632,7 +591,46 @@ namespace EmbyIcons.Services
         {
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
-            PopulateTagData(item, profileOptions, tags, tagBasedIcons);
+
+            if (item.Tags != null && item.Tags.Length > 0)
+            {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isAlbum  = item is MusicAlbum;
+                bool isArtist = item is MusicArtist;
+
+                foreach (var tag in item.Tags)
+                {
+                    var nt = NormalizeTag(tag);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isAlbum  ? mapping.ApplyToAlbums
+                                             : isArtist ? mapping.ApplyToArtists
+                                             : false;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName         = nt,
+                                    Alignment        = mapping.IconAlignment,
+                                    Priority         = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                        tags.Add(nt);
+                }
+            }
 
             float? communityRating = item.CommunityRating;
             if (!communityRating.HasValue)
@@ -665,73 +663,100 @@ namespace EmbyIcons.Services
                 ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating)
             };
 
-            if (profileOptions?.FavoriteCountIconAlignment != IconAlignment.Disabled)
-                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
-
             return data;
         }
 
         public async Task<OverlayData> GetOverlayDataAsync(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
         {
-            EnsureMaintenanceTimerInitialized();
-
-            OverlayData overlayData;
-
-            if (item is Series seriesItem)
+            if (item is BoxSet && AreCollectionOverlaysDisabled(profileOptions))
             {
-                if (!profileOptions.UseSeriesLiteMode && !profileOptions.ShowSeriesIconsIfAllEpisodesHaveLanguage)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                        _enhancer.Logger.Debug($"[EmbyIcons] Overlays for TV show posters are disabled in the current profile. Skipping '{item.Name}'.");
-                    return new OverlayData();
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
                 }
+                return new OverlayData();
+            }
 
-                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(seriesItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, seriesItem, profileOptions);
-            }
-            else if (item is Season seasonItem)
+            var overlayData = GetBaseOverlayData(item, profileOptions, globalOptions);
+
+            if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
             {
-                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(seasonItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, seasonItem, profileOptions);
+                overlayData.FavoriteCount = _enhancer.GetFavoriteCount(item);
             }
-            else if (item is BoxSet collectionItem)
+
+            if (profileOptions.PopcornScoreIconAlignment != IconAlignment.Disabled || profileOptions.MyAnimeListScoreIconAlignment != IconAlignment.Disabled)
             {
-                if (!profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage)
+                try
                 {
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    var apiKey = Plugin.Instance?.Configuration.MDBListApiKey ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(apiKey))
                     {
-                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] Overlays for collections are disabled in the current profile (Full Mode). Skipping '{item.Name}'.");
+                        var mdbData = await _mdbListService.FetchRatingsAsync(item, apiKey, cancellationToken).ConfigureAwait(false);
+                        if (mdbData != null)
+                        {
+                            overlayData.PopcornRating = mdbData.PopcornScore;
+                            overlayData.PopcornVotes = mdbData.PopcornVotes;
+                            overlayData.MyAnimeListRating = mdbData.MyAnimeListScore;
+                        }
                     }
-                    return new OverlayData();
                 }
-
-                var aggResult = await _enhancer.GetOrBuildAggregatedDataForParentAsync(collectionItem, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                overlayData = CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
+                catch (Exception ex)
+                {
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                        _enhancer.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings: {ex.Message}");
+                }
             }
-            else if (item is MusicAlbum albumItem && profileOptions.EnableMusicAlbumAggregation)
-            {
-                var aggResult = await _enhancer.GetOrBuildAggregatedDataForAlbumAsync(albumItem, profileOptions, cancellationToken).ConfigureAwait(false);
-                overlayData = CreateOverlayDataFromMusicAggregate(aggResult, albumItem, profileOptions);
-            }
-            else if (item is MusicArtist artistItem && profileOptions.EnableMusicAlbumAggregation)
-            {
-                var aggResult = await _enhancer.GetOrBuildAggregatedDataForAlbumAsync(artistItem, profileOptions, cancellationToken).ConfigureAwait(false);
-                overlayData = CreateOverlayDataFromMusicAggregate(aggResult, artistItem, profileOptions);
-            }
-            else
-            {
-                overlayData = await GetOverlayDataForItemAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
-                return overlayData;
-            }
-
-            await ApplyMdbListRatingsAsync(item, profileOptions, overlayData, cancellationToken).ConfigureAwait(false);
 
             return overlayData;
         }
 
-        private async Task<OverlayData> GetOverlayDataForItemAsync(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions, CancellationToken cancellationToken)
-        {
+        private static bool AreCollectionOverlaysDisabled(ProfileSettings profileOptions) =>
+            !profileOptions.UseCollectionLiteMode && !profileOptions.ShowCollectionIconsIfAllChildrenHaveLanguage;
 
+        public OverlayData GetBaseOverlayData(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
+        {
+            EnsureMaintenanceTimerInitialized();
+
+            if (item is Series seriesItem)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
+                return CreateOverlayDataFromAggregate(aggResult, seriesItem, profileOptions);
+            }
+
+            if (item is Season seasonItem)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
+                return CreateOverlayDataFromAggregate(aggResult, seasonItem, profileOptions);
+            }
+
+            if (item is BoxSet collectionItem)
+            {
+                if (AreCollectionOverlaysDisabled(profileOptions))
+                {
+                    return new OverlayData();
+                }
+
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
+                return CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
+            }
+
+            if (item is MusicAlbum albumItem && profileOptions.EnableMusicAlbumAggregation)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(albumItem, profileOptions);
+                return CreateOverlayDataFromMusicAggregate(aggResult, albumItem, profileOptions);
+            }
+
+            if (item is MusicArtist artistItem && profileOptions.EnableMusicAlbumAggregation)
+            {
+                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(artistItem, profileOptions);
+                return CreateOverlayDataFromMusicAggregate(aggResult, artistItem, profileOptions);
+            }
+
+            return GetOverlayDataForItem(item, profileOptions, globalOptions);
+        }
+
+        private OverlayData GetOverlayDataForItem(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
+        {
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
             if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
             {
@@ -778,7 +803,54 @@ namespace EmbyIcons.Services
                 
                 var cachedTagBasedIcons = new List<FilenameBasedIconData>();
                 var cachedGlobalTags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-                PopulateTagData(item, profileOptions, cachedGlobalTags, cachedTagBasedIcons);
+
+                if (item.Tags != null && item.Tags.Length > 0)
+                {
+                    bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                    bool isMovie = item is Movie;
+                    bool isEpisode = item is Episode;
+                    bool isTrack = item is Audio;
+                    bool isMusicAlbum = item is MusicAlbum;
+                    bool isMusicArtist = item is MusicArtist;
+
+                    foreach (var rawTag in item.Tags)
+                    {
+                        var tag = NormalizeTag(rawTag);
+                        if (string.IsNullOrEmpty(tag)) continue;
+
+                        bool mappedAtLeastOnce = false;
+                        if (hasTagMappings)
+                        {
+                            foreach (var mapping in profileOptions.TagBasedIcons)
+                            {
+                                if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                    continue;
+                                bool shouldApply = isMovie ? mapping.ApplyToMovies
+                                                 : isEpisode ? mapping.ApplyToEpisodes
+                                                 : isTrack ? mapping.ApplyToTracks
+                                                 : isMusicAlbum ? mapping.ApplyToAlbums
+                                                 : isMusicArtist ? mapping.ApplyToArtists
+                                                 : true;
+                                if (shouldApply && string.Equals(mapping.TagName, tag, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    cachedTagBasedIcons.Add(new FilenameBasedIconData
+                                    {
+                                        IconName = tag,
+                                        Alignment = mapping.IconAlignment,
+                                        Priority = mapping.Priority,
+                                        HorizontalLayout = mapping.HorizontalLayout
+                                    });
+                                    mappedAtLeastOnce = true;
+                                }
+                            }
+                        }
+
+                        if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                        {
+                            cachedGlobalTags.Add(tag);
+                        }
+                    }
+                }
 
                 var cachedOverlayData = new OverlayData
                 {
@@ -803,13 +875,6 @@ namespace EmbyIcons.Services
                     AudioBitRateIconName = cachedInfo.AudioBitRateIconName,
                     BitDepthIconName = cachedInfo.BitDepthIconName
                 };
-
-                if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
-                {
-                    cachedOverlayData.FavoriteCount = _enhancer.GetFavoriteCount(item);
-                }
-
-                await ApplyMdbListRatingsAsync(item, profileOptions, cachedOverlayData, cancellationToken).ConfigureAwait(false);
 
                 return cachedOverlayData;
             }
@@ -845,8 +910,6 @@ namespace EmbyIcons.Services
 
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
             EmbyIconsEnhancer._episodeIconCache?.Set(item.Id, newInfo, cacheEntryOptions);
-
-            await ApplyMdbListRatingsAsync(item, profileOptions, overlayData, cancellationToken).ConfigureAwait(false);
 
             return overlayData;
         }
@@ -894,21 +957,12 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (profileOptions.FavoriteCountIconAlignment != IconAlignment.Disabled)
-            {
-                data.FavoriteCount = _enhancer.GetFavoriteCount(item);
-            }
-
             if (profileOptions.ParentalRatingIconAlignment != IconAlignment.Disabled)
             {
                 data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
             }
 
-            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any(m =>
-                    m.ApplyToMovies &&
-                    m.IconAlignment != IconAlignment.Disabled &&
-                    !string.IsNullOrWhiteSpace(m.Keyword) &&
-                    !string.IsNullOrWhiteSpace(m.IconName)))
+            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 string? providerIdKey = null;
@@ -1028,7 +1082,53 @@ namespace EmbyIcons.Services
                 }
             }
 
-            PopulateTagData(item, profileOptions, data.Tags, data.TagBasedIcons);
+            if (item.Tags != null && item.Tags.Length > 0)
+            {
+                bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
+                bool isMovie = item is Movie;
+                bool isEpisode = item is Episode;
+                bool isTrack = item is Audio;
+                bool isMusicAlbum = item is MusicAlbum;
+                bool isMusicArtist = item is MusicArtist;
+
+                foreach (var tag in item.Tags)
+                {
+                    var nt = NormalizeTag(tag);
+                    if (string.IsNullOrEmpty(nt)) continue;
+
+                    bool mappedAtLeastOnce = false;
+                    if (hasTagMappings)
+                    {
+                        foreach (var mapping in profileOptions.TagBasedIcons)
+                        {
+                            if (string.IsNullOrWhiteSpace(mapping.TagName) || mapping.IconAlignment == IconAlignment.Disabled)
+                                continue;
+                            bool shouldApply = isMovie ? mapping.ApplyToMovies
+                                             : isEpisode ? mapping.ApplyToEpisodes
+                                             : isTrack ? mapping.ApplyToTracks
+                                             : isMusicAlbum ? mapping.ApplyToAlbums
+                                             : isMusicArtist ? mapping.ApplyToArtists
+                                             : true;
+                            if (shouldApply && string.Equals(mapping.TagName, nt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                data.TagBasedIcons.Add(new FilenameBasedIconData
+                                {
+                                    IconName = nt,
+                                    Alignment = mapping.IconAlignment,
+                                    Priority = mapping.Priority,
+                                    HorizontalLayout = mapping.HorizontalLayout
+                                });
+                                mappedAtLeastOnce = true;
+                            }
+                        }
+                    }
+
+                    if (!mappedAtLeastOnce && profileOptions.TagIconAlignment != IconAlignment.Disabled)
+                    {
+                        data.Tags.Add(nt);
+                    }
+                }
+            }
 
             var mainItemStreams = item.GetMediaStreams() ?? new List<MediaStream>();
 
@@ -1165,9 +1265,9 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting original language: {ex.Message}");
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language: {ex.Message}");
                 }
             }
 

@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using EmbyIcons.Compat;
+using System.Text.Json;
 using EmbyIcons.Configuration;
 using MediaBrowser.Model.Logging;
 
@@ -18,32 +16,6 @@ namespace EmbyIcons.Services
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-        }
-        public async Task<ExportResult> ExportProfilesToFileAsync(
-            List<Guid>? profileIds,
-            string filePath,
-            bool includeLibraryMappings = false)
-        {
-            try
-            {
-                string resolvedPath;
-                try { resolvedPath = Path.GetFullPath(filePath); }
-                catch (Exception ex) { throw new ArgumentException("Invalid file path.", nameof(filePath), ex); }
-
-                var result = ExportProfiles(profileIds, includeLibraryMappings);
-                
-                var json = SimpleJson.Serialize(result.ExportData, indented: true);
-                await EmbyIcons.Compat.FileCompat.WriteAllTextAsync(resolvedPath, json);
-
-                _logger.Info($"[EmbyIcons] Exported {result.ProfileCount} profile(s) to: {resolvedPath}");
-                
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.ErrorException($"[EmbyIcons] Failed to export profiles to file: {filePath}", ex);
-                throw;
-            }
         }
         public ExportResult ExportProfiles(List<Guid>? profileIds, bool includeLibraryMappings = false)
         {
@@ -81,39 +53,16 @@ namespace EmbyIcons.Services
                 ExportData = exportData
             };
         }
-        public async Task<ImportResult> ImportProfilesFromFileAsync(
-            string filePath,
-            ImportOptions options)
-        {
-            try
-            {
-                string resolvedPath;
-                try { resolvedPath = Path.GetFullPath(filePath); }
-                catch (Exception ex) { throw new ArgumentException("Invalid file path.", nameof(filePath), ex); }
-
-                if (!File.Exists(resolvedPath))
-                {
-                    throw new FileNotFoundException("Profile file not found", resolvedPath);
-                }
-
-                var json = await EmbyIcons.Compat.FileCompat.ReadAllTextAsync(resolvedPath);
-                var result = ImportProfilesFromJson(json, options);
-
-                _logger.Info($"[EmbyIcons] Imported {result.ImportedCount} profile(s) from: {resolvedPath}");
-                
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.ErrorException($"[EmbyIcons] Failed to import profiles from file: {filePath}", ex);
-                throw;
-            }
-        }
         public ImportResult ImportProfilesFromJson(string json, ImportOptions options)
         {
             try
             {
-                var exportData = SimpleJson.Deserialize<ProfileExportData>(json);
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var exportData = JsonSerializer.Deserialize<ProfileExportData>(json, jsonOptions);
                 
                 if (exportData == null || exportData.Profiles == null)
                 {
@@ -233,7 +182,12 @@ namespace EmbyIcons.Services
         {
             try
             {
-                var exportData = SimpleJson.Deserialize<ProfileExportData>(json);
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var exportData = JsonSerializer.Deserialize<ProfileExportData>(json, jsonOptions);
                 
                 if (exportData == null)
                 {

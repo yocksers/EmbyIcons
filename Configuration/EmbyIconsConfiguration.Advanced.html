@@ -64,6 +64,19 @@
     </div>
 
     <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
+        <h3 style="margin-top: 0;">Feature Toggles</h3>
+        <p class="fieldDescription">Enable or disable performance-related features.</p>
+
+        <div class="checkboxContainer" style="margin-top: 1.5em;">
+            <label>
+                <input is="emby-checkbox" type="checkbox" data-config-key="EnableIconTemplateCaching" />
+                <span>Enable icon template caching</span>
+            </label>
+            <div class="fieldDescription">Pre-render common icon combinations (e.g., "4K + DTS + HDR") to improve performance and reduce CPU usage.</div>
+        </div>
+    </div>
+
+    <div class="paper-card" style="padding: 1.5em; margin-top: 2em;">
         <h3 style="margin-top: 0;">Testing & Diagnostics</h3>
         <p class="fieldDescription">Options for testing and troubleshooting image processing.</p>
 
@@ -94,6 +107,14 @@
             <div class="fieldDescription">
                 Required for Popcorn-O-Meter (Rotten Tomatoes Audience Score) ratings. Get your free API key from <a href="https://mdblist.com" target="_blank" style="color: var(--theme-primary-color);">mdblist.com</a>
             </div>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 1.5em;">
+            <label>
+                <input is="emby-checkbox" type="checkbox" data-config-key="EnableMdbListDiskCache" />
+                <span>Keep MDBList ratings on disk</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Saves fetched ratings to a small file in the plugin's data folder, so they survive Emby restarts and each title is only fetched again after 7 days. The file is written at most every 5 minutes, and only when new ratings were fetched. Uncheck this if you don't want EmbyIcons writing to disk, for example so drives can sleep; ratings are then kept in memory only and fetched again after a restart.</div>
         </div>
     </div>
 

@@ -28,15 +28,15 @@ namespace EmbyIcons.Caching
         private volatile string? _iconsFolder;
         private readonly object _initLock = new object();
 
+        private readonly object _bitmapGate = new object();
+
         private static readonly TimeSpan MissingCustomIconRetryInterval = TimeSpan.FromMinutes(2);
         private readonly ConcurrentDictionary<string, DateTime> _missingCustomIcons = new(StringComparer.Ordinal);
 
-        private readonly object _bitmapGate = new object();
-
-        private MemoryCacheEntryOptions CreateBitmapCacheEntryOptions(SKBitmap bitmap)
+        private MemoryCacheEntryOptions CreateBitmapCacheEntryOptions(long byteCount)
         {
             return new MemoryCacheEntryOptions()
-                .SetSize(bitmap.ByteCount)
+                .SetSize(byteCount)
                 .SetSlidingExpiration(TimeSpan.FromHours(2))
                 .RegisterPostEvictionCallback((_, value, _, _) => DisposeCachedBitmap(value as SKBitmap));
         }
@@ -68,6 +68,21 @@ namespace EmbyIcons.Caching
             return null;
         }
 
+        private const int MaxCustomIconHeight = 512;
+
+        private static SKBitmap ShrinkCustomIcon(SKBitmap bitmap)
+        {
+            if (bitmap.Height <= MaxCustomIconHeight) return bitmap;
+
+            int width = Math.Max(1, (int)Math.Round(bitmap.Width * ((double)MaxCustomIconHeight / bitmap.Height)));
+            var info = new SKImageInfo(width, MaxCustomIconHeight, bitmap.ColorType, bitmap.AlphaType);
+            var resized = bitmap.Resize(info, SKFilterQuality.High);
+            if (resized == null) return bitmap;
+
+            bitmap.Dispose();
+            return resized;
+        }
+
         private SKImage? CacheBitmapAndCreateImage(MemoryCache cache, string key, SKBitmap bitmap)
         {
             lock (_bitmapGate)
@@ -75,6 +90,7 @@ namespace EmbyIcons.Caching
                 SKImage? image;
                 try
                 {
+                    bitmap.SetImmutable();
                     image = SKImage.FromBitmap(bitmap);
                 }
                 catch
@@ -89,7 +105,7 @@ namespace EmbyIcons.Caching
                     return null;
                 }
 
-                try { cache.Set(key, bitmap, CreateBitmapCacheEntryOptions(bitmap)); }
+                try { cache.Set(key, bitmap, CreateBitmapCacheEntryOptions(bitmap.ByteCount)); }
                 catch { bitmap.Dispose(); }
 
                 return image;
@@ -111,7 +127,7 @@ namespace EmbyIcons.Caching
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _cacheSizeLimitInBytes = 100 * 1024 * 1024;
+            _cacheSizeLimitInBytes = 50 * 1024 * 1024;
 
             _iconImageCache = new MemoryCache(new MemoryCacheOptions
             {
@@ -136,6 +152,12 @@ namespace EmbyIcons.Caching
                 return CreateEmptyIconKeyMap();
             }
 
+            if (!Directory.Exists(iconsFolder))
+            {
+                _logger.Warn($"[EmbyIcons] Custom icons folder does not exist: '{iconsFolder}'. No custom icons will be loaded.");
+                return CreateEmptyIconKeyMap();
+            }
+
             lock (_customKeysLock)
             {
                 if (_customIconKeys != null &&
@@ -144,18 +166,6 @@ namespace EmbyIcons.Caching
                 {
                     return _customIconKeys;
                 }
-            }
-
-            if (!Directory.Exists(iconsFolder))
-            {
-                _logger.Warn($"[EmbyIcons] Custom icons folder does not exist: '{iconsFolder}'. No custom icons will be loaded.");
-                var emptyKeys = CreateEmptyIconKeyMap();
-                lock (_customKeysLock)
-                {
-                    _customKeysFolder = iconsFolder;
-                    _customIconKeys = emptyKeys;
-                }
-                return emptyKeys;
             }
 
             var allKeys = CreateEmptyIconKeyMap();
@@ -235,7 +245,7 @@ namespace EmbyIcons.Caching
             }
         }
 
-        public void Initialize(string iconsFolder)
+        public Task InitializeAsync(string iconsFolder)
         {
             var effectiveFolder = iconsFolder ?? string.Empty;
 
@@ -244,16 +254,16 @@ namespace EmbyIcons.Caching
                 if (_iconsFolder != null &&
                     string.Equals(_iconsFolder, effectiveFolder, StringComparison.OrdinalIgnoreCase))
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
 
                 _iconsFolder = effectiveFolder;
             }
 
-            RefreshCache(effectiveFolder);
+            return RefreshCacheOnDemandAsync(effectiveFolder);
         }
 
-        public void RefreshCache(string iconsFolder)
+        public Task RefreshCacheOnDemandAsync(string iconsFolder)
         {
             _iconsFolder = iconsFolder;
             _logger.Info("[EmbyIcons] Clearing all cached icon image data.");
@@ -271,7 +281,6 @@ namespace EmbyIcons.Caching
             if (oldCache != null)
             {
                 try { oldCache.Compact(1.0); } catch { }
-                try { oldCache.Dispose(); } catch { }
             }
 
             lock (_customKeysLock)
@@ -281,6 +290,7 @@ namespace EmbyIcons.Caching
             }
 
             _missingCustomIcons.Clear();
+            return Task.CompletedTask;
         }
 
         public async Task<SKImage?> GetIconAsync(string iconNameKey, IconType iconType, PluginOptions options, CancellationToken cancellationToken)
@@ -392,7 +402,7 @@ namespace EmbyIcons.Caching
                             return null;
                         }
 
-                        return CacheBitmapAndCreateImage(cache, baseFileName, bitmap);
+                        return CacheBitmapAndCreateImage(cache, baseFileName, ShrinkCustomIcon(bitmap));
                     }
                     catch (Exception ex)
                     {
@@ -452,8 +462,6 @@ namespace EmbyIcons.Caching
             _cacheMaintenanceTimer = null;
         }
 
-        public long EstimatedCacheBytes => _iconImageCache?.CurrentSize ?? 0;
-
         private void CompactCache()
         {
             try
@@ -479,4 +487,4 @@ namespace EmbyIcons.Caching
             return dict;
         }
     }
-}
+}

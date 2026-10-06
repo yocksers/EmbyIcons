@@ -69,15 +69,12 @@ namespace EmbyIcons.Services
                 ? new[] { "Series" }
                 : new[] { "Movie", Constants.Episode, "Audio" };
 
-            InternalItemsQuery CreateQuery() => new InternalItemsQuery
+            var allItems = LibraryItemPager.EnumeratePages(_libraryManager, () => new InternalItemsQuery
             {
                 IncludeItemTypes = includeTypes,
                 IsVirtualItem = false,
                 Recursive = true
-            };
-
-            var iconTypeUpper = iconType.ToUpperInvariant();
-            bool needsStreams = iconTypeUpper != "TAG" && iconTypeUpper != "PARENTALRATING" && iconTypeUpper != "SERIESSTATUS" && iconTypeUpper != "ORIGINALLANGUAGE";
+            }, 500, 5000).SelectMany(page => page);
             var matchingItems = new List<MediaItemInfo>();
 
             var options = Plugin.Instance?.GetConfiguredOptions();
@@ -98,17 +95,17 @@ namespace EmbyIcons.Services
                 }
             }
 
-            foreach (var item in LibraryItemPager.EnumerateAll(_libraryManager, CreateQuery, 1000))
+            foreach (var item in allItems)
             {
                 if (matchingItems.Count >= limit) break;
 
-                var streams = needsStreams ? (item.GetMediaStreams() ?? new List<MediaStream>()) : new List<MediaStream>();
-                if (needsStreams && streams.Count == 0)
+                var streams = item.GetMediaStreams() ?? new List<MediaStream>();
+                if (!streams.Any() && !iconType.Equals("Tag", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("ParentalRating", StringComparison.OrdinalIgnoreCase) && !iconType.Equals("SeriesStatus", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 bool matches = false;
 
-                switch (iconTypeUpper)
+                switch (iconType.ToUpperInvariant())
                 {
                     case "LANGUAGE":
                         matches = streams.Any(s => s.Type == MediaStreamType.Audio && 
@@ -294,8 +291,8 @@ namespace EmbyIcons.Services
             }
             catch (Exception ex)
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error extracting original language for '{item?.Name}': {ex.Message}");
+                if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
+                    Plugin.Instance.Logger.Debug($"[EmbyIcons] Error extracting original language for '{item?.Name}': {ex.Message}");
             }
 
             return null;

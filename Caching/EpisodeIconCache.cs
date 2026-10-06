@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using EmbyIcons.Helpers;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace EmbyIcons
@@ -12,57 +9,6 @@ namespace EmbyIcons
     {
         internal static volatile MemoryCache? _episodeIconCache;
         private static readonly object _episodeCacheInitLock = new object();
-
-        private const int StreamHashCacheSize = 20000;
-        private static volatile MemoryCache? _streamHashCache;
-
-        private sealed class StreamHashEntry
-        {
-            public long DateModifiedTicks { get; set; }
-            public string Hash { get; set; } = string.Empty;
-        }
-
-        private static MemoryCache GetStreamHashCache()
-        {
-            var cache = _streamHashCache;
-            if (cache != null) return cache;
-
-            lock (_episodeCacheInitLock)
-            {
-                return _streamHashCache ??= new MemoryCache(new MemoryCacheOptions { SizeLimit = StreamHashCacheSize });
-            }
-        }
-
-        internal static string GetCachedItemMediaStreamHash(BaseItem item)
-        {
-            var cache = GetStreamHashCache();
-            var ticks = item.DateModified.Ticks;
-
-            if (item.Id != Guid.Empty &&
-                cache.TryGetValue(item.Id, out StreamHashEntry? cached) &&
-                cached != null &&
-                cached.DateModifiedTicks == ticks)
-            {
-                return cached.Hash;
-            }
-
-            var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-            var hash = MediaStreamHelper.GetItemMediaStreamHashV2(item, streams);
-
-            if (item.Id != Guid.Empty)
-            {
-                try
-                {
-                    cache.Set(item.Id, new StreamHashEntry { DateModifiedTicks = ticks, Hash = hash },
-                        new MemoryCacheEntryOptions()
-                            .SetSize(1)
-                            .SetSlidingExpiration(TimeSpan.FromHours(EpisodeCacheSlidingExpirationHours)));
-                }
-                catch (ObjectDisposedException) { }
-            }
-
-            return hash;
-        }
 
         private static int MaxEpisodeCacheSize => Plugin.Instance?.Configuration.MaxEpisodeCacheSize ?? 2000;
         internal static int EpisodeCacheSlidingExpirationHours => Plugin.Instance?.Configuration.EpisodeCacheSlidingExpirationHours ?? 6;
@@ -110,17 +56,10 @@ namespace EmbyIcons
 
             EnsureEpisodeCacheInitialized();
             _episodeIconCache?.Remove(episodeId);
-            _streamHashCache?.Remove(episodeId);
-            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+            if (Plugin.Instance?.Configuration.EnableDebugLogging ?? false)
             {
                 _logger.Debug($"[EmbyIcons] Event handler cleared icon info cache for item ID: {episodeId}");
             }
-        }
-
-        internal static void ClearStreamHashCache()
-        {
-            var oldHashCache = Interlocked.Exchange(ref _streamHashCache, new MemoryCache(new MemoryCacheOptions { SizeLimit = StreamHashCacheSize }));
-            try { oldHashCache?.Dispose(); } catch { }
         }
 
         public void ClearAllEpisodeCaches()

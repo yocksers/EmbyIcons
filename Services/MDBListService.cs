@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using EmbyIcons.Compat;
 using EmbyIcons.Configuration;
 using MediaBrowser.Controller.Entities;
 
@@ -16,77 +19,206 @@ namespace EmbyIcons.Services
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        private static readonly Dictionary<string, CachedRatingData> _ratingsCache = new Dictionary<string, CachedRatingData>();
-        private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
+        private static readonly Dictionary<string, CachedRatingData> _ratingsCache = new Dictionary<string, CachedRatingData>(StringComparer.Ordinal);
+        private static readonly object _cacheGate = new object();
+        private static readonly ConcurrentDictionary<string, Lazy<Task<MDBListRatingData?>>> _inFlight = new ConcurrentDictionary<string, Lazy<Task<MDBListRatingData?>>>(StringComparer.Ordinal);
+        private static readonly ConcurrentDictionary<string, DateTime> _failedUntil = new ConcurrentDictionary<string, DateTime>(StringComparer.Ordinal);
         private static readonly SemaphoreSlim _httpConcurrencyLock = new SemaphoreSlim(4, 4);
-        private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
-        private static readonly TimeSpan NotFoundCacheExpiration = TimeSpan.FromHours(6);
-        private static readonly TimeSpan ErrorCacheExpiration = TimeSpan.FromMinutes(15);
-        private static Timer? _cacheCleanupTimer;
+        private static readonly TimeSpan CacheExpiration = TimeSpan.FromDays(7);
+        private static readonly TimeSpan FailureRetryInterval = TimeSpan.FromHours(1);
+        private static readonly TimeSpan MaintenanceInterval = TimeSpan.FromMinutes(5);
+        private const int MaxCacheEntries = 50000;
+        private const string DiskCacheFileName = "mdblist-ratings.json";
+        private const int DiskCacheFormatVersion = 1;
+        private static Timer? _maintenanceTimer;
         private static readonly object _timerLock = new object();
-        private const int MAX_CACHE_ENTRIES = 20000;
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<MDBListRatingData?>>> _inFlight = new();
+        private static readonly object _diskGate = new object();
+        private static bool _diskCacheLoaded;
+        private static bool _dirty;
 
         static MDBListService()
         {
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("EmbyIcons/1.0");
             lock (_timerLock)
             {
-                if (_cacheCleanupTimer == null)
+                if (_maintenanceTimer == null)
                 {
-                    _cacheCleanupTimer = new Timer(_ => PruneExpiredCacheEntries(), null, 
-                        TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+                    _maintenanceTimer = new Timer(_ => RunMaintenance(), null, MaintenanceInterval, MaintenanceInterval);
                 }
             }
         }
 
-        private static void PruneExpiredCacheEntries()
+        private static bool IsDiskCacheEnabled => Plugin.Instance?.Configuration.EnableMdbListDiskCache ?? false;
+
+        private static string? GetDiskCachePath()
+        {
+            var folder = Plugin.Instance?.DataFolderPath;
+            return string.IsNullOrWhiteSpace(folder) ? null : Path.Combine(folder, DiskCacheFileName);
+        }
+
+        private static void RunMaintenance()
         {
             try
             {
-                if (!_cacheLock.Wait(0)) return;
-                try
+                PruneCache();
+
+                if (IsDiskCacheEnabled)
                 {
-                    var now = DateTime.UtcNow;
-                    var keysToRemove = _ratingsCache
-                        .Where(kvp => now - kvp.Value.CachedAt > kvp.Value.Ttl)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-
-                    foreach (var key in keysToRemove)
-                    {
-                        _ratingsCache.Remove(key);
-                    }
-
-                    if (_ratingsCache.Count > MAX_CACHE_ENTRIES)
-                    {
-                        var oldestKeys = _ratingsCache
-                            .OrderBy(kvp => kvp.Value.CachedAt)
-                            .Take(_ratingsCache.Count - MAX_CACHE_ENTRIES)
-                            .Select(kvp => kvp.Key)
-                            .ToList();
-
-                        foreach (var key in oldestKeys)
-                        {
-                            _ratingsCache.Remove(key);
-                        }
-                    }
-
-                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                    {
-                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] MDBList cache pruned. Removed {keysToRemove.Count} expired entries. Current size: {_ratingsCache.Count}");
-                    }
-                }
-                finally
-                {
-                    _cacheLock.Release();
+                    SaveDiskCache();
                 }
             }
             catch (Exception ex)
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during MDBList cache cleanup: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error during MDBList cache maintenance: {ex.Message}");
+                }
+            }
+        }
+
+        private static void PruneCache()
+        {
+            var now = DateTime.UtcNow;
+            int removed = 0;
+
+            lock (_cacheGate)
+            {
+                var expiredKeys = _ratingsCache
+                    .Where(kvp => now - kvp.Value.CachedAt > CacheExpiration)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in expiredKeys)
+                {
+                    _ratingsCache.Remove(key);
+                }
+                removed += expiredKeys.Count;
+
+                if (_ratingsCache.Count > MaxCacheEntries)
+                {
+                    var oldestKeys = _ratingsCache
+                        .OrderBy(kvp => kvp.Value.CachedAt)
+                        .Take(_ratingsCache.Count - MaxCacheEntries)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+
+                    foreach (var key in oldestKeys)
+                    {
+                        _ratingsCache.Remove(key);
+                    }
+                    removed += oldestKeys.Count;
+                }
+
+                if (removed > 0)
+                {
+                    _dirty = true;
+                }
+            }
+
+            foreach (var failure in _failedUntil.Where(kvp => kvp.Value <= now).ToList())
+            {
+                ((ICollection<KeyValuePair<string, DateTime>>)_failedUntil).Remove(failure);
+            }
+
+            if (removed > 0 && Helpers.PluginHelper.IsDebugLoggingEnabled)
+            {
+                Plugin.Instance?.Logger.Debug($"[EmbyIcons] MDBList cache pruned {removed} entries.");
+            }
+        }
+
+        private static void EnsureDiskCacheLoaded()
+        {
+            if (_diskCacheLoaded || !IsDiskCacheEnabled) return;
+
+            lock (_diskGate)
+            {
+                if (_diskCacheLoaded) return;
+                _diskCacheLoaded = true;
+
+                var path = GetDiskCachePath();
+                if (path == null || !File.Exists(path)) return;
+
+                try
+                {
+                    MDBListDiskCacheFile? file;
+                    using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536))
+                    {
+                        file = JsonSerializer.Deserialize<MDBListDiskCacheFile>(stream);
+                    }
+                    if (file?.Entries == null || file.Version != DiskCacheFormatVersion) return;
+
+                    var now = DateTime.UtcNow;
+                    int loaded = 0;
+                    lock (_cacheGate)
+                    {
+                        foreach (var entry in file.Entries)
+                        {
+                            if (entry.Value?.Data == null || now - entry.Value.CachedAt > CacheExpiration) continue;
+                            if (_ratingsCache.ContainsKey(entry.Key)) continue;
+
+                            _ratingsCache[entry.Key] = entry.Value;
+                            loaded++;
+                        }
+                    }
+
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    {
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] Loaded {loaded} MDBList ratings from '{path}'.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Instance?.Logger.Warn($"[EmbyIcons] The saved MDBList ratings could not be read and will be rebuilt: {ex.Message}");
+                }
+            }
+        }
+
+        private static void SaveDiskCache()
+        {
+            lock (_diskGate)
+            {
+                Dictionary<string, CachedRatingData> snapshot;
+                lock (_cacheGate)
+                {
+                    if (!_dirty) return;
+                    snapshot = new Dictionary<string, CachedRatingData>(_ratingsCache, StringComparer.Ordinal);
+                    _dirty = false;
+                }
+
+                var path = GetDiskCachePath();
+                if (path == null) return;
+
+                var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536))
+                    {
+                        JsonSerializer.Serialize(stream, new MDBListDiskCacheFile { Version = DiskCacheFormatVersion, Entries = snapshot });
+                    }
+
+                    if (File.Exists(path))
+                    {
+                        File.Replace(tempPath, path, null);
+                    }
+                    else
+                    {
+                        File.Move(tempPath, path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lock (_cacheGate)
+                    {
+                        _dirty = true;
+                    }
+
+                    try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    {
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] Could not save MDBList ratings to '{path}': {ex.Message}");
+                    }
                 }
             }
         }
@@ -107,183 +239,150 @@ namespace EmbyIcons.Services
             var mediaType = item is MediaBrowser.Controller.Entities.Movies.Movie ? StringConstants.MediaTypeMovie : StringConstants.MediaTypeShow;
             var cacheKey = $"mdblist_{mediaType}_{tmdbId}";
 
-            await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
+            EnsureDiskCacheLoaded();
+
+            lock (_cacheGate)
             {
                 if (_ratingsCache.TryGetValue(cacheKey, out var cachedData))
                 {
-                    if (DateTime.UtcNow - cachedData.CachedAt < cachedData.Ttl)
+                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration)
                     {
                         return cachedData.Data;
                     }
-                    else
-                    {
-                        _ratingsCache.Remove(cacheKey);
-                    }
+
+                    _ratingsCache.Remove(cacheKey);
+                    _dirty = true;
                 }
+            }
+
+            if (_failedUntil.TryGetValue(cacheKey, out var retryAfter) && DateTime.UtcNow < retryAfter)
+            {
+                return null;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var fetch = _inFlight.GetOrAdd(cacheKey, key => new Lazy<Task<MDBListRatingData?>>(() => FetchAndStoreAsync(key, mediaType, tmdbId!, apiKey)));
+            try
+            {
+                return await fetch.Value.ConfigureAwait(false);
             }
             finally
             {
-                _cacheLock.Release();
+                ((ICollection<KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>>)_inFlight).Remove(new KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>(cacheKey, fetch));
             }
-
-            var fetch = _inFlight.GetOrAdd(cacheKey, key => new Lazy<Task<MDBListRatingData?>>(
-                () => FetchAndCacheAsync(key, mediaType, tmdbId!, apiKey),
-                LazyThreadSafetyMode.ExecutionAndPublication));
-
-            return await WaitWithCancellationAsync(fetch.Value, cancellationToken).ConfigureAwait(false);
         }
 
-        private static async Task<T> WaitWithCancellationAsync<T>(Task<T> task, CancellationToken cancellationToken)
+        private static async Task<MDBListRatingData?> FetchAndStoreAsync(string cacheKey, string mediaType, string tmdbId, string apiKey)
         {
-            if (task.IsCompleted || !cancellationToken.CanBeCanceled)
-            {
-                return await task.ConfigureAwait(false);
-            }
-
-            var cancelled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using (cancellationToken.Register(() => cancelled.TrySetResult(true)))
-            {
-                if (await Task.WhenAny(task, cancelled.Task).ConfigureAwait(false) != task)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-            }
-
-            return await task.ConfigureAwait(false);
-        }
-
-        private static async Task<MDBListRatingData?> FetchAndCacheAsync(string cacheKey, string mediaType, string tmdbId, string apiKey)
-        {
+            await _httpConcurrencyLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await _httpConcurrencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                try
-                {
                 var url = $"https://api.mdblist.com/tmdb/{mediaType}/{Uri.EscapeDataString(tmdbId)}?apikey={Uri.EscapeDataString(apiKey)}";
                 using var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
-                
-                using var response = await _httpClient.SendAsync(requestMessage, CancellationToken.None).ConfigureAwait(false);
+                using var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    var notFound = new MDBListRatingData();
+                    StoreResult(cacheKey, notFound);
+                    return notFound;
+                }
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, CancellationToken.None).ConfigureAwait(false);
+                    _failedUntil[cacheKey] = DateTime.UtcNow + FailureRetryInterval;
+                    if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                    {
+                        Plugin.Instance?.Logger.Debug($"[EmbyIcons] MDBList returned {(int)response.StatusCode} for {tmdbId}; retrying in {FailureRetryInterval.TotalMinutes:F0} minutes.");
+                    }
                     return null;
                 }
 
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var root = SimpleJson.Parse(content) as Dictionary<string, object?>;
+                var result = ParseRatings(content);
 
-                if (root == null || !root.TryGetValue("ratings", out var ratingsValue) || ratingsValue is not List<object?> ratingsArray)
-                {
-                    await StoreAsync(cacheKey, new MDBListRatingData(), NotFoundCacheExpiration, CancellationToken.None).ConfigureAwait(false);
-                    return null;
-                }
-
-                float? popcornScore = null;
-                int? popcornVotes = null;
-                float? myAnimeListScore = null;
-
-                foreach (var ratingValue in ratingsArray)
-                {
-                    if (ratingValue is not Dictionary<string, object?> rating)
-                        continue;
-
-                    if (!rating.TryGetValue("source", out var sourceValue) || sourceValue is not string sourceText)
-                        continue;
-
-                    var source = sourceText.ToLowerInvariant();
-
-                    if (source.Contains(StringConstants.MdbListPopcornSource) || source.Contains(StringConstants.MdbListAudienceSource))
-                    {
-                        if (rating.TryGetValue("value", out var valueRaw) && IsNumber(valueRaw))
-                        {
-                            popcornScore = (float)Convert.ToDouble(valueRaw, System.Globalization.CultureInfo.InvariantCulture);
-                        }
-
-                        if (rating.TryGetValue("votes", out var votesRaw) && IsNumber(votesRaw))
-                        {
-                            popcornVotes = Convert.ToInt32(votesRaw, System.Globalization.CultureInfo.InvariantCulture);
-                        }
-                    }
-                    else if (source.Contains(StringConstants.MdbListMyAnimeListSource) || source.Contains(StringConstants.MdbListMalSource))
-                    {
-                        if (rating.TryGetValue("value", out var valueRaw) && IsNumber(valueRaw))
-                        {
-                            myAnimeListScore = (float)Convert.ToDouble(valueRaw, System.Globalization.CultureInfo.InvariantCulture);
-                        }
-                    }
-                }
-
-                var result = new MDBListRatingData
-                {
-                    PopcornScore = popcornScore,
-                    PopcornVotes = popcornVotes,
-                    MyAnimeListScore = myAnimeListScore
-                };
-
-                await StoreAsync(cacheKey, result, CacheExpiration, CancellationToken.None).ConfigureAwait(false);
-
+                StoreResult(cacheKey, result);
+                _failedUntil.TryRemove(cacheKey, out _);
                 return result;
-                }
-                finally
-                {
-                    _httpConcurrencyLock.Release();
-                }
             }
             catch (Exception ex)
             {
+                _failedUntil[cacheKey] = DateTime.UtcNow + FailureRetryInterval;
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
-                    Plugin.Instance?.Logger.Info($"[EmbyIcons] Error fetching MDBList ratings for {tmdbId}: {ex.Message}");
+                    Plugin.Instance?.Logger.Debug($"[EmbyIcons] Error fetching MDBList ratings for {tmdbId}: {ex.Message}");
                 }
-
-                try { await StoreAsync(cacheKey, new MDBListRatingData(), ErrorCacheExpiration, CancellationToken.None).ConfigureAwait(false); }
-                catch { }
-
                 return null;
             }
             finally
             {
-                _inFlight.TryRemove(cacheKey, out _);
+                _httpConcurrencyLock.Release();
             }
         }
 
-        private static async Task StoreAsync(string cacheKey, MDBListRatingData data, TimeSpan ttl, CancellationToken cancellationToken)
+        private static MDBListRatingData ParseRatings(string content)
         {
-            await _cacheLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
+            using var jsonDoc = JsonDocument.Parse(content);
+            var root = jsonDoc.RootElement;
+
+            float? popcornScore = null;
+            int? popcornVotes = null;
+            float? myAnimeListScore = null;
+
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("ratings", out var ratingsArray) &&
+                ratingsArray.ValueKind == JsonValueKind.Array)
             {
-                if (_ratingsCache.Count >= MAX_CACHE_ENTRIES && !_ratingsCache.ContainsKey(cacheKey))
+                foreach (var rating in ratingsArray.EnumerateArray())
                 {
-                    string? oldestKey = null;
-                    var oldestTime = DateTime.MaxValue;
-                    foreach (var kvp in _ratingsCache)
+                    if (!rating.TryGetProperty("source", out var sourceElement))
+                        continue;
+
+                    var source = sourceElement.GetString()?.ToLowerInvariant() ?? string.Empty;
+
+                    if (source.Contains(StringConstants.MdbListPopcornSource) || source.Contains(StringConstants.MdbListAudienceSource))
                     {
-                        if (kvp.Value.CachedAt < oldestTime)
+                        if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
                         {
-                            oldestTime = kvp.Value.CachedAt;
-                            oldestKey = kvp.Key;
+                            popcornScore = (float)valueElement.GetDouble();
+                        }
+
+                        if (rating.TryGetProperty("votes", out var votesElement) && votesElement.ValueKind == JsonValueKind.Number)
+                        {
+                            popcornVotes = votesElement.GetInt32();
                         }
                     }
-
-                    if (oldestKey != null)
-                        _ratingsCache.Remove(oldestKey);
+                    else if (source.Contains(StringConstants.MdbListMyAnimeListSource) || source.Contains(StringConstants.MdbListMalSource))
+                    {
+                        if (rating.TryGetProperty("value", out var valueElement) && valueElement.ValueKind == JsonValueKind.Number)
+                        {
+                            myAnimeListScore = (float)valueElement.GetDouble();
+                        }
+                    }
                 }
+            }
 
+            return new MDBListRatingData
+            {
+                PopcornScore = popcornScore,
+                PopcornVotes = popcornVotes,
+                MyAnimeListScore = myAnimeListScore
+            };
+        }
+
+        private static void StoreResult(string cacheKey, MDBListRatingData data)
+        {
+            lock (_cacheGate)
+            {
                 _ratingsCache[cacheKey] = new CachedRatingData
                 {
                     Data = data,
-                    CachedAt = DateTime.UtcNow,
-                    Ttl = ttl
+                    CachedAt = DateTime.UtcNow
                 };
-            }
-            finally
-            {
-                _cacheLock.Release();
+                _dirty = true;
             }
         }
-
-        private static bool IsNumber(object? value) => value is long || value is double;
 
         private static string? GetTmdbId(BaseItem item)
         {
@@ -304,14 +403,20 @@ namespace EmbyIcons.Services
             {
                 try
                 {
-                    _cacheCleanupTimer?.Dispose();
-                    _cacheCleanupTimer = null;
+                    _maintenanceTimer?.Dispose();
+                    _maintenanceTimer = null;
                 }
                 catch { }
             }
 
-            try { _cacheLock.Dispose(); } catch { }
-            try { _httpConcurrencyLock.Dispose(); } catch { }
+            try
+            {
+                if (IsDiskCacheEnabled)
+                {
+                    SaveDiskCache();
+                }
+            }
+            catch { }
         }
     }
 
@@ -319,7 +424,6 @@ namespace EmbyIcons.Services
     {
         public MDBListRatingData Data { get; set; } = new MDBListRatingData();
         public DateTime CachedAt { get; set; }
-        public TimeSpan Ttl { get; set; }
     }
 
     internal class MDBListRatingData
@@ -327,5 +431,11 @@ namespace EmbyIcons.Services
         public float? PopcornScore { get; set; }
         public int? PopcornVotes { get; set; }
         public float? MyAnimeListScore { get; set; }
+    }
+
+    internal class MDBListDiskCacheFile
+    {
+        public int Version { get; set; }
+        public Dictionary<string, CachedRatingData> Entries { get; set; } = new Dictionary<string, CachedRatingData>();
     }
 }
