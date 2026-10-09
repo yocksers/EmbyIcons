@@ -1,3 +1,4 @@
+using EmbyIcons.Caching;
 using EmbyIcons.Configuration;
 using EmbyIcons.Helpers;
 using EmbyIcons.Models;
@@ -8,6 +9,7 @@ using MediaBrowser.Model.Querying;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -19,6 +21,7 @@ namespace EmbyIcons
         private static readonly KeyedAsyncLock<Guid> _albumAggregationLocks = new();
         private static int _albumAdditionsCounter = 0;
         private const int ALBUM_CACHE_SIZE_CHECK_FREQUENCY = 50;
+        private static readonly SummaryDiskStore<AlbumSummaryData> _albumSummaryStore = new("summaries-music.json");
 
         private static int MaxAlbumCacheSize => Plugin.Instance?.Configuration.MaxAlbumCacheSize ?? 2000;
 
@@ -32,6 +35,56 @@ namespace EmbyIcons
             public string? BitDepth { get; init; }
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
+            internal long LastUsedTicks;
+        }
+
+        internal sealed class AlbumSummaryData
+        {
+            public string[]? AudioLangs { get; set; }
+            public string[]? AudioCodecs { get; set; }
+            public string? ChannelType { get; set; }
+            public string? SampleRate { get; set; }
+            public string? AudioBitRate { get; set; }
+            public string? BitDepth { get; set; }
+            public List<FilenameBasedIconData>? FilenameBasedIcons { get; set; }
+        }
+
+        private static AlbumSummaryData ToSummaryData(AggregatedAlbumResult result) => new AlbumSummaryData
+        {
+            AudioLangs = SummaryStoreKeys.Pack(result.AudioLangs),
+            AudioCodecs = SummaryStoreKeys.Pack(result.AudioCodecs),
+            ChannelType = result.ChannelType,
+            SampleRate = result.SampleRate,
+            AudioBitRate = result.AudioBitRate,
+            BitDepth = result.BitDepth,
+            FilenameBasedIcons = result.FilenameBasedIcons.Count > 0 ? result.FilenameBasedIcons : null
+        };
+
+        private static AggregatedAlbumResult FromSummaryData(AlbumSummaryData data) => new AggregatedAlbumResult
+        {
+            Timestamp = DateTime.UtcNow,
+            LastUsedTicks = Stopwatch.GetTimestamp(),
+            AudioLangs = SummaryStoreKeys.Unpack(data.AudioLangs),
+            AudioCodecs = SummaryStoreKeys.Unpack(data.AudioCodecs),
+            ChannelType = data.ChannelType,
+            SampleRate = data.SampleRate,
+            AudioBitRate = data.AudioBitRate,
+            BitDepth = data.BitDepth,
+            FilenameBasedIcons = data.FilenameBasedIcons ?? new List<FilenameBasedIconData>()
+        };
+
+        private static AggregatedAlbumResult TouchAlbumResult(AggregatedAlbumResult result)
+        {
+            Volatile.Write(ref result.LastUsedTicks, Stopwatch.GetTimestamp());
+            return result;
+        }
+
+        private void CacheAlbumResult(Guid parentId, AggregatedAlbumResult result)
+        {
+            _albumAggregationCache.AddOrUpdate(parentId, result, (_, __) => result);
+
+            if (Interlocked.Increment(ref _albumAdditionsCounter) % ALBUM_CACHE_SIZE_CHECK_FREQUENCY == 0)
+                PruneAlbumAggregationCacheWithLimit();
         }
 
         private void PruneAlbumAggregationCacheWithLimit()
@@ -41,7 +94,9 @@ namespace EmbyIcons
 
             var toRemove = count - MaxAlbumCacheSize;
             var entries = _albumAggregationCache.ToArray();
-            Array.Sort(entries, (a, b) => a.Value.Timestamp.CompareTo(b.Value.Timestamp));
+            var lastUsed = new long[entries.Length];
+            for (int k = 0; k < entries.Length; k++) lastUsed[k] = Volatile.Read(ref entries[k].Value.LastUsedTicks);
+            Array.Sort(lastUsed, entries);
             var keysToRemove = new Guid[toRemove];
             for (int k = 0; k < toRemove; k++) keysToRemove[k] = entries[k].Key;
 
@@ -70,13 +125,13 @@ namespace EmbyIcons
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Using cached album aggregation for '{parent.Name}' ({parent.Id}).");
-                return cachedResult;
+                return TouchAlbumResult(cachedResult);
             }
 
             using (_albumAggregationLocks.Lock(parent.Id))
             {
                 if (_albumAggregationCache.TryGetValue(parent.Id, out cachedResult))
-                    return cachedResult;
+                    return TouchAlbumResult(cachedResult);
 
                 bool useLiteMode = profileOptions.UseMusicAlbumLiteMode;
 
@@ -98,6 +153,26 @@ namespace EmbyIcons
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _logger.Debug($"[EmbyIcons] No tracks found for '{parent.Name}'. Returning empty result without caching.");
                     return new AggregatedAlbumResult();
+                }
+
+                string? storeSignature = null;
+                string? storeFingerprint = null;
+                if (SummaryDiskStore<AlbumSummaryData>.IsEnabled)
+                {
+                    var globalOptions = Plugin.Instance?.GetConfiguredOptions();
+                    if (globalOptions != null)
+                    {
+                        storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
+                        storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
+                        if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
+                        {
+                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                                _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
+                            var restored = FromSummaryData(stored);
+                            CacheAlbumResult(parent.Id, restored);
+                            return restored;
+                        }
+                    }
                 }
 
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
@@ -251,6 +326,7 @@ namespace EmbyIcons
                 var result = new AggregatedAlbumResult
                 {
                     Timestamp               = DateTime.UtcNow,
+                    LastUsedTicks           = Stopwatch.GetTimestamp(),
                     AudioLangs              = checkAudioLangs   ? allAudioLangs      : new HashSet<string>(),
                     AudioCodecs             = checkAudioCodecs  ? commonAudioCodecs  : new HashSet<string>(),
                     ChannelType             = checkChannels     ? commonChannelType  : null,
@@ -260,10 +336,12 @@ namespace EmbyIcons
                     FilenameBasedIcons      = filenameBasedIconsList
                 };
 
-                _albumAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
+                CacheAlbumResult(parent.Id, result);
 
-                if (Interlocked.Increment(ref _albumAdditionsCounter) % ALBUM_CACHE_SIZE_CHECK_FREQUENCY == 0)
-                    PruneAlbumAggregationCacheWithLimit();
+                if (storeSignature != null && storeFingerprint != null)
+                {
+                    _albumSummaryStore.Set(parent.Id, storeSignature, storeFingerprint, ToSummaryData(result));
+                }
 
                 return result;
             }

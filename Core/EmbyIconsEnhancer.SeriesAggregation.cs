@@ -8,6 +8,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -21,6 +22,7 @@ namespace EmbyIcons
         private static int _additionsCounter = 0;
         private static readonly KeyedAsyncLock<Guid> _aggregationLocks = new();
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, Guid> _aggregatedParentIds = new();
+        private static readonly SummaryDiskStore<SeriesSummaryData> _seriesSummaryStore = new("summaries-tv.json");
 
         internal static bool TryGetAggregatedParentId(long internalId, out Guid parentId)
             => _aggregatedParentIds.TryGetValue(internalId, out parentId);
@@ -41,6 +43,83 @@ namespace EmbyIcons
             public HashSet<string> SourceIcons { get; init; } = new(StringComparer.OrdinalIgnoreCase);
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
+            internal long LastUsedTicks;
+        }
+
+        internal sealed class SeriesSummaryData
+        {
+            public string[]? AudioLangs { get; set; }
+            public string[]? SubtitleLangs { get; set; }
+            public string[]? ChannelTypes { get; set; }
+            public string[]? AudioCodecs { get; set; }
+            public string[]? VideoCodecs { get; set; }
+            public string[]? VideoFormats { get; set; }
+            public string[]? Resolutions { get; set; }
+            public string[]? AspectRatios { get; set; }
+            public string[]? SourceIcons { get; set; }
+            public List<FilenameBasedIconData>? FilenameBasedIcons { get; set; }
+        }
+
+        private static SeriesSummaryData ToSummaryData(AggregatedSeriesResult result) => new SeriesSummaryData
+        {
+            AudioLangs = SummaryStoreKeys.Pack(result.AudioLangs),
+            SubtitleLangs = SummaryStoreKeys.Pack(result.SubtitleLangs),
+            ChannelTypes = SummaryStoreKeys.Pack(result.ChannelTypes),
+            AudioCodecs = SummaryStoreKeys.Pack(result.AudioCodecs),
+            VideoCodecs = SummaryStoreKeys.Pack(result.VideoCodecs),
+            VideoFormats = SummaryStoreKeys.Pack(result.VideoFormats),
+            Resolutions = SummaryStoreKeys.Pack(result.Resolutions),
+            AspectRatios = SummaryStoreKeys.Pack(result.AspectRatios),
+            SourceIcons = SummaryStoreKeys.Pack(result.SourceIcons),
+            FilenameBasedIcons = result.FilenameBasedIcons.Count > 0 ? result.FilenameBasedIcons : null
+        };
+
+        private static AggregatedSeriesResult FromSummaryData(SeriesSummaryData data) => new AggregatedSeriesResult
+        {
+            Timestamp = DateTime.UtcNow,
+            LastUsedTicks = Stopwatch.GetTimestamp(),
+            AudioLangs = SummaryStoreKeys.Unpack(data.AudioLangs),
+            SubtitleLangs = SummaryStoreKeys.Unpack(data.SubtitleLangs),
+            ChannelTypes = SummaryStoreKeys.Unpack(data.ChannelTypes),
+            AudioCodecs = SummaryStoreKeys.Unpack(data.AudioCodecs),
+            VideoCodecs = SummaryStoreKeys.Unpack(data.VideoCodecs),
+            VideoFormats = SummaryStoreKeys.Unpack(data.VideoFormats),
+            Resolutions = SummaryStoreKeys.Unpack(data.Resolutions),
+            AspectRatios = SummaryStoreKeys.Unpack(data.AspectRatios),
+            SourceIcons = SummaryStoreKeys.Unpack(data.SourceIcons),
+            FilenameBasedIcons = data.FilenameBasedIcons ?? new List<FilenameBasedIconData>()
+        };
+
+        private static AggregatedSeriesResult TouchSeriesResult(AggregatedSeriesResult result)
+        {
+            Volatile.Write(ref result.LastUsedTicks, Stopwatch.GetTimestamp());
+            return result;
+        }
+
+        private List<string> GetKnownResolutionKeys(PluginOptions globalOptions)
+        {
+            var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
+            return globalOptions.IconLoadingMode switch
+            {
+                IconLoadingMode.CustomOnly => customResolutionKeys,
+                IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
+                _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
+            };
+        }
+
+        private void CacheSeriesResult(BaseItem parent, AggregatedSeriesResult result)
+        {
+            _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
+            if (parent.InternalId > 0)
+            {
+                _aggregatedParentIds[parent.InternalId] = parent.Id;
+            }
+
+            if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
+            {
+                PruneSeriesAggregationCacheWithLimit();
+            }
         }
 
         private void PruneSeriesAggregationCacheWithLimit()
@@ -52,7 +131,9 @@ namespace EmbyIcons
                 if (toRemove <= 0) return;
                 
                 var entries = _seriesAggregationCache.ToArray();
-                Array.Sort(entries, (a, b) => a.Value.Timestamp.CompareTo(b.Value.Timestamp));
+                var lastUsed = new long[entries.Length];
+                for (int k = 0; k < entries.Length; k++) lastUsed[k] = Volatile.Read(ref entries[k].Value.LastUsedTicks);
+                Array.Sort(lastUsed, entries);
                 var keysToRemove = new Guid[toRemove];
                 for (int k = 0; k < toRemove; k++) keysToRemove[k] = entries[k].Key;
                     
@@ -76,9 +157,9 @@ namespace EmbyIcons
 
             if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult))
             {
-                if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
+                if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
-                return cachedResult;
+                return TouchSeriesResult(cachedResult);
             }
 
             using (_aggregationLocks.Lock(parent.Id))
@@ -87,7 +168,7 @@ namespace EmbyIcons
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
-                    return cachedResult;
+                    return TouchSeriesResult(cachedResult);
                 }
 
                 bool useLiteMode;
@@ -178,6 +259,22 @@ namespace EmbyIcons
                     return new AggregatedSeriesResult();
                 }
 
+                string? storeSignature = null;
+                string? storeFingerprint = null;
+                if (SummaryDiskStore<SeriesSummaryData>.IsEnabled)
+                {
+                    storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, GetKnownResolutionKeys(globalOptions));
+                    storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
+                    if (_seriesSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
+                    {
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} item(s) are unchanged.");
+                        var restored = FromSummaryData(stored);
+                        CacheSeriesResult(parent, restored);
+                        return restored;
+                    }
+                }
+
                 bool checkAudioLangs = profileOptions.AudioIconAlignment != IconAlignment.Disabled;
                 bool checkSubLangs = profileOptions.SubtitleIconAlignment != IconAlignment.Disabled;
                 bool checkAudioCodecs = profileOptions.AudioCodecIconAlignment != IconAlignment.Disabled;
@@ -255,19 +352,22 @@ namespace EmbyIcons
                 string? commonResolution = null;
                 if (checkResolution)
                 {
-                    var customResolutionKeys = _iconCacheManager.GetAllAvailableIconKeys(globalOptions.IconsFolder).GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
-                    var embeddedResolutionKeys = _iconCacheManager.GetAllAvailableEmbeddedIconKeys().GetValueOrDefault(IconCacheManager.IconType.Resolution, new List<string>());
-                    knownResolutionKeys = globalOptions.IconLoadingMode switch
-                    {
-                        IconLoadingMode.CustomOnly => customResolutionKeys,
-                        IconLoadingMode.BuiltInOnly => embeddedResolutionKeys,
-                        _ => customResolutionKeys.Union(embeddedResolutionKeys, StringComparer.OrdinalIgnoreCase).ToList()
-                    };
+                    knownResolutionKeys = GetKnownResolutionKeys(globalOptions);
                     commonResolution = MediaStreamHelper.GetResolutionIconNameFromStream(firstVideoStream, knownResolutionKeys);
                 }
 
-                var processedStreams = checkVideoFormat ? new List<List<MediaStream>>(itemList.Count) : null;
-                processedStreams?.Add(firstStreams);
+                var seenVideoFormats = new HashSet<string>();
+                bool videoFormatSettled = true;
+                if (checkVideoFormat)
+                {
+                    var firstVideoFormat = MediaStreamHelper.GetVideoFormatIconName(firstItem, firstStreams);
+                    if (firstVideoFormat != null)
+                    {
+                        seenVideoFormats.Add(firstVideoFormat);
+                        videoFormatSettled = false;
+                    }
+                }
+
                 for (int i = 1; i < itemList.Count; i++)
                 {
                     bool allCommonExhausted =
@@ -277,7 +377,8 @@ namespace EmbyIcons
                         (!checkVideoCodecs || commonVideoCodecs.Count == 0) &&
                         (!checkChannels || commonChannelType == null) &&
                         (!checkAspectRatio || commonAspectRatio == null) &&
-                        (!checkResolution || commonResolution == null);
+                        (!checkResolution || commonResolution == null) &&
+                        videoFormatSettled;
 
                     if (allCommonExhausted)
                     {
@@ -288,8 +389,21 @@ namespace EmbyIcons
 
                     var item = itemList[i];
                     var streams = item.GetMediaStreams() ?? new List<MediaStream>();
-                    processedStreams?.Add(streams);
                     var videoStream = MediaStreamHelper.GetPrimaryVideoStream(streams);
+
+                    if (!videoFormatSettled)
+                    {
+                        var currentVideoFormat = MediaStreamHelper.GetVideoFormatIconName(item, streams);
+                        if (currentVideoFormat == null)
+                        {
+                            seenVideoFormats.Clear();
+                            videoFormatSettled = true;
+                        }
+                        else
+                        {
+                            seenVideoFormats.Add(currentVideoFormat);
+                        }
+                    }
 
                     if (checkAudioLangs)
                     {
@@ -335,30 +449,13 @@ namespace EmbyIcons
                 var finalAspectRatios = (checkAspectRatio && commonAspectRatio != null) ? new HashSet<string> { commonAspectRatio } : new HashSet<string>();
 
                 var finalVideoFormats = new HashSet<string>();
-                if (checkVideoFormat && itemList.Any())
+                if (seenVideoFormats.Count > 1)
                 {
-                    var fetched = processedStreams!;
-                    var hdrStates = new List<string?>(itemList.Count);
-                    for (int k = 0; k < fetched.Count; k++)
-                        hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], fetched[k]));
-                    for (int k = fetched.Count; k < itemList.Count; k++)
-                    {
-                        var s = itemList[k].GetMediaStreams() ?? new List<MediaStream>();
-                        hdrStates.Add(MediaStreamHelper.GetVideoFormatIconName(itemList[k], s));
-                    }
-
-                    if (!hdrStates.Contains(null))
-                    {
-                        var distinctFormats = hdrStates.Where(s => s != null).Distinct().ToList();
-                        if (distinctFormats.Count > 1)
-                        {
-                            finalVideoFormats.Add("hdr");
-                        }
-                        else if (distinctFormats.Count == 1)
-                        {
-                            finalVideoFormats.Add(distinctFormats.First()!);
-                        }
-                    }
+                    finalVideoFormats.Add("hdr");
+                }
+                else if (seenVideoFormats.Count == 1)
+                {
+                    finalVideoFormats.Add(seenVideoFormats.First());
                 }
 
                 var finalSourceIcons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -448,6 +545,7 @@ namespace EmbyIcons
                 var result = new AggregatedSeriesResult
                 {
                     Timestamp = DateTime.UtcNow,
+                    LastUsedTicks = Stopwatch.GetTimestamp(),
                     AudioLangs = finalAudioLangs,
                     SubtitleLangs = finalSubtitleLangs,
                     ChannelTypes = finalChannelTypes,
@@ -460,15 +558,11 @@ namespace EmbyIcons
                     FilenameBasedIcons = filenameBasedIconsList
                 };
 
-                _seriesAggregationCache.AddOrUpdate(parent.Id, result, (_, __) => result);
-                if (parent.InternalId > 0)
-                {
-                    _aggregatedParentIds[parent.InternalId] = parent.Id;
-                }
+                CacheSeriesResult(parent, result);
 
-                if (Interlocked.Increment(ref _additionsCounter) % CACHE_SIZE_CHECK_FREQUENCY == 0)
+                if (storeSignature != null && storeFingerprint != null)
                 {
-                    PruneSeriesAggregationCacheWithLimit();
+                    _seriesSummaryStore.Set(parent.Id, storeSignature, storeFingerprint, ToSummaryData(result));
                 }
 
                 return result;

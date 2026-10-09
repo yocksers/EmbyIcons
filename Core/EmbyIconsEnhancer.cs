@@ -95,6 +95,9 @@ namespace EmbyIcons
             _iconCacheManager = new IconCacheManager(_logger);
             _overlayDataService = new OverlayDataService(this, _libraryManager);
             _imageOverlayService = new ImageOverlayService(_logger, _iconCacheManager);
+
+            _seriesSummaryStore.StartLoading();
+            _albumSummaryStore.StartLoading();
         }
         public void EnsureTemplateCacheInitialized()
         {
@@ -140,6 +143,7 @@ namespace EmbyIcons
         {
             _logger.Info($"[EmbyIcons] Forcing full cache refresh for folder: '{iconsFolder}'");
             ClearAllItemDataCaches();
+            ClearSavedSummaries();
             ClearFavoriteCounts();
             _templateCache?.Clear();
             return _iconCacheManager.RefreshCacheOnDemandAsync(iconsFolder);
@@ -152,6 +156,19 @@ namespace EmbyIcons
             _aggregatedParentIds.Clear();
             ClearAllEpisodeCaches();
             _logger.Info("[EmbyIcons] Cleared all series, album, and episode data caches.");
+        }
+
+        internal static void ClearSavedSummaries()
+        {
+            _seriesSummaryStore.Clear();
+            _albumSummaryStore.Clear();
+        }
+
+        internal static void ForgetSavedSummary(Guid itemId)
+        {
+            if (itemId == Guid.Empty) return;
+            _seriesSummaryStore.Remove(itemId);
+            _albumSummaryStore.Remove(itemId);
         }
 
         public void InvalidateMovieProviderPathCache(BaseItem item)
@@ -661,6 +678,16 @@ namespace EmbyIcons
 
         internal static void CleanupStaticResources(ILogger? logger)
         {
+            try
+            {
+                _seriesSummaryStore.Dispose();
+                _albumSummaryStore.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug($"[EmbyIcons] Error saving summaries: {ex.Message}");
+            }
+
             try
             {
                 _seriesAggregationCache.Clear();

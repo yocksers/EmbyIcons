@@ -90,6 +90,7 @@ namespace EmbyIcons.Configuration
         public bool ForceDisableSkiaSharp { get; set; } = false;
         public string MDBListApiKey { get; set; } = string.Empty;
         public bool EnableMdbListDiskCache { get; set; } = true;
+        public bool EnableSummaryDiskCache { get; set; } = false;
         
         #endregion
 

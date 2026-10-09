@@ -484,6 +484,7 @@ namespace EmbyIcons
             if (e?.Item != null && e.Item.InternalId > 0)
             {
                 EmbyIconsEnhancer.ForgetAggregatedParent(e.Item.InternalId);
+                EmbyIconsEnhancer.ForgetSavedSummary(e.Item.Id);
             }
         }
 
@@ -606,6 +607,12 @@ namespace EmbyIcons
                 {
                     _logger.Info($"[EmbyIcons] Template caching setting changed to: {newOptions.EnableIconTemplateCaching}");
                     Enhancer.EnsureTemplateCacheInitialized();
+                }
+
+                if (oldOptions.EnableSummaryDiskCache && !newOptions.EnableSummaryDiskCache)
+                {
+                    EmbyIconsEnhancer.ClearSavedSummaries();
+                    _logger.Info("[EmbyIcons] Saved summaries turned off. The summary files were removed.");
                 }
             }
 

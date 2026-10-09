@@ -91,7 +91,7 @@ namespace EmbyIcons.Helpers
                 .OrderBy(s => s, StringComparer.Ordinal);
         }
 
-        private static string DataSignature(ProfileSettings? settings)
+        internal static string DataSignature(ProfileSettings? settings)
         {
             if (settings == null) return string.Empty;
 

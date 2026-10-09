@@ -12,12 +12,20 @@
 
         <div class="inputContainer" style="margin-top: 1.5em;">
             <input is="emby-input" type="number" label="Max Episode Cache Size:" min="100" max="50000" data-config-key="MaxEpisodeCacheSize" />
-            <div class="fieldDescription">Maximum number of episode icon data entries to cache. Default: 2000.</div>
+            <div class="fieldDescription">Maximum number of episode icon data entries to cache. Default: 10000.</div>
         </div>
 
         <div class="inputContainer" style="margin-top: 1.5em;">
             <input is="emby-input" type="number" label="Max Series Cache Size:" min="50" max="10000" data-config-key="MaxSeriesCacheSize" />
-            <div class="fieldDescription">Maximum number of series aggregation results to cache. Default: 500.</div>
+            <div class="fieldDescription">Maximum number of TV show, season and collection summaries to cache. When full, the summaries that haven't been needed for the longest time are removed first. Default: 5000.</div>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 1.5em;">
+            <label>
+                <input is="emby-checkbox" type="checkbox" data-config-key="EnableSummaryDiskCache" />
+                <span>Keep TV show, collection and album summaries on disk</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Saves the summaries to files in the plugin's data folder, so they survive Emby restarts. After a restart, a saved summary is only reused when the episodes or tracks it was built from are unchanged; otherwise it is rebuilt. This saves reading the media info of every episode again after each restart, which helps most with large TV libraries. The files are written at most every 5 minutes, and only when summaries changed. Turning this off deletes the files. Default: off.</div>
         </div>
 
         <div class="inputContainer" style="margin-top: 1.5em;">

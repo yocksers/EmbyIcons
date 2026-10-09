@@ -6,9 +6,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.61.1.4</Version>
-		<AssemblyVersion>5.61.1.4</AssemblyVersion>
-		<FileVersion>5.61.1.4</FileVersion>
+		<Version>5.61.1.5</Version>
+		<AssemblyVersion>5.61.1.5</AssemblyVersion>
+		<FileVersion>5.61.1.5</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**</DefaultItemExcludes>
 	</PropertyGroup>
