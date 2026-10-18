@@ -161,18 +161,15 @@ namespace EmbyIcons
                 string? storeFingerprint = null;
                 if (SummaryDiskStore<AlbumSummaryData>.IsEnabled)
                 {
-                    if (globalOptions != null)
+                    storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
+                    storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
+                    if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
                     {
-                        storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
-                        storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
-                        if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
-                        {
-                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                                _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
-                            var restored = FromSummaryData(stored) with { DataVersion = dataVersion };
-                            CacheAlbumResult(parent.Id, restored);
-                            return restored;
-                        }
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
+                        var restored = FromSummaryData(stored) with { DataVersion = dataVersion };
+                        CacheAlbumResult(parent.Id, restored);
+                        return restored;
                     }
                 }
 
