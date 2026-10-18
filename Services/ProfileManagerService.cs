@@ -25,6 +25,16 @@ namespace EmbyIcons.Services
         private MemoryCache _itemToProfileIdCache;
         private MemoryCache _collectionToProfileIdCache;
         private Timer? _cacheMaintenanceTimer;
+        private long _collectionGeneration;
+
+        private bool TryGetCollectionProfile(long id, out Guid profileId)
+        {
+            profileId = Guid.Empty;
+            if (!_collectionToProfileIdCache.TryGetValue(id, out (Guid Id, long Generation) cached) ||
+                cached.Generation != Volatile.Read(ref _collectionGeneration)) return false;
+            profileId = cached.Id;
+            return true;
+        }
 
         public ProfileManagerService(ILibraryManager libraryManager, ILogger logger, PluginOptions configuration)
         {
@@ -39,6 +49,41 @@ namespace EmbyIcons.Services
             var maintenanceInterval = TimeSpan.FromHours(Math.Max(0.5, configuration.CacheMaintenanceIntervalHours));
             _cacheMaintenanceTimer = new Timer(_ => CompactCaches(), null, maintenanceInterval, maintenanceInterval);
         }
+
+        // Cache-only path for image tags. Never build the trie or resolve collection members here.
+        public bool TryGetCachedProfile(BaseItem item, out IconProfile? profile)
+        {
+            profile = null;
+            if (item is BoxSet boxSet)
+            {
+                var mapping = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == boxSet.ParentId.ToString());
+                if (mapping != null)
+                {
+                    profile = _configuration.Profiles.FirstOrDefault(p => p.Id == mapping.ProfileId);
+                    return true;
+                }
+                if (!_configuration.EnableCollectionProfileLookup) return true;
+                if (!TryGetCollectionProfile(boxSet.InternalId, out Guid id)) return false;
+                profile = _configuration.Profiles.FirstOrDefault(p => p.Id == id);
+                return true;
+            }
+            var trie = _libraryPathTrie;
+            if (trie == null) return false;
+            if (string.IsNullOrEmpty(item.Path)) return false;
+            var libraryId = trie.FindLongestPrefix(item.Path);
+            var match = _configuration.LibraryProfileMappings.FirstOrDefault(m => m.LibraryId == libraryId);
+            if (match != null) profile = _configuration.Profiles.FirstOrDefault(p => p.Id == match.ProfileId);
+            return true;
+        }
+
+        public Task WarmLibraryPathsAsync() => Task.Run(() =>
+        {
+            try { GetOrCreateLibraryPathTrie(); }
+            catch (ObjectDisposedException) { }
+            catch (Exception ex) { _logger.Warn($"[EmbyIcons] Library profile warm-up will retry on image access: {ex.Message}"); }
+        });
+
+        internal void InvalidateCollectionProfiles() => Interlocked.Increment(ref _collectionGeneration);
 
         public void UseConfiguration(PluginOptions configuration)
         {
@@ -66,6 +111,7 @@ namespace EmbyIcons.Services
             var oldCollectionCache = Interlocked.Exchange(ref _collectionToProfileIdCache, new MemoryCache(new MemoryCacheOptions { SizeLimit = maxCollectionCacheSize }));
             try { oldCollectionCache?.Dispose(); } catch (Exception ex) { _logger.Debug($"[EmbyIcons] Error disposing old collection cache: {ex.Message}"); }
 
+            _ = WarmLibraryPathsAsync();
             _logger.Info("[EmbyIcons] Library path and item profile caches have been invalidated.");
         }
 
@@ -181,6 +227,7 @@ namespace EmbyIcons.Services
             catch (Exception ex)
             {
                 _logger.ErrorException("[EmbyIcons] CRITICAL: Failed to get virtual folders from LibraryManager.", ex);
+                throw;
             }
 
             return newTrie;
@@ -234,7 +281,7 @@ namespace EmbyIcons.Services
 
         public IconProfile? GetProfileForItem(BaseItem item)
         {
-            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
+            if (!(item is BoxSet) && item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
             {
                 if (cachedProfileId == Guid.Empty) return null; 
                 return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
@@ -251,12 +298,13 @@ namespace EmbyIcons.Services
                 }
                 else if (_configuration.EnableCollectionProfileLookup)
                 {
-                    if (_collectionToProfileIdCache.TryGetValue(boxSet.InternalId, out Guid cachedCollectionProfileId))
+                    if (TryGetCollectionProfile(boxSet.InternalId, out Guid cachedCollectionProfileId))
                     {
                         foundProfile = cachedCollectionProfileId == Guid.Empty ? null : _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedCollectionProfileId);
                     }
                     else
                     {
+                        var generation = Volatile.Read(ref _collectionGeneration);
                         var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
                         {
                             CollectionIds = new[] { boxSet.InternalId },
@@ -280,7 +328,7 @@ namespace EmbyIcons.Services
                         var cacheEntryOptions = new MemoryCacheEntryOptions()
                             .SetSize(1)
                             .SetSlidingExpiration(TimeSpan.FromHours(6));
-                        _collectionToProfileIdCache.Set(boxSet.InternalId, profileIdToCache, cacheEntryOptions);
+                        _collectionToProfileIdCache.Set(boxSet.InternalId, (profileIdToCache, generation), cacheEntryOptions);
                     }
                 }
                 else
@@ -293,7 +341,7 @@ namespace EmbyIcons.Services
                 foundProfile = GetProfileForPath(item.Path);
             }
 
-            if (item.Id != Guid.Empty)
+            if (!(item is BoxSet) && item.Id != Guid.Empty)
             {
                 var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
                 var cacheEntryOptions = new MemoryCacheEntryOptions()
@@ -308,7 +356,7 @@ namespace EmbyIcons.Services
 
         public async Task<IconProfile?> GetProfileForItemAsync(BaseItem item)
         {
-            if (item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
+            if (!(item is BoxSet) && item.Id != Guid.Empty && _itemToProfileIdCache.TryGetValue(item.Id, out Guid cachedProfileId))
             {
                 if (cachedProfileId == Guid.Empty) return null;
                 return _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedProfileId);
@@ -325,12 +373,13 @@ namespace EmbyIcons.Services
                 }
                 else if (_configuration.EnableCollectionProfileLookup)
                 {
-                    if (_collectionToProfileIdCache.TryGetValue(boxSet.InternalId, out Guid cachedCollectionProfileId))
+                    if (TryGetCollectionProfile(boxSet.InternalId, out Guid cachedCollectionProfileId))
                     {
                         foundProfile = cachedCollectionProfileId == Guid.Empty ? null : _configuration.Profiles?.FirstOrDefault(p => p.Id == cachedCollectionProfileId);
                     }
                     else
                     {
+                        var generation = Volatile.Read(ref _collectionGeneration);
                         var firstChild = _libraryManager.GetItemList(new InternalItemsQuery
                         {
                             CollectionIds = new[] { boxSet.InternalId },
@@ -354,7 +403,7 @@ namespace EmbyIcons.Services
                         var cacheEntryOptions = new MemoryCacheEntryOptions()
                             .SetSize(1)
                             .SetSlidingExpiration(TimeSpan.FromHours(6));
-                        _collectionToProfileIdCache.Set(boxSet.InternalId, profileIdToCache, cacheEntryOptions);
+                        _collectionToProfileIdCache.Set(boxSet.InternalId, (profileIdToCache, generation), cacheEntryOptions);
                     }
                 }
                 else
@@ -367,7 +416,7 @@ namespace EmbyIcons.Services
                 foundProfile = await GetProfileForPathAsync(item.Path).ConfigureAwait(false);
             }
 
-            if (item.Id != Guid.Empty)
+            if (!(item is BoxSet) && item.Id != Guid.Empty)
             {
                 var profileIdToCache = foundProfile?.Id ?? Guid.Empty;
                 var cacheEntryOptions = new MemoryCacheEntryOptions()

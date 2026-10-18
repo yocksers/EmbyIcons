@@ -126,7 +126,7 @@ namespace EmbyIcons.Helpers
             return _cache.GetOrAdd((profile.Id, (long)content), _ => Compute(profile.Settings, globalOptions, content));
         }
 
-        private static string Compute(ProfileSettings settings, PluginOptions globalOptions, DrawableContent content)
+        internal static string Compute(ProfileSettings settings, PluginOptions globalOptions, DrawableContent content)
         {
             var node = JsonSerializer.SerializeToNode(settings) as JsonObject ?? new JsonObject();
 

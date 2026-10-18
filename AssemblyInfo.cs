@@ -16,3 +16,5 @@ using System.Runtime.InteropServices;
 
 [assembly: AssemblyVersion("5.61.1.5")]
 [assembly: AssemblyFileVersion("5.61.1.5")]
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EmbyIcons.Tests")]

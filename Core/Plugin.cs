@@ -25,6 +25,27 @@ namespace EmbyIcons
 {
     public class Plugin : BasePlugin<PluginOptions>, IHasWebPages, IHasThumbImage, IDisposable
     {
+        internal Caching.ImageCacheState ImageState { get; private set; } = null!;
+        internal ImageKeyService ImageKeys { get; private set; } = null!;
+        internal bool TryGetCachedProfile(BaseItem item, out IconProfile? profile)
+        {
+            profile = null;
+            return _profileManagerLazy.IsValueCreated && ProfileManager.TryGetCachedProfile(item, out profile);
+        }
+        private int _imageCacheStarted;
+        internal void InitializeImageCache()
+        {
+            if (Interlocked.Exchange(ref _imageCacheStarted, 1) != 0) return;
+            Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(GetConfiguredOptions());
+            ImageProcessing.ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger);
+            _ = ProfileManager.WarmLibraryPathsAsync();
+            StartDependencyVerification();
+        }
+        private void StartDependencyVerification()
+        {
+            if (ImageKeys.NeedsVerification) ImageState.Start(_libraryManager);
+        }
         private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
         private readonly IUserManager _userManager;
@@ -121,6 +142,8 @@ namespace EmbyIcons
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
             Instance = this;
+            ImageState = new Caching.ImageCacheState(Path.Combine(appPaths.DataPath, "EmbyIcons"), _logger);
+            ImageKeys = new ImageKeyService(new PluginOptions(), ImageState);
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
@@ -234,6 +257,9 @@ namespace EmbyIcons
                     _logger.Info($"[EmbyIcons] Background migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
                     cancellationToken.ThrowIfCancellationRequested();
                     SaveConfiguration();
+                    ImageKeys.Configure(Configuration);
+                    StartDependencyVerification();
+                    ProfileManager.InvalidateLibraryCache();
 
                     lock (_migrationLock)
                     {
@@ -391,7 +417,7 @@ namespace EmbyIcons
         private void SubscribeLibraryEvents()
         {
             _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
-            _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
+            _libraryManager.ItemAdded += LibraryManagerOnItemAdded;
             _libraryManager.ItemRemoved += LibraryManagerOnItemRemoved;
             
             if (_userDataManager != null)
@@ -405,7 +431,7 @@ namespace EmbyIcons
             try { _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged; } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemUpdated: {ex.Message}"); }
             
-            try { _libraryManager.ItemAdded -= LibraryManagerOnItemChanged; } 
+            try { _libraryManager.ItemAdded -= LibraryManagerOnItemAdded; }
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemAdded: {ex.Message}"); }
             
             try { _libraryManager.ItemRemoved -= LibraryManagerOnItemRemoved; } 
@@ -479,7 +505,7 @@ namespace EmbyIcons
 
         private void LibraryManagerOnItemRemoved(object? sender, ItemChangeEventArgs e)
         {
-            LibraryManagerOnItemChanged(sender, e);
+            HandleItemChanged(e, removed: true);
 
             if (e?.Item != null && e.Item.InternalId > 0)
             {
@@ -488,12 +514,19 @@ namespace EmbyIcons
             }
         }
 
-        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
+        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e) => HandleItemChanged(e, removed: false);
+
+        private void LibraryManagerOnItemAdded(object? sender, ItemChangeEventArgs e) => HandleItemChanged(e, removed: false, added: true);
+
+        private void HandleItemChanged(ItemChangeEventArgs e, bool removed, bool added = false)
         {
             if (e?.Item == null) return;
             
             try
             {
+                if (e.Item is Video || e.Item is Series || e.Item is Season || e.Item is BoxSet)
+                    ProfileManager.InvalidateCollectionProfiles();
+                ImageState.Changed(e.Item, removed, added);
                 var enhancer = Enhancer;
                 
                 var rootFolder = _libraryManager.RootFolder;
@@ -583,6 +616,10 @@ namespace EmbyIcons
         {
             SaveConfiguration();
             Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(Configuration);
+            StartDependencyVerification();
+            ProfileManager.UseConfiguration(Configuration);
+            ProfileManager.InvalidateLibraryCache();
 
             if (_enhancerLazy.IsValueCreated)
             {
@@ -600,6 +637,8 @@ namespace EmbyIcons
             newOptions.PersistedVersion = Configuration.PersistedVersion;
             base.UpdateConfiguration(newOptions);
             Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(newOptions);
+            StartDependencyVerification();
 
             if (oldOptions != null)
             {
@@ -626,21 +665,19 @@ namespace EmbyIcons
 
             IconManagerService.InvalidateCache();
 
-            if (profileLookupChanged || !_profileManagerLazy.IsValueCreated)
+            if (_profileManagerLazy.IsValueCreated)
             {
-                if (_profileManagerLazy.IsValueCreated)
-                {
-                    ProfileManager.InvalidateLibraryCache();
-                }
+                ProfileManager.UseConfiguration(newOptions);
+                if (profileLookupChanged) ProfileManager.InvalidateLibraryCache();
+            }
+            else
+            {
                 _profileManagerLazy = new Lazy<ProfileManagerService>(
                     () => new ProfileManagerService(_libraryManager, _logger, newOptions),
                     LazyThreadSafetyMode.ExecutionAndPublication);
             }
-            else
-            {
-                ProfileManager.UseConfiguration(newOptions);
-            }
 
+            _ = ProfileManager.WarmLibraryPathsAsync();
             _logger.Info("[EmbyIcons] Configuration saved. Only images whose look is affected by the changes will be redrawn as they are viewed.");
         }
 
@@ -753,6 +790,7 @@ namespace EmbyIcons
                 _logger?.Debug($"[EmbyIcons] Error disposing background tasks CTS: {ex.Message}");
             }
             
+            ImageState.Dispose();
             CleanupStaticResources(_logger);
             
             Instance = null;

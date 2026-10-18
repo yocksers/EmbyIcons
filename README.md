@@ -82,6 +82,22 @@ Fine-tune cache sizes, expiration times, concurrency, and MDBList API key. Defau
 
 ---
 
+## Image tags and rendering
+
+Media-list image tags use cached profile information, precomputed settings keys, and input revisions. They do not query episodes, read media streams, scan icon directories, or fetch MDBList ratings. Actual image requests and the pre-draw task share the normal rendering path; parent-only overlays such as ratings and parental ratings skip child aggregation there as well.
+
+Library paths are warmed after Emby assigns the plugin's startup information. An unresolved collection is treated conservatively until an actual image request resolves its profile. Collection keys stay stable when the profile cache is evicted. Media changes advance revisions for the affected TV parents; collection, music, and multi-version movie dependencies use conservative domain revisions so moved or removed members cannot leave stale aggregates behind.
+
+Input revisions are stored in `EmbyIcons/image-input-versions.json` under Emby's data directory. When profiles use collections, child aggregation, or multi-version filename rules, a background check reads media IDs and metadata in batches of 500, without reading media streams, before reusing saved dependency revisions. Requests do not wait for verification. Changed libraries, invalid state, or more than 500,000 tracked items fall back to safe session revisions; early requests may therefore cause images to be rebuilt. The new `ei11` key format also rebuilds older enhanced images as they are viewed. MDBList image keys use stable, per-work seven-day intervals, matching the ratings-cache refresh boundary.
+
+The renderer, previews, troubleshooting tools, and pre-draw task retain their existing roles. First-time image rendering still incurs the required data and drawing work. Settings keys conservatively include potentially drawable content, so some settings changes may invalidate more images than the previous content-derived keys. Collection images and child-derived music overlays are invalidated once per server session: ordinary item timestamps cannot prove that collection/artist link tables stayed unchanged during a restart. Verified TV and multi-version movie dependency revisions can be reused across restarts.
+
+To run the offline regression suite with the .NET 8 SDK:
+
+```sh
+dotnet test Tests/EmbyIcons.Tests.csproj --configuration Release
+```
+
 ## Acknowledgements
 Many thanks to **Neminem**, **keitaro26**, **Bakes82**, and everyone from the Emby Community forum. Shoutout to **Craggles** for the default icons.
 
