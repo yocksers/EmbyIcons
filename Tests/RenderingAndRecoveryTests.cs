@@ -121,13 +121,15 @@ namespace EmbyIcons.Tests
             var newSeries = new Series { InternalId = 800 };
             var episode = new Episode { InternalId = 701, ParentId = 702, SeriesId = 700 };
             using var state = ImageQueryTests.NewState();
-            state.Start(ImageQueryTests.Inventory(oldSeries, newSeries, episode).Object);
-            await state.Initialization!;
-            var settings = new ProfileSettings();
+            var settings = ImageQueryTests.RatingsOnly(); settings.AudioIconAlignment = IconAlignment.TopLeft;
+            state.Inspect = (item, _, _, _) => Task.FromResult(new ImageCacheState.Inspection { Fingerprint = item.InternalId == episode.SeriesId ? "member" : "empty", Dependencies = item.InternalId == episode.SeriesId ? new long[] { 701 } : Array.Empty<long>() });
             var beforeOld = state.GetDataVersion(oldSeries, settings);
             var beforeNew = state.GetDataVersion(newSeries, settings);
+            state.Observed(oldSeries, settings, new ImageCacheState.Inspection { Fingerprint = "member", Dependencies = new long[] { 701 } }, 0, true);
+            state.Observed(newSeries, settings, new ImageCacheState.Inspection { Fingerprint = "empty" }, 0, true);
+            state.Start(ImageQueryTests.Inventory(oldSeries, newSeries, episode).Object); await state.Initialization!;
             episode.ParentId = 802; episode.SeriesId = 800;
-            state.Changed(episode);
+            state.Changed(episode); await state.VerifyPendingAsync();
             Assert.NotEqual(beforeOld, state.GetDataVersion(oldSeries, settings));
             Assert.NotEqual(beforeNew, state.GetDataVersion(newSeries, settings));
         }
@@ -155,21 +157,22 @@ namespace EmbyIcons.Tests
             using var h = await ImageQueryTests.Harness.Create();
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
-            var library = ImageQueryTests.Inventory();
-            library.Setup(x => x.GetInternalItemIds(It.IsAny<InternalItemsQuery>())).Returns(() =>
+            var series = new Series { InternalId = 901 };
+            var library = ImageQueryTests.Inventory(series);
+            library.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>(), It.IsAny<CancellationToken>())).Returns(() =>
             {
                 entered.Set();
                 if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
-                return Array.Empty<long>();
+                return new BaseItem[] { series };
             });
             using var state = ImageQueryTests.NewState();
+            var keys = new ImageKeyService(h.Options, state);
+            var before = keys.GetKey(series, ImageType.Primary, null, false);
             state.Start(library.Object);
             Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
             try
             {
-                var keys = new ImageKeyService(h.Options, state);
-                var series = new Series { InternalId = 901 };
-                for (int i = 0; i < 100; i++) Assert.StartsWith("ei11_", keys.GetKey(series, ImageType.Primary, null, false));
+                for (int i = 0; i < 100; i++) Assert.Equal(before, keys.GetKey(series, ImageType.Primary, null, false));
             }
             finally { release.Set(); await state.Initialization!; }
         }

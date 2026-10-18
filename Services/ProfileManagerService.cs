@@ -83,6 +83,11 @@ namespace EmbyIcons.Services
             catch (Exception ex) { _logger.Warn($"[EmbyIcons] Library profile warm-up will retry on image access: {ex.Message}"); }
         });
 
+        internal void InvalidateItemProfile(BaseItem item)
+        {
+            if (item.Id != Guid.Empty) _itemToProfileIdCache.Remove(item.Id);
+        }
+
         internal void InvalidateCollectionProfiles() => Interlocked.Increment(ref _collectionGeneration);
 
         public void UseConfiguration(PluginOptions configuration)

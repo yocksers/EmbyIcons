@@ -119,7 +119,7 @@ namespace EmbyIcons
 
         internal AggregatedAlbumResult GetOrBuildAggregatedDataForAlbum(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
-            var dataVersion = (Plugin.Instance?.ImageState.GetDataVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
+            var dataVersion = (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
             if (parent.Id == Guid.Empty)
                 return new AggregatedAlbumResult();
 
@@ -163,7 +163,7 @@ namespace EmbyIcons
                 {
                     storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
                     storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
-                    if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
+                    if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored, SummaryStoreKeys.GetCompatibleSignatures(profileOptions, globalOptions, null)) && stored != null)
                     {
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
@@ -335,7 +335,7 @@ namespace EmbyIcons
                     FilenameBasedIcons      = filenameBasedIconsList
                 };
 
-                if (dataVersion != (Plugin.Instance?.ImageState.GetDataVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
+                if (dataVersion != (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
                     return result;
 
                 CacheAlbumResult(parent.Id, result);

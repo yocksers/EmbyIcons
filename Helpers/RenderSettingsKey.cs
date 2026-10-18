@@ -2,6 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Model.Entities;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EmbyIcons.Configuration;
@@ -126,7 +134,7 @@ namespace EmbyIcons.Helpers
             return _cache.GetOrAdd((profile.Id, (long)content), _ => Compute(profile.Settings, globalOptions, content));
         }
 
-        internal static string Compute(ProfileSettings settings, PluginOptions globalOptions, DrawableContent content)
+        private static JsonObject BuildNode(ProfileSettings settings, DrawableContent content)
         {
             var node = JsonSerializer.SerializeToNode(settings) as JsonObject ?? new JsonObject();
 
@@ -154,6 +162,12 @@ namespace EmbyIcons.Helpers
                 }
             }
 
+            return node;
+        }
+
+        internal static string Compute(ProfileSettings settings, PluginOptions globalOptions, DrawableContent content)
+        {
+            var node = BuildNode(settings, content);
             var text = new StringBuilder(node.ToJsonString())
                 .Append('|').Append(globalOptions.IconsFolder ?? string.Empty)
                 .Append('|').Append((int)globalOptions.IconLoadingMode)
@@ -166,6 +180,135 @@ namespace EmbyIcons.Helpers
             using var md5 = MD5.Create();
             var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(text));
             return BitConverter.ToString(hash, 0, 8).Replace("-", string.Empty).ToLowerInvariant();
+        }
+
+        // Deliberate compatibility contract. New options enter image invalidation only
+        // after their rendering effect is reviewed; JSON property order is irrelevant.
+        private const string RenderCompatibilityVersion = "1";
+
+        private static readonly HashSet<string> VisualProperties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(ProfileSettings.EnableForPosters), nameof(ProfileSettings.EnableForThumbs), nameof(ProfileSettings.EnableForBanners),
+            nameof(ProfileSettings.NormalizePosterAspectRatio), nameof(ProfileSettings.NormalizeThumbAspectRatio), nameof(ProfileSettings.NormalizeBannerAspectRatio),
+            nameof(ProfileSettings.NormalizeMusicPosterAspectRatio), nameof(ProfileSettings.ShowOverlaysForEpisodes), nameof(ProfileSettings.ShowOverlaysForSeasons),
+            nameof(ProfileSettings.ShowSeriesIconsIfAllEpisodesHaveLanguage), nameof(ProfileSettings.ExcludeSpecialsFromSeriesAggregation), nameof(ProfileSettings.ShowCollectionIconsIfAllChildrenHaveLanguage),
+            nameof(ProfileSettings.UseCollectionLiteMode), nameof(ProfileSettings.EnableMusicAlbumAggregation), nameof(ProfileSettings.UseMusicAlbumLiteMode),
+            nameof(ProfileSettings.AudioIconAlignment), nameof(ProfileSettings.AudioOverlayHorizontal), nameof(ProfileSettings.AudioIconPriority),
+            nameof(ProfileSettings.SubtitleIconAlignment), nameof(ProfileSettings.SubtitleOverlayHorizontal), nameof(ProfileSettings.SubtitleIconPriority),
+            nameof(ProfileSettings.ChannelIconAlignment), nameof(ProfileSettings.ChannelOverlayHorizontal), nameof(ProfileSettings.ChannelIconPriority),
+            nameof(ProfileSettings.AudioCodecIconAlignment), nameof(ProfileSettings.AudioCodecOverlayHorizontal), nameof(ProfileSettings.AudioCodecIconPriority),
+            nameof(ProfileSettings.VideoFormatIconAlignment), nameof(ProfileSettings.VideoFormatOverlayHorizontal), nameof(ProfileSettings.VideoFormatIconPriority),
+            nameof(ProfileSettings.VideoCodecIconAlignment), nameof(ProfileSettings.VideoCodecOverlayHorizontal), nameof(ProfileSettings.VideoCodecIconPriority),
+            nameof(ProfileSettings.TagIconAlignment), nameof(ProfileSettings.TagOverlayHorizontal), nameof(ProfileSettings.TagIconPriority),
+            nameof(ProfileSettings.ResolutionIconAlignment), nameof(ProfileSettings.ResolutionOverlayHorizontal), nameof(ProfileSettings.ResolutionIconPriority),
+            nameof(ProfileSettings.CommunityScoreIconAlignment), nameof(ProfileSettings.CommunityScoreOverlayHorizontal), nameof(ProfileSettings.CommunityScoreIconPriority),
+            nameof(ProfileSettings.RottenTomatoesScoreIconAlignment), nameof(ProfileSettings.RottenTomatoesScoreOverlayHorizontal), nameof(ProfileSettings.RottenTomatoesScoreIconPriority),
+            nameof(ProfileSettings.RottenTomatoesScoreBackgroundShape), nameof(ProfileSettings.RottenTomatoesScoreBackgroundColor), nameof(ProfileSettings.RottenTomatoesScoreBackgroundOpacity),
+            nameof(ProfileSettings.PopcornScoreIconAlignment), nameof(ProfileSettings.PopcornScoreOverlayHorizontal), nameof(ProfileSettings.PopcornScoreIconPriority),
+            nameof(ProfileSettings.PopcornScoreBackgroundShape), nameof(ProfileSettings.PopcornScoreBackgroundColor), nameof(ProfileSettings.PopcornScoreBackgroundOpacity),
+            nameof(ProfileSettings.MyAnimeListScoreIconAlignment), nameof(ProfileSettings.MyAnimeListScoreOverlayHorizontal), nameof(ProfileSettings.MyAnimeListScoreIconPriority),
+            nameof(ProfileSettings.MyAnimeListScoreBackgroundShape), nameof(ProfileSettings.MyAnimeListScoreBackgroundColor), nameof(ProfileSettings.MyAnimeListScoreBackgroundOpacity),
+            nameof(ProfileSettings.AspectRatioIconAlignment), nameof(ProfileSettings.AspectRatioOverlayHorizontal), nameof(ProfileSettings.AspectRatioIconPriority),
+            nameof(ProfileSettings.SnapAspectRatioToCommon), nameof(ProfileSettings.ParentalRatingIconAlignment), nameof(ProfileSettings.ParentalRatingOverlayHorizontal),
+            nameof(ProfileSettings.ParentalRatingIconPriority), nameof(ProfileSettings.SourceIconAlignment), nameof(ProfileSettings.SourceOverlayHorizontal),
+            nameof(ProfileSettings.SourceIconPriority), nameof(ProfileSettings.FavoriteCountIconAlignment), nameof(ProfileSettings.FavoriteCountOverlayHorizontal),
+            nameof(ProfileSettings.FavoriteCountIconPriority), nameof(ProfileSettings.FavoriteCountBackgroundShape), nameof(ProfileSettings.FavoriteCountBackgroundColor),
+            nameof(ProfileSettings.FavoriteCountBackgroundOpacity), nameof(ProfileSettings.FrameRateIconAlignment), nameof(ProfileSettings.FrameRateOverlayHorizontal),
+            nameof(ProfileSettings.FrameRateIconPriority), nameof(ProfileSettings.SnapFrameRateToCommon), nameof(ProfileSettings.OriginalLanguageIconAlignment),
+            nameof(ProfileSettings.OriginalLanguageOverlayHorizontal), nameof(ProfileSettings.OriginalLanguageIconPriority), nameof(ProfileSettings.SeriesStatusIconAlignment),
+            nameof(ProfileSettings.SeriesStatusOverlayHorizontal), nameof(ProfileSettings.SeriesStatusIconPriority), nameof(ProfileSettings.SampleRateIconAlignment),
+            nameof(ProfileSettings.SampleRateOverlayHorizontal), nameof(ProfileSettings.SampleRateIconPriority), nameof(ProfileSettings.AudioBitRateIconAlignment),
+            nameof(ProfileSettings.AudioBitRateOverlayHorizontal), nameof(ProfileSettings.AudioBitRateIconPriority), nameof(ProfileSettings.BitDepthIconAlignment),
+            nameof(ProfileSettings.BitDepthOverlayHorizontal), nameof(ProfileSettings.BitDepthIconPriority), nameof(ProfileSettings.CommunityScoreBackgroundShape),
+            nameof(ProfileSettings.CommunityScoreBackgroundColor), nameof(ProfileSettings.CommunityScoreBackgroundOpacity), nameof(ProfileSettings.IconSize),
+            nameof(ProfileSettings.TopLeftIconSize), nameof(ProfileSettings.TopRightIconSize), nameof(ProfileSettings.BottomLeftIconSize),
+            nameof(ProfileSettings.BottomRightIconSize), nameof(ProfileSettings.IconSpacing), nameof(ProfileSettings.EdgePaddingHorizontal),
+            nameof(ProfileSettings.EdgePaddingVertical), nameof(ProfileSettings.TopLeftHorizontalPadding), nameof(ProfileSettings.TopLeftVerticalPadding),
+            nameof(ProfileSettings.TopRightHorizontalPadding), nameof(ProfileSettings.TopRightVerticalPadding), nameof(ProfileSettings.BottomLeftHorizontalPadding),
+            nameof(ProfileSettings.BottomLeftVerticalPadding), nameof(ProfileSettings.BottomRightHorizontalPadding), nameof(ProfileSettings.BottomRightVerticalPadding),
+            nameof(ProfileSettings.RatingFontSizeMultiplier), nameof(ProfileSettings.RatingPercentageSuffix), nameof(ProfileSettings.RatingTextVerticalOffset),
+            nameof(ProfileSettings.EnableTopIconBar), nameof(ProfileSettings.TopIconBarHeight), nameof(ProfileSettings.TopIconBarColor),
+            nameof(ProfileSettings.TopIconBarOpacity), nameof(ProfileSettings.TopIconBarOverlay), nameof(ProfileSettings.EnableBottomIconBar),
+            nameof(ProfileSettings.BottomIconBarHeight), nameof(ProfileSettings.BottomIconBarColor), nameof(ProfileSettings.BottomIconBarOpacity),
+            nameof(ProfileSettings.BottomIconBarOverlay), nameof(ProfileSettings.OnlyDrawBarsWhenIconsPresent), nameof(ProfileSettings.UseSeriesLiteMode),
+            nameof(ProfileSettings.FilenameBasedIcons), nameof(ProfileSettings.TagBasedIcons), nameof(ProfileSettings.SafeZones),
+        };
+
+        internal static string ComputeStable(ProfileSettings settings, PluginOptions options, DrawableContent content, BaseItem item, ImageType type)
+        {
+            var node = BuildNode(settings, content);
+            foreach (string name in node.Select(p => p.Key).ToArray())
+                if (!VisualProperties.Contains(name)) node.Remove(name);
+            foreach (string name in VisualProperties.Where(n => n.EndsWith("IconAlignment", StringComparison.Ordinal)))
+            {
+                bool disabled = !node.TryGetPropertyValue(name, out var alignment) || alignment == null || alignment.GetValue<int>() == (int)IconAlignment.Disabled;
+                if (!disabled) continue;
+                string prefix = name.Substring(0, name.Length - "IconAlignment".Length);
+                foreach (string suffix in new[] { "OverlayHorizontal", "IconPriority", "BackgroundShape", "BackgroundColor", "BackgroundOpacity" })
+                    node.Remove(prefix + suffix);
+            }
+            if (!OverlayRequirements.VideoChildren(item, settings))
+                foreach (string name in new[] { nameof(ProfileSettings.UseSeriesLiteMode), nameof(ProfileSettings.ExcludeSpecialsFromSeriesAggregation),
+                    nameof(ProfileSettings.ShowSeriesIconsIfAllEpisodesHaveLanguage), nameof(ProfileSettings.UseCollectionLiteMode),
+                    nameof(ProfileSettings.ShowCollectionIconsIfAllChildrenHaveLanguage) }) node.Remove(name);
+            if (!(item is MusicAlbum || item is MusicArtist) || !OverlayRequirements.MusicChildren(item, settings))
+                foreach (string name in new[] { nameof(ProfileSettings.EnableMusicAlbumAggregation), nameof(ProfileSettings.UseMusicAlbumLiteMode) }) node.Remove(name);
+            node["FilenameBasedIcons"] = JsonSerializer.SerializeToNode(settings.FilenameBasedIcons.Where(m =>
+                m.IconAlignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(m.Keyword) && !string.IsNullOrWhiteSpace(m.IconName) &&
+                (item is Movie ? m.ApplyToMovies : item is Episode ? m.ApplyToEpisodes :
+                 item is Series ? m.ApplyToSeries || m.ApplyToEpisodes : item is Season ? m.ApplyToSeasons || m.ApplyToEpisodes :
+                 item is Audio ? m.ApplyToTracks : item is MusicAlbum ? m.ApplyToAlbums || (settings.EnableMusicAlbumAggregation && m.ApplyToTracks) :
+                 item is MusicArtist && (m.ApplyToArtists || (settings.EnableMusicAlbumAggregation && (m.ApplyToAlbums || m.ApplyToTracks))))).ToArray());
+            node["TagBasedIcons"] = JsonSerializer.SerializeToNode(settings.TagBasedIcons.Where(m =>
+                m.IconAlignment != IconAlignment.Disabled && !string.IsNullOrWhiteSpace(m.TagName) &&
+                (item is Movie ? m.ApplyToMovies : item is Episode ? m.ApplyToEpisodes : item is Audio ? m.ApplyToTracks :
+                 item is MusicAlbum ? m.ApplyToAlbums : !(item is MusicArtist) || m.ApplyToArtists)).ToArray());
+            TrimTargetFlags(node["FilenameBasedIcons"], item, settings, false);
+            TrimTargetFlags(node["TagBasedIcons"], item, settings, true);
+            node["RenderCompatibility"] = RenderCompatibilityVersion;
+            node["Supported"] = OverlayRequirements.Supports(item, type, settings);
+            node["IconsFolder"] = options.IconsFolder ?? string.Empty;
+            node["IconLoadingMode"] = (int)options.IconLoadingMode;
+            node["OutputFormat"] = (int)options.OutputFormat;
+            node["JpegQuality"] = options.JpegQuality;
+            node["MaxRenderDimension"] = options.MaxRenderDimension;
+            node["EnableImageSmoothing"] = options.EnableImageSmoothing;
+            node["ManualRefresh"] = options.PersistedVersion;
+            using var document = JsonDocument.Parse(node.ToJsonString());
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream)) WriteCanonical(writer, document.RootElement);
+            return ImageInputProjection.Hash(Encoding.UTF8.GetString(stream.ToArray()));
+        }
+
+        private static void TrimTargetFlags(JsonNode? value, BaseItem item, ProfileSettings settings, bool tags)
+        {
+            if (!(value is JsonArray array)) return;
+            var flags = item is Movie ? new[] { "ApplyToMovies" } : item is Episode ? new[] { "ApplyToEpisodes" } :
+                item is Audio ? new[] { "ApplyToTracks" } : item is MusicAlbum ?
+                    (!tags && settings.EnableMusicAlbumAggregation ? new[] { "ApplyToAlbums", "ApplyToTracks" } : new[] { "ApplyToAlbums" }) :
+                item is MusicArtist ? (!tags && settings.EnableMusicAlbumAggregation ? new[] { "ApplyToArtists", "ApplyToAlbums", "ApplyToTracks" } : new[] { "ApplyToArtists" }) :
+                !tags && item is Series ? new[] { "ApplyToSeries", "ApplyToEpisodes" } :
+                !tags && item is Season ? new[] { "ApplyToSeasons", "ApplyToEpisodes" } : Array.Empty<string>();
+            foreach (var entry in array.OfType<JsonObject>())
+                foreach (string name in entry.Select(p => p.Key).Where(n => n.StartsWith("ApplyTo", StringComparison.Ordinal) && !flags.Contains(n)).ToArray()) entry.Remove(name);
+        }
+
+        private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+                { writer.WritePropertyName(property.Name); WriteCanonical(writer, property.Value); }
+                writer.WriteEndObject();
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                writer.WriteStartArray();
+                foreach (var value in element.EnumerateArray()) WriteCanonical(writer, value);
+                writer.WriteEndArray();
+            }
+            else element.WriteTo(writer);
         }
     }
 }

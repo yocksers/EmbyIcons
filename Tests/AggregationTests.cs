@@ -43,14 +43,18 @@ namespace EmbyIcons.Tests
             Assert.Equal(lite ? 1 : 0, data.SubtitleLanguages.Count);
             enhancer._overlayDataService.GetBaseOverlayData(parent, h.Settings, h.Options);
             Assert.Single(h.Library.Invocations);
+            h.Observe(parent, data, first.InternalId, second.InternalId);
 
             first.MediaStreams = Streams("French", subtitle: false);
             h.Plugin.ImageState.Changed(first);
+            await h.Plugin.ImageState.VerifyPendingAsync();
             Assert.NotEqual(key, enhancer.GetConfigurationCacheKey(parent, ImageType.Primary));
             var updated = enhancer._overlayDataService.GetBaseOverlayData(parent, h.Settings, h.Options);
             Assert.DoesNotContain("english", updated.AudioLanguages);
             if (lite) Assert.Contains("french", updated.AudioLanguages);
-            Assert.Equal(2, h.Library.Invocations.Count);
+            h.Library.Invocations.Clear();
+            enhancer.GetConfigurationCacheKey(parent, ImageType.Primary);
+            Assert.Empty(h.Library.Invocations);
         }
 
         [Theory]
@@ -133,7 +137,7 @@ namespace EmbyIcons.Tests
             return item;
         }
 
-        private static List<MediaStream> Streams(string language, bool subtitle)
+        internal static List<MediaStream> Streams(string language, bool subtitle)
         {
             var streams = new List<MediaStream> { new MediaStream
             {

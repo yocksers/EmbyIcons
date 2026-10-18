@@ -150,7 +150,7 @@ namespace EmbyIcons
 
         internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
-            var dataVersion = (Plugin.Instance?.ImageState.GetDataVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
+            var dataVersion = (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
             if (parent.Id == Guid.Empty)
             {
                 _logger.Warn($"[EmbyIcons] Attempted to aggregate data for a parent item with an empty ID: {parent.Name}. Returning empty result.");
@@ -267,7 +267,7 @@ namespace EmbyIcons
                 {
                     storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, GetKnownResolutionKeys(globalOptions));
                     storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
-                    if (_seriesSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
+                    if (_seriesSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored, SummaryStoreKeys.GetCompatibleSignatures(profileOptions, globalOptions, GetKnownResolutionKeys(globalOptions))) && stored != null)
                     {
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} item(s) are unchanged.");
@@ -561,7 +561,7 @@ namespace EmbyIcons
                     FilenameBasedIcons = filenameBasedIconsList
                 };
 
-                if (dataVersion != (Plugin.Instance?.ImageState.GetDataVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
+                if (dataVersion != (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
                     return result;
 
                 CacheSeriesResult(parent, result);

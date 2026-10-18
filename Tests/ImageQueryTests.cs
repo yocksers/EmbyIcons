@@ -119,9 +119,13 @@ namespace EmbyIcons.Tests
         public async Task MetadataAndSettingsChangeImageKeys()
         {
             using var h = await Harness.Create();
-            var item = new Series { InternalId = 200, Path = "/media/show" };
+            var item = new Series { InternalId = 200, Path = "/media/show", CommunityRating = 8.4f };
             var before = h.Plugin.Enhancer.GetConfigurationCacheKey(item, ImageType.Primary);
             item.DateLastSaved = DateTimeOffset.UtcNow;
+            h.Plugin.ImageState.Changed(item);
+            Assert.Equal(before, h.Plugin.Enhancer.GetConfigurationCacheKey(item, ImageType.Primary));
+            item.CommunityRating = 9.1f;
+            h.Plugin.ImageState.Changed(item);
             var afterMetadata = h.Plugin.Enhancer.GetConfigurationCacheKey(item, ImageType.Primary);
             Assert.NotEqual(before, afterMetadata);
             h.Settings.CommunityScoreIconAlignment = IconAlignment.BottomRight;
@@ -130,38 +134,42 @@ namespace EmbyIcons.Tests
         }
 
         [Fact]
-        public void ChildRevisionsInvalidateOnlyOverlaysWhichUseChildren()
+        public async Task ChildRevisionsInvalidateOnlyOverlaysWhichUseChildren()
         {
             using var state = NewState();
             var parent = new Series { InternalId = 200 };
-            var settings = RatingsOnly();
-            var ratings = state.GetDataVersion(parent, settings);
-            settings.AudioIconAlignment = IconAlignment.TopLeft;
-            var technical = state.GetDataVersion(parent, settings);
-            state.Changed(new Episode { InternalId = 300, ParentId = 201, SeriesId = 200 });
-            Assert.NotEqual(technical, state.GetDataVersion(parent, settings));
-            settings.AudioIconAlignment = IconAlignment.Disabled;
-            Assert.Equal(ratings, state.GetDataVersion(parent, settings));
+            var child = new Episode { InternalId = 300, ParentId = 201, SeriesId = 200 };
+            var ratings = RatingsOnly();
+            var technical = RatingsOnly(); technical.AudioIconAlignment = IconAlignment.TopLeft;
+            string language = "english";
+            state.Inspect = (_, _, _, _) => Task.FromResult(new ImageCacheState.Inspection { Fingerprint = language, Dependencies = new long[] { 300 } });
+            var beforeRatings = state.GetDataVersion(parent, ratings);
+            var beforeTechnical = state.GetDataVersion(parent, technical);
+            state.Observed(parent, technical, new ImageCacheState.Inspection { Fingerprint = language, Dependencies = new long[] { 300 } }, state.BeginInspection(parent), true);
+            state.Start(Inventory(parent, child).Object); await state.Initialization!;
+            language = "french"; state.Changed(child); await state.VerifyPendingAsync();
+            Assert.NotEqual(beforeTechnical, state.GetDataVersion(parent, technical));
+            Assert.Equal(beforeRatings, state.GetDataVersion(parent, ratings));
         }
 
         [Fact]
-        public void CollectionMusicAndMovieVersionDomainsCoverIndirectDependencies()
+        public async Task RelationshipChangesInvalidateOnlyOwnersAfterInputComparison()
         {
             using var state = NewState();
-            var settings = new ProfileSettings();
-            var collection = new BoxSet { InternalId = 2 };
-            var artist = new MusicArtist { InternalId = 3 };
-            var beforeCollection = state.GetDataVersion(collection, settings);
-            var beforeArtist = state.GetDataVersion(artist, settings);
-            state.Changed(new Movie { InternalId = 5 }, removed: true);
-            state.Changed(new Audio { InternalId = 6 }, removed: true);
-            Assert.NotEqual(beforeCollection, state.GetDataVersion(collection, settings));
-            Assert.NotEqual(beforeArtist, state.GetDataVersion(artist, settings));
-            settings.FilenameBasedIcons.Add(new FilenameIconMapping { Keyword = "remux", IconName = "remux" });
-            var movie = new Movie { InternalId = 7 };
-            var beforeMovie = state.GetDataVersion(movie, settings);
-            state.Changed(new Movie { InternalId = 8 });
-            Assert.NotEqual(beforeMovie, state.GetDataVersion(movie, settings));
+            var first = new BoxSet { InternalId = 2 };
+            var second = new BoxSet { InternalId = 3 };
+            var settings = RatingsOnly();
+            var member = new Movie { InternalId = 5 };
+            string fingerprint = "before";
+            state.Inspect = (item, _, _, _) => Task.FromResult(new ImageCacheState.Inspection { Fingerprint = item.InternalId == 2 ? fingerprint : "unrelated", Dependencies = new long[] { item.InternalId == 2 ? 5 : 6 } });
+            var before = state.GetDataVersion(first, settings);
+            var unrelated = state.GetDataVersion(second, settings);
+            state.Observed(first, settings, new ImageCacheState.Inspection { Fingerprint = fingerprint, Dependencies = new long[] { 5 } }, 0, true);
+            state.Observed(second, settings, new ImageCacheState.Inspection { Fingerprint = "unrelated", Dependencies = new long[] { 6 } }, 0, true);
+            state.Start(Inventory(first, second, member).Object); await state.Initialization!;
+            fingerprint = "after"; state.Changed(member); await state.VerifyPendingAsync();
+            Assert.NotEqual(before, state.GetDataVersion(first, settings));
+            Assert.Equal(unrelated, state.GetDataVersion(second, settings));
         }
 
         [Theory]
@@ -170,23 +178,22 @@ namespace EmbyIcons.Tests
         public async Task VerifiedRestartsReuseUnchangedRevisionsAndRejectChangedLibraries(bool changed)
         {
             var folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-            var parent = new Series { InternalId = 10, DateLastSaved = DateTimeOffset.UtcNow };
-            var episode = new Episode { InternalId = 11, ParentId = 12, SeriesId = 10 };
-            var library = Inventory(parent, episode);
-            var settings = new ProfileSettings();
+            var parent = new Series { InternalId = 10, DateLastSaved = DateTimeOffset.UtcNow, CommunityRating = 8.4f };
+            var library = Inventory(parent);
+            var settings = RatingsOnly();
             string version;
             using (var state = new ImageCacheState(folder, Mock.Of<ILogger>()))
             {
-                state.Start(library.Object);
-                await state.Initialization!;
-                state.Changed(episode);
                 version = state.GetDataVersion(parent, settings);
+                state.Start(library.Object); await state.Initialization!;
+                Assert.Equal(version, state.GetDataVersion(parent, settings));
             }
-            if (changed) episode.DateLastSaved = DateTimeOffset.UtcNow;
+            parent.DateLastSaved = DateTimeOffset.UtcNow;
+            if (changed) parent.CommunityRating = 9.2f;
             using (var state = new ImageCacheState(folder, Mock.Of<ILogger>()))
             {
-                state.Start(library.Object);
-                await state.Initialization!;
+                Assert.Equal(version, state.GetDataVersion(parent, settings));
+                state.Start(library.Object); await state.Initialization!;
                 if (changed) Assert.NotEqual(version, state.GetDataVersion(parent, settings));
                 else Assert.Equal(version, state.GetDataVersion(parent, settings));
             }
@@ -194,13 +201,13 @@ namespace EmbyIcons.Tests
         }
 
         [Fact]
-        public void RelationshipDomainsRemainSafeWhenLinkTablesCannotBeVerified()
+        public void RelationshipRevisionsDoNotDependOnSessionRandomness()
         {
             using var first = NewState();
             using var second = NewState();
-            var settings = new ProfileSettings();
-            Assert.NotEqual(first.GetDataVersion(new BoxSet(), settings), second.GetDataVersion(new BoxSet(), settings));
-            Assert.NotEqual(first.GetDataVersion(new MusicArtist(), settings), second.GetDataVersion(new MusicArtist(), settings));
+            var settings = RatingsOnly();
+            Assert.Equal(first.GetDataVersion(new BoxSet(), settings), second.GetDataVersion(new BoxSet(), settings));
+            Assert.Equal(first.GetDataVersion(new MusicArtist(), settings), second.GetDataVersion(new MusicArtist(), settings));
         }
 
         [Fact]
@@ -243,13 +250,14 @@ namespace EmbyIcons.Tests
             internal Mock<ILibraryManager> Library = null!;
             internal Mock<ILogger> Log = new Mock<ILogger>();
             internal Mock<IUserDataManager> UserData = new Mock<IUserDataManager>();
+            internal Mock<MediaBrowser.Controller.Collections.ICollectionManager> Collections = new Mock<MediaBrowser.Controller.Collections.ICollectionManager>();
             internal Mock<IMediaSourceManager> Streams = new Mock<IMediaSourceManager>(MockBehavior.Strict);
             private IMediaSourceManager? _previousStreams;
             private ILibraryManager? _previousLibrary;
             internal Mock<IFileSystem> Files = new Mock<IFileSystem>(MockBehavior.Strict);
             private string _folder = null!;
 
-            internal static async Task<Harness> Create()
+            internal static async Task<Harness> Create(bool collectionEvents = false)
             {
                 var h = new Harness { _folder = Path.Combine(Path.GetTempPath(), "embyicons-tests-" + Guid.NewGuid().ToString("N")) };
                 Directory.CreateDirectory(h._folder);
@@ -275,6 +283,7 @@ namespace EmbyIcons.Tests
                 var xml = new Mock<IXmlSerializer>(); xml.Setup(x => x.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>())).Returns(h.Options);
                 var appHost = new Mock<IApplicationHost>();
                 appHost.Setup(x => x.Resolve<IUserDataManager>()).Returns(h.UserData.Object);
+                if (collectionEvents) appHost.Setup(x => x.Resolve<MediaBrowser.Controller.Collections.ICollectionManager>()).Returns(h.Collections.Object);
                 h.Plugin = new Plugin(appHost.Object, paths.Object, h.Library.Object, Mock.Of<IUserManager>(), log.Object, h.Files.Object, xml.Object);
                 h.Plugin.SetAttributes(Path.Combine(h._folder, "EmbyIcons.dll"), h._folder, new Version(5, 61, 1, 5));
                 h.Plugin.SetStartupInfo(_ => { });
@@ -283,6 +292,13 @@ namespace EmbyIcons.Tests
                 if (h.Plugin.ImageState.Initialization != null) await h.Plugin.ImageState.Initialization;
                 h.Plugin.GetProfileForItem(new Series { Path = "/media/show" });
                 return h;
+            }
+
+            internal void Observe(BaseItem item, EmbyIcons.Models.OverlayData data, params long[] dependencies)
+            {
+                var state = Plugin.ImageState;
+                state.Observed(item, Settings, new ImageCacheState.Inspection
+                { Fingerprint = state.Projection(item, Settings).Overlay(data), Dependencies = dependencies }, state.BeginInspection(item), true);
             }
 
             public void Dispose()

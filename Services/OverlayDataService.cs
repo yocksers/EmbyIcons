@@ -82,19 +82,12 @@ namespace EmbyIcons.Services
             }
         }
 
-        private string[] QueryAndCacheMoviePaths(string providerIdKey, string providerIdValue, string cacheKey)
+        private string[] QueryAndCacheMoviePaths(Movie movie, string cacheKey)
         {
             string[] paths;
-            var query = new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { "Movie" },
-                Recursive = true,
-                AnyProviderIdEquals = new[] { new KeyValuePair<string, string>(providerIdKey, providerIdValue) },
-                Limit = 50
-            };
             try
             {
-                paths = _libraryManager.GetItemList(query)
+                paths = MovieVersions.Queries(movie).SelectMany(q => _libraryManager.GetItemList(q)).Concat(new BaseItem[] { movie })
                     .OfType<Movie>()
                     .Where(v => !string.IsNullOrEmpty(v.Path))
                     .Select(v => v.Path!.ToLowerInvariant())
@@ -770,7 +763,7 @@ namespace EmbyIcons.Services
         private OverlayData GetOverlayDataForItem(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
-            var dataVersion = (Plugin.Instance?.ImageState.GetDataVersion(item, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
+            var dataVersion = (Plugin.Instance?.ImageState.GetAggregationVersion(item, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
             if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks && cachedInfo.DataVersion == dataVersion)
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
@@ -980,40 +973,11 @@ namespace EmbyIcons.Services
             if (item is Movie movieItem && OverlayRequirements.MoviePaths(profileOptions))
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
-                string? providerIdKey = null;
-                foreach (var key in movieItem.ProviderIds.Keys)
-                {
-                    if (key.Equals(StringConstants.ImdbProvider, StringComparison.OrdinalIgnoreCase) || 
-                        key.Equals(StringConstants.TmdbProvider, StringComparison.OrdinalIgnoreCase))
-                    {
-                        providerIdKey = key;
-                        break;
-                    }
-                }
-
-                if (providerIdKey != null && providerIdKey.Length > 0 && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
-                {
-                    var cacheKey = $"{providerIdKey}:{providerIdValue}:{Plugin.Instance?.ImageState.MovieRevision}";
-                    if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
-                    {
-                        cachedPaths = QueryAndCacheMoviePaths(providerIdKey, providerIdValue, cacheKey);
-                    }
-                    else if (!string.IsNullOrEmpty(movieItem.Path))
-                    {
-                        var currentPathLower = movieItem.Path.ToLowerInvariant();
-                        if (!cachedPaths.Contains(currentPathLower))
-                        {
-                            _providerPathCache.Remove(cacheKey);
-                            cachedPaths = QueryAndCacheMoviePaths(providerIdKey, providerIdValue, cacheKey);
-                        }
-                    }
-
-                    allPaths = cachedPaths ?? Array.Empty<string>();
-                }
-                else
-                {
-                    allPaths = string.IsNullOrEmpty(movieItem.Path) ? Array.Empty<string>() : new[] { movieItem.Path!.ToLowerInvariant() };
-                }
+                var cacheKey = $"movie:{movieItem.InternalId}:{string.Join("|", MovieVersions.Groups(movieItem))}:{Plugin.Instance?.ImageState.MovieRevision}";
+                if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
+                    cachedPaths = QueryAndCacheMoviePaths(movieItem, cacheKey);
+                // Always retain this version even if Emby's version query is temporarily incomplete.
+                allPaths = cachedPaths.Concat(string.IsNullOrEmpty(movieItem.Path) ? Array.Empty<string>() : new[] { movieItem.Path.ToLowerInvariant() }).Distinct().ToArray();
 
                 foreach (var path in allPaths)
                 {

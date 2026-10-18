@@ -327,6 +327,28 @@ namespace EmbyIcons
             return plugin.ImageKeys.GetKey(item, imageType, profile, resolved);
         }
 
+        internal async Task<Caching.ImageCacheState.Inspection> InspectImageInputsAsync(BaseItem item, ProfileSettings settings, Caching.ImageCacheState.Inspection baseline, CancellationToken token)
+        {
+            var plugin = Plugin.Instance ?? throw new InvalidOperationException("Plugin is not available.");
+            token.ThrowIfCancellationRequested();
+            var dependencies = ImageDependencies.Read(_libraryManager, item, settings, token);
+            var stamp = await plugin.ImageState.DependencyStamp(dependencies, token).ConfigureAwait(false);
+            if (!baseline.Force && baseline.Source == Caching.ImageCacheState.Source(item) && baseline.DependencyStamp == stamp)
+                return new Caching.ImageCacheState.Inspection { Fingerprint = baseline.Fingerprint, Dependencies = dependencies, DependencyStamp = stamp };
+            await GlobalConcurrencyLock.WaitAsync(token).ConfigureAwait(false);
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                ClearEpisodeIconCache(item.Id);
+                ClearSeriesAggregationCache(item.Id);
+                ClearAlbumAggregationCache(item.Id);
+                var data = _overlayDataService.GetBaseOverlayData(item, settings, plugin.GetConfiguredOptions());
+                return new Caching.ImageCacheState.Inspection { Fingerprint = plugin.ImageState.Projection(item, settings).Overlay(data),
+                    Dependencies = dependencies, DependencyStamp = stamp };
+            }
+            finally { GlobalConcurrencyLock.Release(); }
+        }
+
         [Obsolete]
         public Task EnhanceImageAsync(BaseItem item, string inputFile, string outputFile, ImageType imageType, int imageIndex) =>
             EnhanceImageAsync(item, inputFile, outputFile, imageType, imageIndex, CancellationToken.None);
@@ -351,6 +373,7 @@ namespace EmbyIcons
 
                 item = GetFullItem(item);
                 var profile = await plugin.GetProfileForItemAsync(item).ConfigureAwait(false);
+                plugin.ImageKeys.Bind(item, profile);
                 if (profile == null || !OverlayRequirements.Supports(item, imageType, profile.Settings))
                 {
                     await CopyOriginalAsync(item, imageType, inputFile, outputFile, cancellationToken).ConfigureAwait(false);
@@ -360,7 +383,15 @@ namespace EmbyIcons
                 var globalOptions = plugin.GetConfiguredOptions();
                 var profileOptions = profile.Settings;
 
+                var inputGeneration = plugin.ImageState.BeginInspection(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                var dependencies = ImageDependencies.Read(_libraryManager, item, profileOptions, cancellationToken);
+                var dependencyStamp = await plugin.ImageState.DependencyStamp(dependencies, cancellationToken).ConfigureAwait(false);
+                plugin.ImageState.Observed(item, profileOptions, new Caching.ImageCacheState.Inspection
+                {
+                    Fingerprint = plugin.ImageState.Projection(item, profileOptions).Overlay(overlayData),
+                    Dependencies = dependencies, DependencyStamp = dependencyStamp
+                }, inputGeneration, rendering: true);
 
                 using var inputStream = FileUtils.OpenSourceImage(inputFile, _fileSystem);
                 using var sourceBitmap = DecodeForRendering(inputStream, GetMaxRenderDimension(globalOptions));

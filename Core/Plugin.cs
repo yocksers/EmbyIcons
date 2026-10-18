@@ -4,6 +4,7 @@ using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -41,6 +42,7 @@ namespace EmbyIcons
             ImageProcessing.ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger);
             _ = ProfileManager.WarmLibraryPathsAsync();
             StartDependencyVerification();
+            _logger.Info($"[EmbyIcons] Stable image cache loaded: {ImageState.TrackedCount} tracked identities; collection events: {ImageState.CollectionEventsAvailable}.");
         }
         private void StartDependencyVerification()
         {
@@ -59,6 +61,7 @@ namespace EmbyIcons
         private volatile Lazy<ProfileManagerService> _profileManagerLazy = null!;
         private CancellationTokenSource? _backgroundTasksCts;
         private MediaBrowser.Controller.Library.IUserDataManager? _userDataManager;
+        private ICollectionManager? _collectionManager;
 
         private bool _migrationPerformed = false;
         private static bool _migrationAttempted = false;
@@ -144,6 +147,11 @@ namespace EmbyIcons
             Instance = this;
             ImageState = new Caching.ImageCacheState(Path.Combine(appPaths.DataPath, "EmbyIcons"), _logger);
             ImageKeys = new ImageKeyService(new PluginOptions(), ImageState);
+            try { _collectionManager = _appHost.Resolve<ICollectionManager>(); }
+            catch (Exception ex) { _logger.Debug($"[EmbyIcons] Collection events are unavailable; using coalesced membership checks: {ex.Message}"); }
+            ImageState.CollectionEventsAvailable = _collectionManager != null;
+            ImageState.ResolveProfile = item => ImageKeys.Bind(item, GetProfileForItem(item));
+            ImageState.Inspect = (item, settings, baseline, token) => Enhancer.InspectImageInputsAsync(item, settings, baseline, token);
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
@@ -419,6 +427,11 @@ namespace EmbyIcons
             _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
             _libraryManager.ItemAdded += LibraryManagerOnItemAdded;
             _libraryManager.ItemRemoved += LibraryManagerOnItemRemoved;
+            if (_collectionManager != null)
+            {
+                _collectionManager.ItemsAddedToCollection += CollectionMembersChanged;
+                _collectionManager.ItemsRemovedFromCollection += CollectionMembersChanged;
+            }
             
             if (_userDataManager != null)
             {
@@ -426,8 +439,20 @@ namespace EmbyIcons
             }
         }
 
+        private void CollectionMembersChanged(object? sender, CollectionModifiedEventArgs e)
+        {
+            if (e?.Collection == null) return;
+            ProfileManager.InvalidateCollectionProfiles();
+            ImageState.CollectionChanged(e.Collection);
+        }
+
         private void UnsubscribeLibraryEvents()
         {
+            if (_collectionManager != null)
+            {
+                _collectionManager.ItemsAddedToCollection -= CollectionMembersChanged;
+                _collectionManager.ItemsRemovedFromCollection -= CollectionMembersChanged;
+            }
             try { _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged; } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemUpdated: {ex.Message}"); }
             
@@ -448,6 +473,8 @@ namespace EmbyIcons
         {
             if (e?.Item == null) return;
             if (e.SaveReason != MediaBrowser.Model.Entities.UserDataSaveReason.UpdateUserRating) return;
+            var profile = GetProfileForItem(e.Item);
+            if (profile == null || profile.Settings.FavoriteCountIconAlignment == IconAlignment.Disabled) return;
 
             try
             {
@@ -526,6 +553,7 @@ namespace EmbyIcons
             {
                 if (e.Item is Video || e.Item is Series || e.Item is Season || e.Item is BoxSet)
                     ProfileManager.InvalidateCollectionProfiles();
+                ProfileManager.InvalidateItemProfile(e.Item);
                 ImageState.Changed(e.Item, removed, added);
                 var enhancer = Enhancer;
                 
