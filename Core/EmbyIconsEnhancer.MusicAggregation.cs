@@ -36,6 +36,7 @@ namespace EmbyIcons
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
             internal long LastUsedTicks;
+            internal string DataVersion { get; init; } = string.Empty;
         }
 
         internal sealed class AlbumSummaryData
@@ -116,12 +117,13 @@ namespace EmbyIcons
             }
         }
 
-        internal AggregatedAlbumResult GetOrBuildAggregatedDataForAlbum(BaseItem parent, ProfileSettings profileOptions)
+        internal AggregatedAlbumResult GetOrBuildAggregatedDataForAlbum(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
+            var dataVersion = (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
             if (parent.Id == Guid.Empty)
                 return new AggregatedAlbumResult();
 
-            if (_albumAggregationCache.TryGetValue(parent.Id, out var cachedResult))
+            if (_albumAggregationCache.TryGetValue(parent.Id, out var cachedResult) && cachedResult.DataVersion == dataVersion)
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Using cached album aggregation for '{parent.Name}' ({parent.Id}).");
@@ -130,7 +132,7 @@ namespace EmbyIcons
 
             using (_albumAggregationLocks.Lock(parent.Id))
             {
-                if (_albumAggregationCache.TryGetValue(parent.Id, out cachedResult))
+                if (_albumAggregationCache.TryGetValue(parent.Id, out cachedResult) && cachedResult.DataVersion == dataVersion)
                     return TouchAlbumResult(cachedResult);
 
                 bool useLiteMode = profileOptions.UseMusicAlbumLiteMode;
@@ -159,19 +161,15 @@ namespace EmbyIcons
                 string? storeFingerprint = null;
                 if (SummaryDiskStore<AlbumSummaryData>.IsEnabled)
                 {
-                    var globalOptions = Plugin.Instance?.GetConfiguredOptions();
-                    if (globalOptions != null)
+                    storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
+                    storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
+                    if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored, SummaryStoreKeys.GetCompatibleSignatures(profileOptions, globalOptions, null)) && stored != null)
                     {
-                        storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, null);
-                        storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
-                        if (_albumSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
-                        {
-                            if (Helpers.PluginHelper.IsDebugLoggingEnabled)
-                                _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
-                            var restored = FromSummaryData(stored);
-                            CacheAlbumResult(parent.Id, restored);
-                            return restored;
-                        }
+                        if (Helpers.PluginHelper.IsDebugLoggingEnabled)
+                            _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} track(s) are unchanged.");
+                        var restored = FromSummaryData(stored) with { DataVersion = dataVersion };
+                        CacheAlbumResult(parent.Id, restored);
+                        return restored;
                     }
                 }
 
@@ -325,6 +323,7 @@ namespace EmbyIcons
 
                 var result = new AggregatedAlbumResult
                 {
+                    DataVersion = dataVersion,
                     Timestamp               = DateTime.UtcNow,
                     LastUsedTicks           = Stopwatch.GetTimestamp(),
                     AudioLangs              = checkAudioLangs   ? allAudioLangs      : new HashSet<string>(),
@@ -335,6 +334,9 @@ namespace EmbyIcons
                     BitDepth                = checkBitDepth     ? commonBitDepth     : null,
                     FilenameBasedIcons      = filenameBasedIconsList
                 };
+
+                if (dataVersion != (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
+                    return result;
 
                 CacheAlbumResult(parent.Id, result);
 

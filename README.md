@@ -82,6 +82,26 @@ Fine-tune cache sizes, expiration times, concurrency, and MDBList API key. Defau
 
 ---
 
+## Image tags and rendering
+
+Media-list image tags use cached profile information, precomputed settings keys, and input revisions. They do not query episodes, read media streams, scan icon directories, or fetch MDBList ratings. Actual image requests and the pre-draw task share the normal rendering path; parent-only overlays such as ratings and parental ratings skip child aggregation there as well.
+
+Image identities and configuration bindings are saved in `EmbyIcons/image-state-v2/` under Emby's data directory. Internal Emby IDs identify items even when no TMDb or other provider ID exists. Learning a profile after startup does not change an already-issued image key. Assembly version, cache sizes, logging, profile names, and the disk-summary toggle do not invalidate enhanced images. Explicit manual refresh and actual drawing-setting changes still do.
+
+Only identities that participate in image caching are tracked; there is no whole-library scan or 500,000-item cutoff. A background worker reads tracked metadata in batches of 500 and checks relevant relationships. It compares enabled overlay inputs before changing an image revision, so timestamp-only metadata saves need not redraw posters. Collection membership events and reverse dependency indexes target affected images. Where precise relationship events are unavailable, coalesced checks inspect known collection/music parents. List requests do not wait for this verification, so an existing overlay can remain visible briefly while changed inputs are checked. Actual drawing and stream inspection share the renderer's concurrency limit.
+
+State is stored in checksummed, atomically replaced partitions with backup recovery. Corruption invalidates only the affected partition. Existing `ei11` keys for ordinary resolved-profile overlays are retained where their inputs can be proved compatible; earlier session-dependent collection/aggregation keys or unverifiable state can require one initial redraw. MDBList image keys retain per-work seven-day refresh intervals.
+
+The optional **Keep TV show, collection and album summaries on disk** setting saves aggregation results separately in `plugins/embyicons/summaries-tv.json` and `summaries-music.json`. These summaries still validate child membership and metadata before reuse. Their compatibility version is independent of the DLL version; unchanged summaries written by 5.61.1.5 and 5.61.1.6 can be migrated after validation. The first rendering lookup waits for the initial disk load rather than racing it and unnecessarily aggregating again. Keeping summaries does not by itself preserve Emby's enhanced-image cache tags.
+
+Movie filename overlays use Emby's saved alternate-version relationship and a namespaced TMDb, IMDb, Douban, JavDB, or JavBus identifier when available. Without either relationship, a movie uses only its own path; matching titles or catalogue numbers never merge unrelated items. The renderer, previews, troubleshooting tools, and pre-draw task retain their existing roles. First-time rendering still performs the required data and drawing work.
+
+To run the offline regression suite with the .NET 8 SDK:
+
+```sh
+dotnet test Tests/EmbyIcons.Tests.csproj --configuration Release
+```
+
 ## Acknowledgements
 Many thanks to **Neminem**, **keitaro26**, **Bakes82**, and everyone from the Emby Community forum. Shoutout to **Craggles** for the default icons.
 

@@ -10,7 +10,7 @@
 		<AssemblyVersion>5.61.1.5</AssemblyVersion>
 		<FileVersion>5.61.1.5</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**</DefaultItemExcludes>
+		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**;Tests\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<ItemGroup>

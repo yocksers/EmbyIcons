@@ -310,102 +310,43 @@ namespace EmbyIcons
                 return false;
             }
 
-            var profile = Plugin.Instance?.GetProfileForItem(item);
-            if (profile == null) return false;
-
-            var options = profile.Settings;
-
-            bool isTypeSupported = imageType switch
-            {
-                ImageType.Primary => options.EnableForPosters,
-                ImageType.Thumb => options.EnableForThumbs,
-                ImageType.Banner => options.EnableForBanners,
-                _ => false
-            };
-
-            if (!isTypeSupported) return false;
-
-            bool isSupportedType = item is Video || item is Series || item is Season || item is Photo || item is BoxSet || item is Audio || item is MusicAlbum || item is MusicArtist;
-            if (!isSupportedType) return false;
-
-            if (item is Episode && !(options.ShowOverlaysForEpisodes)) return false;
-            if (item is Season && !(options.ShowOverlaysForSeasons)) return false;
-            if (item is Series && !options.UseSeriesLiteMode && !options.ShowSeriesIconsIfAllEpisodesHaveLanguage) return false;
-            if (item is BoxSet && !options.UseCollectionLiteMode && !options.ShowCollectionIconsIfAllChildrenHaveLanguage) return false;
-
-            return options.AudioIconAlignment != IconAlignment.Disabled ||
-                   options.SubtitleIconAlignment != IconAlignment.Disabled ||
-                   options.ChannelIconAlignment != IconAlignment.Disabled ||
-                   options.VideoFormatIconAlignment != IconAlignment.Disabled ||
-                   options.ResolutionIconAlignment != IconAlignment.Disabled ||
-                   options.CommunityScoreIconAlignment != IconAlignment.Disabled ||
-                   options.AudioCodecIconAlignment != IconAlignment.Disabled ||
-                   options.VideoCodecIconAlignment != IconAlignment.Disabled ||
-                   options.TagIconAlignment != IconAlignment.Disabled ||
-                   options.AspectRatioIconAlignment != IconAlignment.Disabled ||
-                   options.ParentalRatingIconAlignment != IconAlignment.Disabled ||
-                   options.SourceIconAlignment != IconAlignment.Disabled ||
-                   options.FavoriteCountIconAlignment != IconAlignment.Disabled ||
-                   options.FrameRateIconAlignment != IconAlignment.Disabled ||
-                   options.OriginalLanguageIconAlignment != IconAlignment.Disabled ||
-                   options.SeriesStatusIconAlignment != IconAlignment.Disabled ||
-                   options.RottenTomatoesScoreIconAlignment != IconAlignment.Disabled ||
-                   options.PopcornScoreIconAlignment != IconAlignment.Disabled ||
-                   options.MyAnimeListScoreIconAlignment != IconAlignment.Disabled ||
-                   options.SampleRateIconAlignment != IconAlignment.Disabled ||
-                   options.AudioBitRateIconAlignment != IconAlignment.Disabled ||
-                   options.BitDepthIconAlignment != IconAlignment.Disabled ||
-                   options.FilenameBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled) ||
-                   options.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled);
+            if (imageType != ImageType.Primary && imageType != ImageType.Thumb && imageType != ImageType.Banner) return false;
+            if (!(item is Video || item is Series || item is Season || item is Photo || item is BoxSet ||
+                  item is Audio || item is MusicAlbum || item is MusicArtist)) return false;
+            var plugin = Plugin.Instance;
+            if (plugin == null) return false;
+            var resolved = plugin.TryGetCachedProfile(item, out var profile);
+            return plugin.ImageKeys.Supports(item, imageType, profile, resolved);
         }
 
         private string GetConfigurationCacheKeyCore(BaseItem item, ImageType imageType)
         {
             var plugin = Plugin.Instance;
             if (plugin == null) return $"ei_np_{item.InternalId}";
+            var resolved = plugin.TryGetCachedProfile(item, out var profile);
+            return plugin.ImageKeys.GetKey(item, imageType, profile, resolved);
+        }
 
-            var profile = plugin.GetProfileForItem(item);
-            if (profile == null) return $"ei_np_{item.InternalId}";
-
-            if (item.Id == Guid.Empty && item.InternalId > 0)
-                item = _libraryManager.GetItemById(item.InternalId) ?? item;
-
-            var globalOptions = plugin.GetConfiguredOptions();
-            var options = profile.Settings;
-            var sb = new StringBuilder(512);
-
-            var itemIdSegment = item.Id != Guid.Empty
-                ? Convert.ToBase64String(item.Id.ToByteArray()).TrimEnd('=')
-                : $"iid_{item.InternalId}";
-
-            sb.Append("ei10_")
-              .Append(itemIdSegment)
-              .Append('_').Append((int)imageType)
-              .Append('v').Append(globalOptions.PersistedVersion)
-              .Append('p').Append(Convert.ToBase64String(profile.Id.ToByteArray()).TrimEnd('='));
-
-            bool isMusicItem = item is Audio || item is MusicAlbum || item is MusicArtist;
-            var content = DrawableContent.None;
-            if (isMusicItem)
+        internal async Task<Caching.ImageCacheState.Inspection> InspectImageInputsAsync(BaseItem item, ProfileSettings settings, Caching.ImageCacheState.Inspection baseline, CancellationToken token)
+        {
+            var plugin = Plugin.Instance ?? throw new InvalidOperationException("Plugin is not available.");
+            token.ThrowIfCancellationRequested();
+            var dependencies = ImageDependencies.Read(_libraryManager, item, settings, token);
+            var stamp = await plugin.ImageState.DependencyStamp(dependencies, token).ConfigureAwait(false);
+            if (!baseline.Force && baseline.Source == Caching.ImageCacheState.Source(item) && baseline.DependencyStamp == stamp)
+                return new Caching.ImageCacheState.Inspection { Fingerprint = baseline.Fingerprint, Dependencies = dependencies, DependencyStamp = stamp };
+            await GlobalConcurrencyLock.WaitAsync(token).ConfigureAwait(false);
+            try
             {
-                content |= DrawableContent.Music;
-                if (imageType == ImageType.Primary) content |= DrawableContent.MusicPoster;
+                token.ThrowIfCancellationRequested();
+                ClearEpisodeIconCache(item.Id);
+                ClearSeriesAggregationCache(item.Id);
+                ClearAlbumAggregationCache(item.Id);
+                var data = _overlayDataService.GetBaseOverlayData(item, settings, plugin.GetConfiguredOptions());
+                return new Caching.ImageCacheState.Inspection { Fingerprint = plugin.ImageState.Projection(item, settings).Overlay(data),
+                    Dependencies = dependencies, DependencyStamp = stamp };
             }
-            else if (imageType == ImageType.Primary) content |= DrawableContent.PosterImage;
-            else if (imageType == ImageType.Thumb) content |= DrawableContent.ThumbImage;
-            else if (imageType == ImageType.Banner) content |= DrawableContent.BannerImage;
-
-            if (item is Series || item is Season) content |= DrawableContent.TvShow;
-            else if (item is BoxSet) content |= DrawableContent.Collection;
-            if (!string.IsNullOrWhiteSpace(globalOptions.MDBListApiKey)) content |= DrawableContent.MdbListRatings;
-
-            var overlayData = _overlayDataService.GetBaseOverlayData(item, options, globalOptions);
-            content |= OverlayDataKey.GetContent(overlayData);
-
-            sb.Append("_s").Append(RenderSettingsKey.Get(profile, globalOptions, content));
-            sb.Append("_d").Append(OverlayDataKey.Compute(overlayData));
-
-            return sb.ToString();
+            finally { GlobalConcurrencyLock.Release(); }
         }
 
         [Obsolete]
@@ -420,16 +361,6 @@ namespace EmbyIcons
             Interlocked.Increment(ref _enhanceCallCount);
             TempFileJanitor.ScheduleCleanupFor(outputFile);
 
-            var profile = await plugin.GetProfileForItemAsync(item).ConfigureAwait(false);
-            if (profile == null)
-            {
-                await CopyOriginalAsync(item, imageType, inputFile, outputFile, cancellationToken).ConfigureAwait(false);
-                return;
-            }
-
-            var globalOptions = plugin.GetConfiguredOptions();
-            var profileOptions = profile.Settings;
-
             bool globalLockAcquired = false;
             var renderTimer = System.Diagnostics.Stopwatch.StartNew();
             long lockWaitMs = -1;
@@ -441,7 +372,26 @@ namespace EmbyIcons
                 lockWaitMs = renderTimer.ElapsedMilliseconds;
 
                 item = GetFullItem(item);
+                var profile = await plugin.GetProfileForItemAsync(item).ConfigureAwait(false);
+                plugin.ImageKeys.Bind(item, profile);
+                if (profile == null || !OverlayRequirements.Supports(item, imageType, profile.Settings))
+                {
+                    await CopyOriginalAsync(item, imageType, inputFile, outputFile, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                var globalOptions = plugin.GetConfiguredOptions();
+                var profileOptions = profile.Settings;
+
+                var inputGeneration = plugin.ImageState.BeginInspection(item);
                 var overlayData = await _overlayDataService.GetOverlayDataAsync(item, profileOptions, globalOptions, cancellationToken).ConfigureAwait(false);
+                var dependencies = ImageDependencies.Read(_libraryManager, item, profileOptions, cancellationToken);
+                var dependencyStamp = await plugin.ImageState.DependencyStamp(dependencies, cancellationToken).ConfigureAwait(false);
+                plugin.ImageState.Observed(item, profileOptions, new Caching.ImageCacheState.Inspection
+                {
+                    Fingerprint = plugin.ImageState.Projection(item, profileOptions).Overlay(overlayData),
+                    Dependencies = dependencies, DependencyStamp = dependencyStamp
+                }, inputGeneration, rendering: true);
 
                 using var inputStream = FileUtils.OpenSourceImage(inputFile, _fileSystem);
                 using var sourceBitmap = DecodeForRendering(inputStream, GetMaxRenderDimension(globalOptions));

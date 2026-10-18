@@ -4,6 +4,7 @@ using MediaBrowser.Common;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -25,6 +26,28 @@ namespace EmbyIcons
 {
     public class Plugin : BasePlugin<PluginOptions>, IHasWebPages, IHasThumbImage, IDisposable
     {
+        internal Caching.ImageCacheState ImageState { get; private set; } = null!;
+        internal ImageKeyService ImageKeys { get; private set; } = null!;
+        internal bool TryGetCachedProfile(BaseItem item, out IconProfile? profile)
+        {
+            profile = null;
+            return _profileManagerLazy.IsValueCreated && ProfileManager.TryGetCachedProfile(item, out profile);
+        }
+        private int _imageCacheStarted;
+        internal void InitializeImageCache()
+        {
+            if (Interlocked.Exchange(ref _imageCacheStarted, 1) != 0) return;
+            Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(GetConfiguredOptions());
+            ImageProcessing.ImageProcessingCapabilities.IsSkiaSharpAvailable(_logger);
+            _ = ProfileManager.WarmLibraryPathsAsync();
+            StartDependencyVerification();
+            _logger.Info($"[EmbyIcons] Stable image cache loaded: {ImageState.TrackedCount} tracked identities; collection events: {ImageState.CollectionEventsAvailable}.");
+        }
+        private void StartDependencyVerification()
+        {
+            if (ImageKeys.NeedsVerification) ImageState.Start(_libraryManager);
+        }
         private readonly IApplicationHost _appHost;
         private readonly ILibraryManager _libraryManager;
         private readonly IUserManager _userManager;
@@ -38,6 +61,7 @@ namespace EmbyIcons
         private volatile Lazy<ProfileManagerService> _profileManagerLazy = null!;
         private CancellationTokenSource? _backgroundTasksCts;
         private MediaBrowser.Controller.Library.IUserDataManager? _userDataManager;
+        private ICollectionManager? _collectionManager;
 
         private bool _migrationPerformed = false;
         private static bool _migrationAttempted = false;
@@ -121,6 +145,13 @@ namespace EmbyIcons
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
             Instance = this;
+            ImageState = new Caching.ImageCacheState(Path.Combine(appPaths.DataPath, "EmbyIcons"), _logger);
+            ImageKeys = new ImageKeyService(new PluginOptions(), ImageState);
+            try { _collectionManager = _appHost.Resolve<ICollectionManager>(); }
+            catch (Exception ex) { _logger.Debug($"[EmbyIcons] Collection events are unavailable; using coalesced membership checks: {ex.Message}"); }
+            ImageState.CollectionEventsAvailable = _collectionManager != null;
+            ImageState.ResolveProfile = item => ImageKeys.Bind(item, GetProfileForItem(item));
+            ImageState.Inspect = (item, settings, baseline, token) => Enhancer.InspectImageInputsAsync(item, settings, baseline, token);
 
             _logger.Debug("EmbyIcons plugin initialized.");
             SubscribeLibraryEvents();
@@ -234,6 +265,9 @@ namespace EmbyIcons
                     _logger.Info($"[EmbyIcons] Background migration complete. Created 'Default' profile and assigned it to {Configuration.LibraryProfileMappings.Count} libraries.");
                     cancellationToken.ThrowIfCancellationRequested();
                     SaveConfiguration();
+                    ImageKeys.Configure(Configuration);
+                    StartDependencyVerification();
+                    ProfileManager.InvalidateLibraryCache();
 
                     lock (_migrationLock)
                     {
@@ -391,8 +425,13 @@ namespace EmbyIcons
         private void SubscribeLibraryEvents()
         {
             _libraryManager.ItemUpdated += LibraryManagerOnItemChanged;
-            _libraryManager.ItemAdded += LibraryManagerOnItemChanged;
+            _libraryManager.ItemAdded += LibraryManagerOnItemAdded;
             _libraryManager.ItemRemoved += LibraryManagerOnItemRemoved;
+            if (_collectionManager != null)
+            {
+                _collectionManager.ItemsAddedToCollection += CollectionMembersChanged;
+                _collectionManager.ItemsRemovedFromCollection += CollectionMembersChanged;
+            }
             
             if (_userDataManager != null)
             {
@@ -400,12 +439,24 @@ namespace EmbyIcons
             }
         }
 
+        private void CollectionMembersChanged(object? sender, CollectionModifiedEventArgs e)
+        {
+            if (e?.Collection == null) return;
+            ProfileManager.InvalidateCollectionProfiles();
+            ImageState.CollectionChanged(e.Collection);
+        }
+
         private void UnsubscribeLibraryEvents()
         {
+            if (_collectionManager != null)
+            {
+                _collectionManager.ItemsAddedToCollection -= CollectionMembersChanged;
+                _collectionManager.ItemsRemovedFromCollection -= CollectionMembersChanged;
+            }
             try { _libraryManager.ItemUpdated -= LibraryManagerOnItemChanged; } 
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemUpdated: {ex.Message}"); }
             
-            try { _libraryManager.ItemAdded -= LibraryManagerOnItemChanged; } 
+            try { _libraryManager.ItemAdded -= LibraryManagerOnItemAdded; }
             catch (Exception ex) { _logger?.Debug($"[EmbyIcons] Error unsubscribing ItemAdded: {ex.Message}"); }
             
             try { _libraryManager.ItemRemoved -= LibraryManagerOnItemRemoved; } 
@@ -422,6 +473,8 @@ namespace EmbyIcons
         {
             if (e?.Item == null) return;
             if (e.SaveReason != MediaBrowser.Model.Entities.UserDataSaveReason.UpdateUserRating) return;
+            var profile = GetProfileForItem(e.Item);
+            if (profile == null || profile.Settings.FavoriteCountIconAlignment == IconAlignment.Disabled) return;
 
             try
             {
@@ -479,7 +532,7 @@ namespace EmbyIcons
 
         private void LibraryManagerOnItemRemoved(object? sender, ItemChangeEventArgs e)
         {
-            LibraryManagerOnItemChanged(sender, e);
+            HandleItemChanged(e, removed: true);
 
             if (e?.Item != null && e.Item.InternalId > 0)
             {
@@ -488,12 +541,20 @@ namespace EmbyIcons
             }
         }
 
-        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e)
+        private void LibraryManagerOnItemChanged(object? sender, ItemChangeEventArgs e) => HandleItemChanged(e, removed: false);
+
+        private void LibraryManagerOnItemAdded(object? sender, ItemChangeEventArgs e) => HandleItemChanged(e, removed: false, added: true);
+
+        private void HandleItemChanged(ItemChangeEventArgs e, bool removed, bool added = false)
         {
             if (e?.Item == null) return;
             
             try
             {
+                if (e.Item is Video || e.Item is Series || e.Item is Season || e.Item is BoxSet)
+                    ProfileManager.InvalidateCollectionProfiles();
+                ProfileManager.InvalidateItemProfile(e.Item);
+                ImageState.Changed(e.Item, removed, added);
                 var enhancer = Enhancer;
                 
                 var rootFolder = _libraryManager.RootFolder;
@@ -583,6 +644,10 @@ namespace EmbyIcons
         {
             SaveConfiguration();
             Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(Configuration);
+            StartDependencyVerification();
+            ProfileManager.UseConfiguration(Configuration);
+            ProfileManager.InvalidateLibraryCache();
 
             if (_enhancerLazy.IsValueCreated)
             {
@@ -600,6 +665,8 @@ namespace EmbyIcons
             newOptions.PersistedVersion = Configuration.PersistedVersion;
             base.UpdateConfiguration(newOptions);
             Helpers.RenderSettingsKey.Invalidate();
+            ImageKeys.Configure(newOptions);
+            StartDependencyVerification();
 
             if (oldOptions != null)
             {
@@ -626,21 +693,19 @@ namespace EmbyIcons
 
             IconManagerService.InvalidateCache();
 
-            if (profileLookupChanged || !_profileManagerLazy.IsValueCreated)
+            if (_profileManagerLazy.IsValueCreated)
             {
-                if (_profileManagerLazy.IsValueCreated)
-                {
-                    ProfileManager.InvalidateLibraryCache();
-                }
+                ProfileManager.UseConfiguration(newOptions);
+                if (profileLookupChanged) ProfileManager.InvalidateLibraryCache();
+            }
+            else
+            {
                 _profileManagerLazy = new Lazy<ProfileManagerService>(
                     () => new ProfileManagerService(_libraryManager, _logger, newOptions),
                     LazyThreadSafetyMode.ExecutionAndPublication);
             }
-            else
-            {
-                ProfileManager.UseConfiguration(newOptions);
-            }
 
+            _ = ProfileManager.WarmLibraryPathsAsync();
             _logger.Info("[EmbyIcons] Configuration saved. Only images whose look is affected by the changes will be redrawn as they are viewed.");
         }
 
@@ -753,6 +818,7 @@ namespace EmbyIcons
                 _logger?.Debug($"[EmbyIcons] Error disposing background tasks CTS: {ex.Message}");
             }
             
+            ImageState.Dispose();
             CleanupStaticResources(_logger);
             
             Instance = null;

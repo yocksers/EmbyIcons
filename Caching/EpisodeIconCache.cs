@@ -47,6 +47,7 @@ namespace EmbyIcons
             public string? SampleRateIconName { get; init; }
             public string? AudioBitRateIconName { get; init; }
             public string? BitDepthIconName { get; init; }
+            internal string DataVersion { get; init; } = string.Empty;
             public long DateModifiedTicks { get; init; }
         }
 

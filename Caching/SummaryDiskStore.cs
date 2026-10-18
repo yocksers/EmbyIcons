@@ -72,23 +72,26 @@ namespace EmbyIcons.Caching
             }
         }
 
-        public bool TryGet(Guid id, string signature, string fingerprint, out T? data)
+        public bool TryGet(Guid id, string signature, string fingerprint, out T? data, IEnumerable<string>? compatibleSignatures = null)
         {
             data = null;
             if (!IsEnabled) return false;
             StartLoading();
+            // Rendering may wait for disk loading; image-tag callbacks never call this store.
+            _loadTask?.GetAwaiter().GetResult();
 
             if (!_entries.TryGetValue(id, out var entry) || entry.Data == null) return false;
             if (!string.Equals(entry.Fingerprint, fingerprint, StringComparison.Ordinal) ||
-                !string.Equals(entry.Signature, signature, StringComparison.Ordinal))
+                (!string.Equals(entry.Signature, signature, StringComparison.Ordinal) &&
+                 !(compatibleSignatures?.Contains(entry.Signature, StringComparer.Ordinal) ?? false)))
             {
                 return false;
             }
 
             var now = DateTime.UtcNow;
-            if (now - entry.LastUsed > LastUsedResolution)
+            if (now - entry.LastUsed > LastUsedResolution || entry.Signature != signature)
             {
-                var touched = new StoredSummary<T> { Signature = entry.Signature, Fingerprint = entry.Fingerprint, LastUsed = now, Data = entry.Data };
+                var touched = new StoredSummary<T> { Signature = signature, Fingerprint = entry.Fingerprint, LastUsed = now, Data = entry.Data };
                 if (_entries.TryUpdate(id, touched, entry))
                 {
                     Interlocked.Exchange(ref _dirty, 1);
@@ -293,14 +296,22 @@ namespace EmbyIcons.Caching
     internal static class SummaryStoreKeys
     {
         private static readonly ConditionalWeakTable<ProfileSettings, string> _profileSignatures = new ConditionalWeakTable<ProfileSettings, string>();
-        private static readonly string _pluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? string.Empty;
+        // Bump only when summary calculation/data becomes incompatible, not on every release.
+        private const string DataCompatibilityVersion = "summary-data-1";
+        private static readonly string[] CompatibleLegacyVersions = { "5.61.1.5", "5.61.1.6" };
 
         public static string GetSignature(ProfileSettings profileOptions, PluginOptions globalOptions, IEnumerable<string>? resolutionKeys)
+            => Signature(profileOptions, globalOptions, resolutionKeys, DataCompatibilityVersion);
+
+        internal static IEnumerable<string> GetCompatibleSignatures(ProfileSettings profileOptions, PluginOptions globalOptions, IEnumerable<string>? resolutionKeys)
+            => CompatibleLegacyVersions.Select(version => Signature(profileOptions, globalOptions, resolutionKeys, version));
+
+        private static string Signature(ProfileSettings profileOptions, PluginOptions globalOptions, IEnumerable<string>? resolutionKeys, string version)
         {
             var profilePart = _profileSignatures.GetValue(profileOptions, SettingsChangeAnalyzer.DataSignature);
 
             var text = new StringBuilder(profilePart.Length + 256)
-                .Append(_pluginVersion)
+                .Append(version)
                 .Append('|').Append(globalOptions.IconsFolder ?? string.Empty)
                 .Append('|').Append((int)globalOptions.IconLoadingMode)
                 .Append('|').Append(profilePart)

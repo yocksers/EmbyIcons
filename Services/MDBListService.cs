@@ -223,6 +223,23 @@ namespace EmbyIcons.Services
             }
         }
 
+        // Fixed, per-work intervals keep image keys stable across cache eviction and restarts.
+        // A list request computes this token without loading ratings or starting HTTP work.
+        internal static long GetImageVersion(BaseItem item)
+        {
+            var id = GetTmdbId(item);
+            if (string.IsNullOrEmpty(id)) return 0;
+            return RatingInterval(id!, DateTime.UtcNow);
+        }
+
+        internal static long RatingInterval(string id, DateTime time)
+        {
+            ulong hash = 14695981039346656037;
+            foreach (var c in id) hash = unchecked((hash ^ c) * 1099511628211);
+            long period = CacheExpiration.Ticks;
+            return (time.Ticks + (long)(hash % (ulong)period)) / period;
+        }
+
         public async Task<MDBListRatingData?> FetchRatingsAsync(BaseItem item, string apiKey, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -245,7 +262,8 @@ namespace EmbyIcons.Services
             {
                 if (_ratingsCache.TryGetValue(cacheKey, out var cachedData))
                 {
-                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration)
+                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration &&
+                        RatingInterval(tmdbId!, cachedData.CachedAt) == RatingInterval(tmdbId!, DateTime.UtcNow))
                     {
                         return cachedData.Data;
                     }

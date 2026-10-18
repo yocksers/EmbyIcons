@@ -44,6 +44,7 @@ namespace EmbyIcons
             public List<FilenameBasedIconData> FilenameBasedIcons { get; init; } = new();
             public DateTime Timestamp { get; init; } = DateTime.MinValue;
             internal long LastUsedTicks;
+            internal string DataVersion { get; init; } = string.Empty;
         }
 
         internal sealed class SeriesSummaryData
@@ -149,13 +150,14 @@ namespace EmbyIcons
 
         internal AggregatedSeriesResult GetOrBuildAggregatedDataForParent(BaseItem parent, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
+            var dataVersion = (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
             if (parent.Id == Guid.Empty)
             {
                 _logger.Warn($"[EmbyIcons] Attempted to aggregate data for a parent item with an empty ID: {parent.Name}. Returning empty result.");
                 return new AggregatedSeriesResult();
             }
 
-            if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult))
+            if (_seriesAggregationCache.TryGetValue(parent.Id, out var cachedResult) && cachedResult.DataVersion == dataVersion)
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                     _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
@@ -164,7 +166,7 @@ namespace EmbyIcons
 
             using (_aggregationLocks.Lock(parent.Id))
             {
-                if (_seriesAggregationCache.TryGetValue(parent.Id, out cachedResult))
+                if (_seriesAggregationCache.TryGetValue(parent.Id, out cachedResult) && cachedResult.DataVersion == dataVersion)
                 {
                     if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                         _logger.Debug($"[EmbyIcons] Using cached aggregated data for '{parent.Name}' ({parent.Id}).");
@@ -265,11 +267,11 @@ namespace EmbyIcons
                 {
                     storeSignature = SummaryStoreKeys.GetSignature(profileOptions, globalOptions, GetKnownResolutionKeys(globalOptions));
                     storeFingerprint = SummaryStoreKeys.GetFingerprint(parent, itemList);
-                    if (_seriesSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored) && stored != null)
+                    if (_seriesSummaryStore.TryGet(parent.Id, storeSignature, storeFingerprint, out var stored, SummaryStoreKeys.GetCompatibleSignatures(profileOptions, globalOptions, GetKnownResolutionKeys(globalOptions))) && stored != null)
                     {
                         if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                             _logger.Debug($"[EmbyIcons] Using saved summary for '{parent.Name}' ({parent.Id}); its {itemList.Count} item(s) are unchanged.");
-                        var restored = FromSummaryData(stored);
+                        var restored = FromSummaryData(stored) with { DataVersion = dataVersion };
                         CacheSeriesResult(parent, restored);
                         return restored;
                     }
@@ -544,6 +546,7 @@ namespace EmbyIcons
 
                 var result = new AggregatedSeriesResult
                 {
+                    DataVersion = dataVersion,
                     Timestamp = DateTime.UtcNow,
                     LastUsedTicks = Stopwatch.GetTimestamp(),
                     AudioLangs = finalAudioLangs,
@@ -557,6 +560,9 @@ namespace EmbyIcons
                     SourceIcons = finalSourceIcons,
                     FilenameBasedIcons = filenameBasedIconsList
                 };
+
+                if (dataVersion != (Plugin.Instance?.ImageState.GetAggregationVersion(parent, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions))
+                    return result;
 
                 CacheSeriesResult(parent, result);
 
