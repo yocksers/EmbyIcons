@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.MemoryUsage, "GET", Summary = "Returns memory usage statistics for the plugin and process")]
     public class MemoryUsageRequest : IReturn<MemoryUsageResult>
     {

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.DefaultProfile, "GET", Summary = "Gets a new icon profile with default settings")]
     public class GetDefaultProfile : IReturn<IconProfile> { }
 

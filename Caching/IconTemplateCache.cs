@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -16,7 +15,7 @@ namespace EmbyIcons.Caching
     {
         private readonly ILogger _logger;
         private volatile MemoryCache? _templateCache;
-        private readonly ConcurrentDictionary<string, SemaphoreSlim> _generationLocks = new();
+        private readonly Helpers.KeyedAsyncLock<string> _generationLocks = new();
         private Timer? _maintenanceTimer;
         private readonly object _cacheInstanceLock = new();
         private volatile bool _disposed = false;
@@ -116,19 +115,16 @@ namespace EmbyIcons.Caching
 
             Interlocked.Increment(ref _cacheMisses);
 
-            var lockObj = _generationLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
-            
-            bool lockAcquired = false;
+            IDisposable generationLock;
             try
             {
-                await lockObj.WaitAsync(cancellationToken).ConfigureAwait(false);
-                lockAcquired = true;
+                generationLock = await _generationLocks.LockAsync(cacheKey, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 return null;
             }
-            try
+            using (generationLock)
             {
                 cache = _templateCache;
                 if (cache == null || _disposed)
@@ -181,28 +177,6 @@ namespace EmbyIcons.Caching
                 }
 
                 return template;
-            }
-            finally
-            {
-                if (lockAcquired)
-                {
-                    try
-                    {
-                        lockObj.Release();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        _generationLocks.TryRemove(cacheKey, out _);
-                    }
-                    catch (SemaphoreFullException ex)
-                    {
-                        _logger?.Debug($"[EmbyIcons] SemaphoreFullException releasing template lock: {ex.Message}");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.Debug($"[EmbyIcons] Error releasing template generation lock: {ex.Message}");
-                    }
-                }
             }
         }
         private SKImage? GenerateTemplate(
@@ -298,14 +272,6 @@ namespace EmbyIcons.Caching
                 }
             }
             
-            var locks = _generationLocks.Values.ToArray();
-            _generationLocks.Clear();
-            foreach (var lockObj in locks)
-            {
-                try { lockObj.Dispose(); } 
-                catch { }
-            }
-            
             _cacheHits = 0;
             _cacheMisses = 0;
             _templatesGenerated = 0;
@@ -335,18 +301,6 @@ namespace EmbyIcons.Caching
             {
                 _templateCache?.Compact(0.2);
 
-                var staleLocks = _generationLocks
-                    .Where(kvp => kvp.Value.CurrentCount > 0)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-                foreach (var key in staleLocks)
-                {
-                    if (_generationLocks.TryRemove(key, out var sem))
-                    {
-                        try { sem.Dispose(); } catch { }
-                    }
-                }
-                
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled)
                 {
                     var stats = GetStats();
@@ -384,17 +338,6 @@ namespace EmbyIcons.Caching
                 catch (Exception ex)
                 {
                     _logger?.Debug($"[EmbyIcons] Error disposing template cache: {ex.Message}");
-                }
-            }
-
-            var locks = _generationLocks.Values.ToArray();
-            _generationLocks.Clear();
-            foreach (var lockObj in locks)
-            {
-                try { lockObj.Dispose(); } 
-                catch (Exception ex) 
-                { 
-                    _logger?.Debug($"[EmbyIcons] Error disposing generation lock: {ex.Message}"); 
                 }
             }
 

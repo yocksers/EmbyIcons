@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ValidatePath, "GET", Summary = "Validates if a given path exists on the server")]
     public class ValidatePathRequest : IReturn<ValidatePathResponse>
     {

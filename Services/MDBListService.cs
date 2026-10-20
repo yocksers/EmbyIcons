@@ -223,6 +223,23 @@ namespace EmbyIcons.Services
             }
         }
 
+        // Fixed, per-work intervals keep image keys stable across cache eviction and restarts.
+        // A list request computes this token without loading ratings or starting HTTP work.
+        internal static long GetImageVersion(BaseItem item)
+        {
+            var id = GetTmdbId(item);
+            if (string.IsNullOrEmpty(id)) return 0;
+            return RatingInterval(id!, DateTime.UtcNow);
+        }
+
+        internal static long RatingInterval(string id, DateTime time)
+        {
+            ulong hash = 14695981039346656037;
+            foreach (var c in id) hash = unchecked((hash ^ c) * 1099511628211);
+            long period = CacheExpiration.Ticks;
+            return (time.Ticks + (long)(hash % (ulong)period)) / period;
+        }
+
         public async Task<MDBListRatingData?> FetchRatingsAsync(BaseItem item, string apiKey, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -241,36 +258,42 @@ namespace EmbyIcons.Services
 
             EnsureDiskCacheLoaded();
 
+            MDBListRatingData? staleData = null;
             lock (_cacheGate)
             {
                 if (_ratingsCache.TryGetValue(cacheKey, out var cachedData))
                 {
-                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration)
+                    if (DateTime.UtcNow - cachedData.CachedAt < CacheExpiration &&
+                        RatingInterval(tmdbId!, cachedData.CachedAt) == RatingInterval(tmdbId!, DateTime.UtcNow))
                     {
                         return cachedData.Data;
                     }
 
-                    _ratingsCache.Remove(cacheKey);
-                    _dirty = true;
+                    staleData = cachedData.Data;
                 }
             }
 
             if (_failedUntil.TryGetValue(cacheKey, out var retryAfter) && DateTime.UtcNow < retryAfter)
             {
-                return null;
+                return staleData;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var fetch = _inFlight.GetOrAdd(cacheKey, key => new Lazy<Task<MDBListRatingData?>>(() => FetchAndStoreAsync(key, mediaType, tmdbId!, apiKey)));
-            try
-            {
-                return await fetch.Value.ConfigureAwait(false);
-            }
-            finally
-            {
-                ((ICollection<KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>>)_inFlight).Remove(new KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>(cacheKey, fetch));
-            }
+            var freshData = await StartOrJoinFetch(cacheKey, mediaType, tmdbId!, apiKey).ConfigureAwait(false);
+            return freshData ?? staleData;
+        }
+
+        private static Task<MDBListRatingData?> StartOrJoinFetch(string cacheKey, string mediaType, string tmdbId, string apiKey)
+        {
+            var fetch = _inFlight.GetOrAdd(cacheKey, key => new Lazy<Task<MDBListRatingData?>>(() => FetchAndStoreAsync(key, mediaType, tmdbId, apiKey)));
+            var task = fetch.Value;
+            task.ContinueWith(
+                _ => ((ICollection<KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>>)_inFlight).Remove(new KeyValuePair<string, Lazy<Task<MDBListRatingData?>>>(cacheKey, fetch)),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return task;
         }
 
         private static async Task<MDBListRatingData?> FetchAndStoreAsync(string cacheKey, string mediaType, string tmdbId, string apiKey)

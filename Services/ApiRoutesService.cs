@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.GetApiRoutes, "GET", Summary = "Gets all API routes for the plugin")]
     public class GetApiRoutesRequest : IReturn<Dictionary<string, string>> { }
 

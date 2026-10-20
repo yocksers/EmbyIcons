@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ScanProgress, "GET", Summary = "Gets the progress of a long-running scan")]
     public class GetScanProgress : IReturn<ScanProgress>
     {

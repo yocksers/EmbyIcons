@@ -5,7 +5,7 @@ using MediaBrowser.Model.Services;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.AspectRatio, "GET", Summary = "Calculates aspect ratio information for given dimensions")]
     public class GetAspectRatio : IReturn<AspectRatioResponse>
     {

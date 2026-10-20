@@ -14,7 +14,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.MusicTroubleshooter, "GET", Summary = "Reports missing icons for music tracks in the library")]
     public class GetMusicTroubleshooterReport : IReturn<MusicTroubleshooterResponse>
     {

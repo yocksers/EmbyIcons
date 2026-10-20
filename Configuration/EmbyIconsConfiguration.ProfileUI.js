@@ -1,4 +1,4 @@
-define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profileModule) {
+define([ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationProfile'], function (profileModule) {
     'use strict';
 
     function populateProfileSelector(instance) {
@@ -32,7 +32,7 @@ define(['configurationpage?name=EmbyIconsConfigurationProfile'], function (profi
         if (instance.safeZonesModule) {
             instance.safeZonesModule.load(profile.Settings.SafeZones || []);
         }
-        require(['configurationpage?name=EmbyIconsConfigurationUIHandlers'], (uiHandlers) => {
+        require([ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationUIHandlers'], (uiHandlers) => {
             uiHandlers.triggerPreviewUpdate(instance);
             uiHandlers.updateAllPriorityGroups(instance);
         });

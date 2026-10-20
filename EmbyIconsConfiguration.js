@@ -7,17 +7,19 @@ define([
     'emby-button',
     'emby-checkbox',
     'emby-select',
-    'configurationpage?name=EmbyIconsConfigurationUtils',
-    'configurationpage?name=EmbyIconsConfigurationDom',
-    'configurationpage?name=EmbyIconsConfigurationDomCache',
-    'configurationpage?name=EmbyIconsConfigurationEvents',
-    'configurationpage?name=EmbyIconsConfigurationDataLoader',
-    'configurationpage?name=EmbyIconsConfigurationUIHandlers',
-    'configurationpage?name=EmbyIconsConfigurationProfile',
-    'configurationpage?name=EmbyIconsConfigurationProfileUI',
-    'configurationpage?name=EmbyIconsConfigurationScans',
-    'configurationpage?name=EmbyIconsConfigurationApi',
-    'configurationpage?name=EmbyIconsConfigurationSafeZones'
+    // Absolute server URLs: a relative name would load from the web app's own site, which fails when
+    // the app is not served by this server (for example app.emby.media). Other modules must use the same IDs.
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationUtils',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationDom',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationDomCache',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationEvents',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationDataLoader',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationUIHandlers',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationProfile',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationProfileUI',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationScans',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationApi',
+    ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationSafeZones'
 ], function (
     BaseView,
     loading,

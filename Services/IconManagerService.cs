@@ -15,7 +15,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.IconManagerReport, "GET", Summary = "Generates a report of used, missing, and unused icons")]
     public class GetIconManagerReport : IReturn<IconManagerReport> { }
 

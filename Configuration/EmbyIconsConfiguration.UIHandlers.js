@@ -1,4 +1,4 @@
-define(['configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) {
+define([ApiClient.serverAddress() + '/web/configurationpage?name=EmbyIconsConfigurationUtils'], function (utils) {
     'use strict';
 
     function onFormChange(instance, event) {

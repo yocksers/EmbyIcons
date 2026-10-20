@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.StaticImage, "GET", Summary = "Returns a static embedded image asset from the plugin")]
     public class GetStaticImage : IReturn<Stream>
     {

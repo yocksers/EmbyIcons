@@ -499,7 +499,8 @@ namespace EmbyIcons.Services
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
 
-            if (item.Tags != null && item.Tags.Length > 0)
+            if ((profileOptions.TagIconAlignment != IconAlignment.Disabled || profileOptions.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled)) &&
+                item.Tags != null && item.Tags.Length > 0)
             {
                 bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                 bool isSeries = item is Series;
@@ -592,7 +593,8 @@ namespace EmbyIcons.Services
             var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var tagBasedIcons = new List<FilenameBasedIconData>();
 
-            if (item.Tags != null && item.Tags.Length > 0)
+            if ((profileOptions.TagIconAlignment != IconAlignment.Disabled || profileOptions.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled)) &&
+                item.Tags != null && item.Tags.Length > 0)
             {
                 bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                 bool isAlbum  = item is MusicAlbum;
@@ -719,13 +721,17 @@ namespace EmbyIcons.Services
 
             if (item is Series seriesItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions);
+                var aggResult = OverlayRequirements.VideoChildren(seriesItem, profileOptions)
+                    ? _enhancer.GetOrBuildAggregatedDataForParent(seriesItem, profileOptions, globalOptions)
+                    : new EmbyIconsEnhancer.AggregatedSeriesResult();
                 return CreateOverlayDataFromAggregate(aggResult, seriesItem, profileOptions);
             }
 
             if (item is Season seasonItem)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions);
+                var aggResult = OverlayRequirements.VideoChildren(seasonItem, profileOptions)
+                    ? _enhancer.GetOrBuildAggregatedDataForParent(seasonItem, profileOptions, globalOptions)
+                    : new EmbyIconsEnhancer.AggregatedSeriesResult();
                 return CreateOverlayDataFromAggregate(aggResult, seasonItem, profileOptions);
             }
 
@@ -736,19 +742,25 @@ namespace EmbyIcons.Services
                     return new OverlayData();
                 }
 
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions);
+                var aggResult = OverlayRequirements.VideoChildren(collectionItem, profileOptions)
+                    ? _enhancer.GetOrBuildAggregatedDataForParent(collectionItem, profileOptions, globalOptions)
+                    : new EmbyIconsEnhancer.AggregatedSeriesResult();
                 return CreateOverlayDataFromAggregate(aggResult, collectionItem, profileOptions);
             }
 
             if (item is MusicAlbum albumItem && profileOptions.EnableMusicAlbumAggregation)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(albumItem, profileOptions);
+                var aggResult = OverlayRequirements.MusicChildren(albumItem, profileOptions)
+                    ? _enhancer.GetOrBuildAggregatedDataForAlbum(albumItem, profileOptions, globalOptions)
+                    : new EmbyIconsEnhancer.AggregatedAlbumResult();
                 return CreateOverlayDataFromMusicAggregate(aggResult, albumItem, profileOptions);
             }
 
             if (item is MusicArtist artistItem && profileOptions.EnableMusicAlbumAggregation)
             {
-                var aggResult = _enhancer.GetOrBuildAggregatedDataForAlbum(artistItem, profileOptions);
+                var aggResult = OverlayRequirements.MusicChildren(artistItem, profileOptions)
+                    ? _enhancer.GetOrBuildAggregatedDataForAlbum(artistItem, profileOptions, globalOptions)
+                    : new EmbyIconsEnhancer.AggregatedAlbumResult();
                 return CreateOverlayDataFromMusicAggregate(aggResult, artistItem, profileOptions);
             }
 
@@ -758,7 +770,8 @@ namespace EmbyIcons.Services
         private OverlayData GetOverlayDataForItem(BaseItem item, ProfileSettings profileOptions, PluginOptions globalOptions)
         {
             EmbyIconsEnhancer.EnsureEpisodeCacheInitialized();
-            if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks)
+            var dataVersion = (Plugin.Instance?.ImageState.GetDataVersion(item, profileOptions) ?? string.Empty) + OverlayRequirements.DataSignature(profileOptions, globalOptions);
+            if (EmbyIconsEnhancer._episodeIconCache?.TryGetValue(item.Id, out EmbyIconsEnhancer.EpisodeIconInfo? cachedInfo) == true && cachedInfo != null && cachedInfo.DateModifiedTicks == item.DateModified.Ticks && cachedInfo.DataVersion == dataVersion)
             {
                 if (Helpers.PluginHelper.IsDebugLoggingEnabled) 
                     Plugin.Instance?.Logger.Debug($"[EmbyIcons] Using cached icon info for '{item.Name}'.");
@@ -804,7 +817,8 @@ namespace EmbyIcons.Services
                 var cachedTagBasedIcons = new List<FilenameBasedIconData>();
                 var cachedGlobalTags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
-                if (item.Tags != null && item.Tags.Length > 0)
+                if ((profileOptions.TagIconAlignment != IconAlignment.Disabled || profileOptions.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled)) &&
+                item.Tags != null && item.Tags.Length > 0)
                 {
                     bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                     bool isMovie = item is Movie;
@@ -895,6 +909,7 @@ namespace EmbyIcons.Services
                 VideoFormatIconName = overlayData.VideoFormatIconName,
                 ResolutionIconName = overlayData.ResolutionIconName,
                 DateModifiedTicks = item.DateModified.Ticks,
+                DataVersion = dataVersion,
                 AspectRatioIconName = overlayData.AspectRatioIconName,
                 ParentalRatingIconName = overlayData.ParentalRatingIconName,
                 FrameRateIconName = overlayData.FrameRateIconName,
@@ -962,7 +977,7 @@ namespace EmbyIcons.Services
                 data.ParentalRatingIconName = MediaStreamHelper.GetParentalRatingIconName(item.OfficialRating);
             }
 
-            if (item is Movie movieItem && profileOptions.FilenameBasedIcons.Any())
+            if (item is Movie movieItem && OverlayRequirements.MoviePaths(profileOptions))
             {
                 IReadOnlyCollection<string> allPaths = Array.Empty<string>();
                 string? providerIdKey = null;
@@ -978,7 +993,7 @@ namespace EmbyIcons.Services
 
                 if (providerIdKey != null && providerIdKey.Length > 0 && movieItem.ProviderIds.TryGetValue(providerIdKey, out var providerIdValue) && !string.IsNullOrEmpty(providerIdValue))
                 {
-                    var cacheKey = $"{providerIdKey}:{providerIdValue}";
+                    var cacheKey = $"{providerIdKey}:{providerIdValue}:{Plugin.Instance?.ImageState.GetMovieGroupRevision(providerIdKey, providerIdValue)}";
                     if (!_providerPathCache.TryGetValue(cacheKey, out string[]? cachedPaths) || cachedPaths == null)
                     {
                         cachedPaths = QueryAndCacheMoviePaths(providerIdKey, providerIdValue, cacheKey);
@@ -1082,7 +1097,8 @@ namespace EmbyIcons.Services
                 }
             }
 
-            if (item.Tags != null && item.Tags.Length > 0)
+            if ((profileOptions.TagIconAlignment != IconAlignment.Disabled || profileOptions.TagBasedIcons.Any(m => m.IconAlignment != IconAlignment.Disabled)) &&
+                item.Tags != null && item.Tags.Length > 0)
             {
                 bool hasTagMappings = profileOptions.TagBasedIcons.Count > 0;
                 bool isMovie = item is Movie;

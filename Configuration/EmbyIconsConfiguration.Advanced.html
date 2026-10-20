@@ -25,7 +25,7 @@
                 <input is="emby-checkbox" type="checkbox" data-config-key="EnableSummaryDiskCache" />
                 <span>Keep TV show, collection and album summaries on disk</span>
             </label>
-            <div class="fieldDescription checkboxFieldDescription">Saves the summaries to files in the plugin's data folder, so they survive Emby restarts. After a restart, a saved summary is only reused when the episodes or tracks it was built from are unchanged; otherwise it is rebuilt. This saves reading the media info of every episode again after each restart, which helps most with large TV libraries. The files are written at most every 5 minutes, and only when summaries changed. Turning this off deletes the files. Default: off.</div>
+            <div class="fieldDescription checkboxFieldDescription">Saves the aggregation data to files in the plugin's data folder, so they survive Emby restarts. The files are written at most every 5 minutes, and only when the data is changed. Turning this off deletes the files. Default: off.</div>
         </div>
 
         <div class="inputContainer" style="margin-top: 1.5em;">

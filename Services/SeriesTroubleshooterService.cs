@@ -14,7 +14,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.SeriesTroubleshooter, "GET", Summary = "Finds inconsistencies in episodes of a series")]
     public class GetSeriesTroubleshooterReport : IReturn<List<SeriesTroubleshooterReport>>
     {

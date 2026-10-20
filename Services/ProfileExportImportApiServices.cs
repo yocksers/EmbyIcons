@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using EmbyIcons.Api;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Services;
 
@@ -10,7 +11,7 @@ namespace EmbyIcons.Services
 {
     #region Export Profiles
 
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ExportProfiles, "GET", Summary = "Export icon profiles to JSON")]
     public class ExportProfilesRequest : IReturn<ExportProfilesResponse>
     {
@@ -52,6 +53,15 @@ namespace EmbyIcons.Services
                         .Select(id => Guid.TryParse(id.Trim(), out var guid) ? guid : Guid.Empty)
                         .Where(g => g != Guid.Empty)
                         .ToList();
+
+                    if (profileIds.Count == 0)
+                    {
+                        return new ExportProfilesResponse
+                        {
+                            Success = false,
+                            Error = "None of the supplied profile IDs are valid."
+                        };
+                    }
                 }
 
                 var result = service.ExportProfiles(profileIds, request.IncludeLibraryMappings);
@@ -83,13 +93,14 @@ namespace EmbyIcons.Services
 
     #region Import Profiles
 
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ImportProfiles, "POST", Summary = "Import icon profiles from JSON")]
     public class ImportProfilesRequest : IReturn<ImportProfilesResponse>
     {
         public string JsonData { get; set; } = string.Empty;
         public bool OverwriteExisting { get; set; }
         public bool RenameOnConflict { get; set; } = true;
+        public bool ImportLibraryMappings { get; set; } = true;
     }
 
     public class ImportProfilesResponse
@@ -103,11 +114,20 @@ namespace EmbyIcons.Services
         public List<string> UpdatedProfiles { get; set; } = new();
         public List<string> SkippedProfiles { get; set; } = new();
         public List<string> FailedProfiles { get; set; } = new();
+        public int ImportedLibraryMappingCount { get; set; }
+        public List<string> SkippedLibraryMappings { get; set; } = new();
         public string? Error { get; set; }
     }
 
     public class ImportProfilesService : IService
     {
+        private readonly ILibraryManager _libraryManager;
+
+        public ImportProfilesService(ILibraryManager libraryManager)
+        {
+            _libraryManager = libraryManager;
+        }
+
         public object Post(ImportProfilesRequest request)
         {
             try
@@ -146,12 +166,17 @@ namespace EmbyIcons.Services
                 var importOptions = new ImportOptions
                 {
                     OverwriteExisting = request.OverwriteExisting,
-                    RenameOnConflict = request.RenameOnConflict
+                    RenameOnConflict = request.RenameOnConflict,
+                    ImportLibraryMappings = request.ImportLibraryMappings,
+                    KnownLibraryIds = new HashSet<string>(
+                        _libraryManager.GetVirtualFolders()
+                            .Where(lib => lib != null)
+                            .Select(lib => lib.Id.ToString()))
                 };
 
                 var result = service.ImportProfilesFromJson(request.JsonData, importOptions);
 
-                if (result.Success && (result.ImportedCount > 0 || result.UpdatedCount > 0))
+                if (result.Success && (result.ImportedCount > 0 || result.UpdatedCount > 0 || result.ImportedLibraryMappingCount > 0))
                 {
                     plugin.SaveCurrentConfiguration();
                 }
@@ -167,6 +192,8 @@ namespace EmbyIcons.Services
                     UpdatedProfiles = result.UpdatedProfiles,
                     SkippedProfiles = result.SkippedProfiles,
                     FailedProfiles = result.FailedProfiles,
+                    ImportedLibraryMappingCount = result.ImportedLibraryMappingCount,
+                    SkippedLibraryMappings = result.SkippedLibraryMappings,
                     Error = result.Error
                 };
             }
@@ -185,7 +212,7 @@ namespace EmbyIcons.Services
 
     #region Validate Profile Import
 
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ValidateProfileImport, "POST", Summary = "Validate profile import JSON without importing")]
     public class ValidateProfileImportRequest : IReturn<ValidateProfileImportResponse>
     {
@@ -263,7 +290,7 @@ namespace EmbyIcons.Services
 
     #region Template Cache Stats
 
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.TemplateCacheStats, "GET", Summary = "Get icon template cache statistics")]
     public class TemplateCacheStatsRequest : IReturn<TemplateCacheStatsResponse> { }
 
@@ -340,7 +367,7 @@ namespace EmbyIcons.Services
 
     #region Clear Template Cache
 
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ClearTemplateCache, "POST", Summary = "Clear the icon template cache")]
     public class ClearTemplateCacheRequest : IReturn<ClearTemplateCacheResponse> { }
 

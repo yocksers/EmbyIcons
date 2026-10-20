@@ -6,11 +6,11 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 
-		<Version>5.61.1.5</Version>
-		<AssemblyVersion>5.61.1.5</AssemblyVersion>
-		<FileVersion>5.61.1.5</FileVersion>
+		<Version>5.61.1.7</Version>
+		<AssemblyVersion>5.61.1.7</AssemblyVersion>
+		<FileVersion>5.61.1.7</FileVersion>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**</DefaultItemExcludes>
+		<DefaultItemExcludes>$(DefaultItemExcludes);Old\**;CoverArt\**;Tests\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -331,6 +331,8 @@ define(['loading', 'toast'], function (loading, toast) {
                     if (result.UpdatedCount > 0) message += `Updated: ${result.UpdatedCount}\n`;
                     if (result.SkippedCount > 0) message += `Skipped: ${result.SkippedCount}\n`;
                     if (result.FailedCount > 0) message += `Failed: ${result.FailedCount}\n`;
+                    if (result.ImportedLibraryMappingCount > 0) message += `Library mappings: ${result.ImportedLibraryMappingCount}\n`;
+                    if (result.SkippedLibraryMappings && result.SkippedLibraryMappings.length > 0) message += `Skipped library mappings:\n  ${result.SkippedLibraryMappings.join('\n  ')}\n`;
                     alert('Import completed:\n\n' + message);
                     await instance.loadData();
                     toast('Profiles imported successfully');

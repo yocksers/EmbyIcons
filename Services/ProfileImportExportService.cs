@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using EmbyIcons.Configuration;
 using MediaBrowser.Model.Logging;
@@ -17,9 +19,11 @@ namespace EmbyIcons.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
+        public const int MaxProfileNameLength = 256;
+
         public ExportResult ExportProfiles(List<Guid>? profileIds, bool includeLibraryMappings = false)
         {
-            var profilesToExport = profileIds == null || profileIds.Count == 0
+            var profilesToExport = profileIds == null
                 ? _configuration.Profiles.ToList()
                 : _configuration.Profiles.Where(p => profileIds.Contains(p.Id)).ToList();
 
@@ -74,7 +78,7 @@ namespace EmbyIcons.Services
                 }
 
                 var result = new ImportResult { Success = true };
-                var importedProfiles = new List<IconProfile>();
+                var profilesByExportedName = new Dictionary<string, IconProfile>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var exportedProfile in exportData.Profiles)
                 {
@@ -87,27 +91,37 @@ namespace EmbyIcons.Services
                             continue;
                         }
 
-                        if (exportedProfile.Name.Length > 256)
+                        if (exportedProfile.Name.Length > MaxProfileNameLength)
                         {
                             result.FailedProfiles.Add(exportedProfile.Name.Substring(0, 32) + "...");
                             continue;
                         }
-                        var existingProfile = _configuration.Profiles.FirstOrDefault(p => 
+
+                        exportedProfile.Settings = SanitizeSettings(exportedProfile.Settings);
+
+                        var existingProfile = _configuration.Profiles.FirstOrDefault(p =>
                             p.Name.Equals(exportedProfile.Name, StringComparison.OrdinalIgnoreCase));
 
                         if (existingProfile != null)
                         {
                             if (options.OverwriteExisting)
                             {
-                                existingProfile.Settings = exportedProfile.Settings ?? new ProfileSettings();
+                                existingProfile.Settings = exportedProfile.Settings;
+                                profilesByExportedName[exportedProfile.Name] = existingProfile;
                                 result.UpdatedProfiles.Add(existingProfile.Name);
                                 _logger.Info($"[EmbyIcons] Updated existing profile: {existingProfile.Name}");
                             }
                             else if (options.RenameOnConflict)
                             {
                                 var newProfile = CreateProfileWithUniqueName(exportedProfile);
+                                if (newProfile == null)
+                                {
+                                    result.FailedProfiles.Add(exportedProfile.Name);
+                                    _logger.Warn($"[EmbyIcons] Could not find a unique name for imported profile: {exportedProfile.Name}");
+                                    continue;
+                                }
                                 _configuration.Profiles.Add(newProfile);
-                                importedProfiles.Add(newProfile);
+                                profilesByExportedName[exportedProfile.Name] = newProfile;
                                 result.ImportedProfiles.Add(newProfile.Name);
                                 _logger.Info($"[EmbyIcons] Imported profile with renamed: {newProfile.Name}");
                             }
@@ -123,10 +137,10 @@ namespace EmbyIcons.Services
                             {
                                 Id = Guid.NewGuid(),
                                 Name = exportedProfile.Name,
-                                Settings = exportedProfile.Settings ?? new ProfileSettings()
+                                Settings = exportedProfile.Settings
                             };
                             _configuration.Profiles.Add(newProfile);
-                            importedProfiles.Add(newProfile);
+                            profilesByExportedName[exportedProfile.Name] = newProfile;
                             result.ImportedProfiles.Add(newProfile.Name);
                             _logger.Info($"[EmbyIcons] Imported new profile: {newProfile.Name}");
                         }
@@ -136,6 +150,11 @@ namespace EmbyIcons.Services
                         _logger.ErrorException($"[EmbyIcons] Failed to import profile: {exportedProfile.Name}", ex);
                         result.FailedProfiles.Add(exportedProfile.Name);
                     }
+                }
+
+                if (options.ImportLibraryMappings && exportData.LibraryMappings != null)
+                {
+                    ImportLibraryMappings(exportData.LibraryMappings, profilesByExportedName, options.KnownLibraryIds, result);
                 }
 
                 result.ImportedCount = result.ImportedProfiles.Count;
@@ -156,27 +175,103 @@ namespace EmbyIcons.Services
             }
         }
 
+        private void ImportLibraryMappings(
+            List<ExportedLibraryMapping> mappings,
+            Dictionary<string, IconProfile> profilesByExportedName,
+            ISet<string>? knownLibraryIds,
+            ImportResult result)
+        {
+            foreach (var mapping in mappings)
+            {
+                if (mapping == null || string.IsNullOrWhiteSpace(mapping.LibraryId)) continue;
+
+                if (string.IsNullOrWhiteSpace(mapping.ProfileName) ||
+                    !profilesByExportedName.TryGetValue(mapping.ProfileName, out var profile))
+                {
+                    result.SkippedLibraryMappings.Add($"{mapping.LibraryId} (profile '{mapping.ProfileName}' was not imported)");
+                    continue;
+                }
+
+                if (knownLibraryIds != null && !knownLibraryIds.Contains(mapping.LibraryId))
+                {
+                    result.SkippedLibraryMappings.Add($"{mapping.LibraryId} (library not found on this server)");
+                    continue;
+                }
+
+                _configuration.LibraryProfileMappings.RemoveAll(m => m.LibraryId == mapping.LibraryId);
+                _configuration.LibraryProfileMappings.Add(new LibraryMapping
+                {
+                    LibraryId = mapping.LibraryId,
+                    ProfileId = profile.Id
+                });
+                result.ImportedLibraryMappingCount++;
+                _logger.Info($"[EmbyIcons] Imported library mapping: {mapping.LibraryId} -> {profile.Name}");
+            }
+        }
+
+        private static ProfileSettings SanitizeSettings(ProfileSettings? settings)
+        {
+            if (settings == null) return new ProfileSettings();
+            ReplaceNullsWithDefaults(settings);
+            return settings;
+        }
+
+        // Explicit JSON nulls overwrite property initializers; restore the defaults so
+        // rendering code can rely on non-null strings and collections.
+        private static void ReplaceNullsWithDefaults(object target)
+        {
+            var type = target.GetType();
+            object? defaults = null;
+
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!prop.CanRead || !prop.CanWrite || prop.PropertyType.IsValueType || prop.GetIndexParameters().Length > 0)
+                    continue;
+
+                var value = prop.GetValue(target);
+                if (value == null)
+                {
+                    defaults ??= Activator.CreateInstance(type);
+                    prop.SetValue(target, prop.GetValue(defaults));
+                }
+                else if (value is IList list)
+                {
+                    for (int i = list.Count - 1; i >= 0; i--)
+                    {
+                        var element = list[i];
+                        if (element == null) list.RemoveAt(i);
+                        else if (!(element is string) && !element.GetType().IsValueType) ReplaceNullsWithDefaults(element);
+                    }
+                }
+            }
+        }
+
         private const int MaxProfileNameSuffix = 1000;
 
-        private IconProfile CreateProfileWithUniqueName(ExportedProfile exportedProfile)
+        private IconProfile? CreateProfileWithUniqueName(ExportedProfile exportedProfile)
         {
             var baseName = exportedProfile.Name;
-            var suffix = 1;
-            var newName = baseName;
 
-            while (suffix <= MaxProfileNameSuffix && _configuration.Profiles.Any(p =>
-                p.Name.Equals(newName, StringComparison.OrdinalIgnoreCase)))
+            for (int suffix = 1; suffix <= MaxProfileNameSuffix; suffix++)
             {
-                newName = $"{baseName} ({suffix})";
-                suffix++;
+                var suffixText = $" ({suffix})";
+                var stem = baseName.Length + suffixText.Length > MaxProfileNameLength
+                    ? baseName.Substring(0, MaxProfileNameLength - suffixText.Length)
+                    : baseName;
+                var candidate = stem + suffixText;
+
+                if (!_configuration.Profiles.Any(p => p.Name.Equals(candidate, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return new IconProfile
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = candidate,
+                        Settings = exportedProfile.Settings
+                    };
+                }
             }
 
-            return new IconProfile
-            {
-                Id = Guid.NewGuid(),
-                Name = newName,
-                Settings = exportedProfile.Settings ?? new ProfileSettings()
-            };
+            return null;
         }
         public ValidationResult ValidateProfileJson(string json)
         {
@@ -209,14 +304,20 @@ namespace EmbyIcons.Services
                 {
                     foreach (var profile in exportData.Profiles)
                     {
+                        if (profile == null)
+                        {
+                            errors.Add("Found an empty profile entry");
+                            continue;
+                        }
+
                         if (string.IsNullOrWhiteSpace(profile.Name))
                         {
                             errors.Add("Found profile with empty name");
                         }
 
-                        if (profile.Name != null && profile.Name.Length > 256)
+                        if (profile.Name != null && profile.Name.Length > MaxProfileNameLength)
                         {
-                            errors.Add($"Profile name is too long (max 256 characters): '{profile.Name.Substring(0, 32)}...'");
+                            errors.Add($"Profile name is too long (max {MaxProfileNameLength} characters): '{profile.Name.Substring(0, 32)}...'");
                         }
 
                         if (profile.Settings == null)
@@ -232,6 +333,11 @@ namespace EmbyIcons.Services
                             warnings.Add($"Profile '{profile.Name}' already exists and will be skipped or overwritten depending on import options");
                         }
                     }
+                }
+
+                if (exportData.LibraryMappings != null && exportData.LibraryMappings.Count > 0)
+                {
+                    warnings.Add($"The file contains {exportData.LibraryMappings.Count} library mapping(s). They will replace the current profile assignment for those libraries; mappings for libraries not on this server will be skipped");
                 }
 
                 return new ValidationResult
@@ -288,6 +394,8 @@ namespace EmbyIcons.Services
     {
         public bool OverwriteExisting { get; set; }
         public bool RenameOnConflict { get; set; } = true;
+        public bool ImportLibraryMappings { get; set; } = true;
+        public ISet<string>? KnownLibraryIds { get; set; }
     }
 
     public class ImportResult
@@ -301,6 +409,8 @@ namespace EmbyIcons.Services
         public List<string> UpdatedProfiles { get; set; } = new();
         public List<string> SkippedProfiles { get; set; } = new();
         public List<string> FailedProfiles { get; set; } = new();
+        public int ImportedLibraryMappingCount { get; set; }
+        public List<string> SkippedLibraryMappings { get; set; } = new();
         public string? Error { get; set; }
     }
 

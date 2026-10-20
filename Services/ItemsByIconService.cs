@@ -14,7 +14,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.ItemsByIcon, "GET", Summary = "Gets media items that use a specific icon")]
     public class GetItemsByIcon : IReturn<ItemsByIconResponse>
     {

@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 
 namespace EmbyIcons
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.Preview, "GET", Summary = "Generates a live preview image based on current settings")]
     public class GetIconPreview : IReturn<Stream>
     {

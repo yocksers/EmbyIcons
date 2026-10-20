@@ -14,7 +14,7 @@ using System.Linq;
 
 namespace EmbyIcons.Services
 {
-    [Authenticated]
+    [Authenticated(Roles = "Admin")]
     [Route(ApiRoutes.MovieTroubleshooter, "GET", Summary = "Reports missing icons for movies in the library")]
     public class GetMovieTroubleshooterReport : IReturn<MovieTroubleshooterResponse>
     {
